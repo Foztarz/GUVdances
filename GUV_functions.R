@@ -535,7 +535,7 @@ MakeStan_MEvonMises = function(brms_data,
       mod.loop,
       mod.priors_intercepts,
       mod.priors_indivs_mu,
-      mod.priors_indivs_kappa,
+      mod.priors_indivs_kappa,      
       mod.constants,
       "}"),
     collapse = ''
