@@ -11,8 +11,8 @@ graphics.off()
 #               
 #      OUTPUTS: Plots and test statistics
 #
-#	   CHANGES: - 
-#             - 
+#	   CHANGES: - Comparisons w/ emmeans
+#             - Adapt delta selection for max random effects model
 #             - 
 #
 #   REFERENCES: Bürkner, P.-C., 2018. 
@@ -193,7 +193,7 @@ priors_bmod_mxRE= within(get_prior(formula = frm_bmod_maxRE,
                                       b = 'normal(0,1)',
                                       sd = 'student_t(3, 0, 2.5)',
                                       cor = 'lkj(1)', # The only supported prior for correlation matrices is the 'lkj' prior
-                                      'normal(0,10)'
+                                      'normal(0,3)' # with this many params need more informative priors
                        )
                      }
 )
@@ -232,10 +232,10 @@ system.time(expr =
               {
                 bmod_test_maxRE = brm(formula = frm_bmod_maxRE ,
                                 data = resc_mvs,
-                                iter = 5e2, # about 95 iterations/ minute
+                                iter = 1e3, # about 95 iterations/ minute
                                 family = Beta(),
                                 prior = priors_bmod_mxRE,#use default
-                                control = list( adapt_delta = 0.90), #lowered to speed up? #0.95 ), # closer to 1.0 means higher resolution sampling
+                                control = list( adapt_delta = 0.95), # closer to 1.0 means higher resolution sampling
                                 cores = 4,
                                 backend = 'cmdstanr',
                                 init = '0',
@@ -244,7 +244,7 @@ system.time(expr =
                 )
               }
 )
-#takes about 5 minutes
+#takes about 10 minutes
 
 
 # Check model convergence -------------------------------------------------
@@ -270,8 +270,8 @@ summary(bmod_test_maxRE)
 
 bmod_loo = loo(bmod_test)
 bmod_loo_maxRE = loo(bmod_test_maxRE)
-bmod_looic = bmod_loo$estimates[3,]
-bmod_looic_maxRE = bmod_loo_maxRE$estimates[3,]
+# bmod_looic = bmod_loo$estimates[3,]
+# bmod_looic_maxRE = bmod_loo_maxRE$estimates[3,]
 
 # all_ic = rbind(bmod_looic, bmod_looic_maxRE)
 # print(all_ic[order(all_ic[,2],decreasing = TRUE),])#bmod is better, but not by >1SE
@@ -294,10 +294,10 @@ plot(x = cond_eff,
 # Calculate model contrasts -----------------------------------------------
 
 
-# . Marginal effects version ----------------------------------------------
-require(marginaleffects)
-marginaleffects::avg_comparisons(mod_chosen,
-                                 hypothesis = 'pairwise')
+  ##. Marginal effects version -
+  # require(marginaleffects)
+  # marginaleffects::avg_comparisons(mod_chosen,
+  #                                  hypothesis = 'pairwise')
 
 
 # . emmeans version -------------------------------------------------------
