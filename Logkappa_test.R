@@ -1,3 +1,5 @@
+
+# Simulate data -----------------------------------------------------------
 require(circular)
 raw_data <- data.frame(bearings = round(c(
   sapply(X = c(3,3,3,3,3,5,5,5,5,5),#concentration parameter "kappa"
@@ -16,11 +18,16 @@ raw_data <- data.frame(bearings = round(c(
   )
 )),
 condition = sort(rep(c('A','B'), 50)), #two conditions with 50 angles
-beetle = sort(rep(1:5, 10)) #5 beetles with 10 angles per condition
+indiv = sort(rep(1:5, 10)) #5 indivs with 10 angles per condition
 )
+
 View(raw_data)#inspect data
+
+# Summarise raw data ------------------------------------------------------
+
+
 #calculate mean vectors
-mean_vectors = aggregate(bearings~beetle*condition,
+mean_vectors = aggregate(bearings~indiv*condition,
                          data = raw_data,
                          FUN = function(i, ...){
                            suppressWarnings(
@@ -35,6 +42,10 @@ mean_vectors = aggregate(bearings~beetle*condition,
 mean_vectors <- within(mean_vectors,
                        {mean_vector = bearings; rm(bearings)} # bearing now indicates a mean vector, not an angle
 )
+
+
+# Plot data summary -------------------------------------------------------
+
 #plot mean vectors
 boxplot(mean_vector~condition, data = mean_vectors, ylim = c(0,1))
 #calculate log kappa
@@ -54,24 +65,24 @@ within(shap_test, {p <- logkappa; rm(logkappa)})
 
 # Try a linear model with log kappa ---------------------------------------
 require(lme4)
-lm_test = lmer(formula = logkappa~condition+(1|beetle), #cannot account for different variances
+lm_test = lmer(formula = logkappa~condition+(1|indiv), #cannot account for different variances
                data = mean_vectors)
-lm_null = lmer(formula = logkappa~1+(1|beetle), 
+lm_null = lmer(formula = logkappa~1+(1|indiv), 
                data = mean_vectors)
-anova(lm_test, lm_null) # model with condition is better, but not significantly
+anova(lm_test, lm_null) # model with condition is better, but not always significantly
 
 
 # Fit beta distributed model ----------------------------------------------
 require(glmmTMB)
 
-glm_test = glmmTMB::glmmTMB(formula = mean_vector~condition+(1|beetle),
+glm_test = glmmTMB::glmmTMB(formula = mean_vector~condition+(1|indiv),
                             dispformula = ~ condition, # cannot account for indiv effects on dispersion
                             family = beta_family(link = "logit"),
                             data = mean_vectors 
                             # control = glmmTMBControl(optimizer = nloptr::bobyqa)
                             )
 
-glm_null = glmmTMB::glmmTMB(formula = mean_vector~1+(1|beetle),
+glm_null = glmmTMB::glmmTMB(formula = mean_vector~1+(1|indiv),
                             dispformula = ~ 1,
                             family = beta_family(link = "logit"),
                             data = mean_vectors#, 
@@ -91,8 +102,8 @@ summary(glm_test) #no significant effect of condition on dispersion
 # Fit a Bayesian Beta distributed model -----------------------------------
 require(brms)
 
-frm_bmod = bf(mean_vector~condition+(1|beetle),
-              phi ~ condition+(1|beetle),
+frm_bmod = bf(mean_vector~condition+(1|indiv),
+              phi ~ condition+(1|indiv),
               family = brms::Beta()) 
 priors_bmod = get_prior(formula = frm_bmod, 
                         data = mean_vectors)
