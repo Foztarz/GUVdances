@@ -1,3 +1,40 @@
+#FOR A 'CLEAN' RUN, PRESS ctrl+shift+F10 to RESTART Rstudio
+graphics.off()
+# Details ---------------------------------------------------------------
+#       AUTHOR:	James Foster              DATE: 2024 04 03
+#     MODIFIED:	James Foster              DATE: 2024 04 03
+#
+#  DESCRIPTION: Load dance angles, calculate mean vectors and fit beta regression
+#               to the mean vectors via brms.
+#               
+#       INPUTS: 
+#               
+#      OUTPUTS: Plots and test statistics
+#
+#	   CHANGES: - 
+#             - 
+#             - 
+#
+#   REFERENCES: Bürkner, P.-C., 2018. 
+#               Advanced Bayesian Multilevel Modeling with the R Package brms.
+#               The R Journal 10, 395–411. 
+#               https://doi.org/10.32614/RJ-2018-017
+# 
+#               Heiss, A. 2021. 
+#               A Guide to Modeling Proportions with Bayesian Beta and 
+#               Zero-Inflated Beta Regression Models. 
+#               https://doi.org/10.59350/7p1a4-0tw75.
+#
+#    EXAMPLES:  
+#
+# 
+#TODO   ---------------------------------------------
+#TODO   
+#- Load data  +
+#- Extract results  +
+#- Switch to marginal_effects  +
+#- Handwrite hypothesis tests for all contrasts
+#- Get modelling consistent 
 # Useful functions --------------------------------------------------------
 
 # . Load packages ----------------------------------------------------------
@@ -178,7 +215,7 @@ system.time(expr =
               {
                 bmod_test = brm(formula = frm_bmod ,
                                 data = resc_mvs,
-                                iter = 5e3, # about 2 minutes
+                                iter = 5e3, # about 2500 iterations/ minute
                                 family = Beta(),
                                 prior = priors_bmod,#use default
                                 control = list( adapt_delta = 0.95 ), # closer to 1.0 means higher resolution sampling
@@ -195,10 +232,10 @@ system.time(expr =
               {
                 bmod_test_maxRE = brm(formula = frm_bmod_maxRE ,
                                 data = resc_mvs,
-                                iter = 1e3, # about 3 minutes
+                                iter = 5e2, # about 95 iterations/ minute
                                 family = Beta(),
                                 prior = priors_bmod_mxRE,#use default
-                                control = list( adapt_delta = 0.8),#0.95 ), # closer to 1.0 means higher resolution sampling
+                                control = list( adapt_delta = 0.90), #lowered to speed up? #0.95 ), # closer to 1.0 means higher resolution sampling
                                 cores = 4,
                                 backend = 'cmdstanr',
                                 init = '0',
@@ -207,7 +244,7 @@ system.time(expr =
                 )
               }
 )
-#takes about 2 minutes
+#takes about 5 minutes
 
 
 # Check model convergence -------------------------------------------------
@@ -227,11 +264,24 @@ plot(bmod_test_maxRE, ask = FALSE)
 #
 #
 
-summary(bmod_test)
+summary(bmod_test_maxRE)
 
+# Compare models ----------------------------------------------------------
+
+bmod_loo = loo(bmod_test)
+bmod_loo_maxRE = loo(bmod_test_maxRE)
+bmod_looic = bmod_loo$estimates[3,]
+bmod_looic_maxRE = bmod_loo_maxRE$estimates[3,]
+
+# all_ic = rbind(bmod_looic, bmod_looic_maxRE)
+# print(all_ic[order(all_ic[,2],decreasing = TRUE),])#bmod is better, but not by >1SE
+bmod_lc = loo_compare(bmod_loo, bmod_loo_maxRE)
+print(bmod_lc)
+
+mod_chosen = get(x = dimnames(bmod_lc)[[1]][1])
 # Extract model predictions -----------------------------------------------
 
-cond_eff = conditional_effects(bmod_test)
+cond_eff = conditional_effects(mod_chosen)
 plot(x = cond_eff, 
      points = TRUE, 
      jitter_width = 0.3, 
@@ -241,17 +291,46 @@ plot(x = cond_eff,
                        )
     )
 
-bmod_loo = loo(bmod_test)
-bmod_loo_maxRE = loo(bmod_test_maxRE)
-bmod_looic = bmod_loo$estimates[3,]
-bmod_looic_maxRE = bmod_loo_maxRE$estimates[3,]
-
-all_ic = rbind(bmod_looic, bmod_looic_maxRE)
-print(all_ic[order(all_ic[,2],decreasing = TRUE),])#bmod is better, but not by >1SE
-bmod_lc = loo_compare(bmod_loo, bmod_loo_maxRE)
-
-mod_chosen = get(x = dimnames(bmod_lc)[[1]][1])
 # Calculate model contrasts -----------------------------------------------
+
+
+# . Marginal effects version ----------------------------------------------
+require(marginaleffects)
+marginaleffects::avg_comparisons(mod_chosen,
+                                 hypothesis = 'pairwise')
+
+
+# . emmeans version -------------------------------------------------------
+require(emmeans)
+em = emmeans::emmeans(mod_chosen,
+                      specs = pairwise~light_type,
+                      regrid = "response" )
+em_con = emmeans::contrast(em,
+                           method = "revpairwise")
+em_sum = summary(em_con)
+print(within(em_sum, 
+             {
+               difference = ifelse(sign(lower.HPD) == sign(upper.HPD),
+                                          yes = '*',#estimated contrast does not overlap with zero
+                                          no = '') # estimated contrast does overlap with zero difference
+             }
+             ) 
+      )
+
+## contrast estimate lower.HPD upper.HPD difference
+## gl - gh  -0.26239  -0.34906   -0.1697 *         
+## uh - gh   0.03281   0.00778    0.0625 *         
+## uh - gl   0.29660   0.20086    0.3889 *         
+## ul - gh  -0.25770  -0.30739   -0.2158 *         
+## ul - gl   0.00327  -0.10039    0.0952           
+## ul - uh  -0.29168  -0.32521   -0.2569 *         
+## ul2 - gh -0.11085  -0.30517    0.0622           
+## ul2 - gl  0.14525  -0.04457    0.3315           
+## ul2 - uh -0.14369  -0.33838    0.0188           
+## ul2 - ul  0.14590  -0.06426    0.3171   
+
+# . Handwritten version ---------------------------------------------------
+
 
 all_draws = prepare_predictions(mod_chosen)
 #collect coefficients
