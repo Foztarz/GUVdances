@@ -33,6 +33,8 @@ graphics.off()
 #- Load data  +
 #- Extract results  +
 #- Switch to marginal_effects  +
+#- Narrower RE prior
+#- Eliminate divergent transitions
 #- Handwrite hypothesis tests for all contrasts
 #- Get modelling consistent 
 # Useful functions --------------------------------------------------------
@@ -199,7 +201,7 @@ priors_bmod_mxRE= within(get_prior(formula = frm_bmod_maxRE,
 )
 
 
-# Run the model -----------------------------------------------------------
+# Run the models -----------------------------------------------------------
 
 #rescale mean vectors equal to 1
 resc_mvs = within(mean_vectors,
@@ -227,6 +229,8 @@ system.time(expr =
                 )
               }
 )
+#takes about 2 minutes
+
 #run and time the model
 system.time(expr = 
               {
