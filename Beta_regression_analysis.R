@@ -113,6 +113,10 @@ cd = within(cd,
             }
             )
 
+#remove ul2
+cd = subset(cd, 
+            !(light_type %in% 'ul2') )
+
 u_id = with(cd, unique(ID)) # unique beedances
 length(u_id)#169 beedances
 
@@ -127,11 +131,25 @@ idx_both  = with(cd,
 u_id_both = u_id[idx_both]
 
 
+# Reorganise data ---------------------------------------------------------
+cd = within(cd,
+            {
+            col_bright = do.call(what = rbind,
+                                 args = strsplit(x = light_type,
+                                                 split = '')
+                                 )
+            colour = col_bright[,1]
+            brightn = col_bright[,2]
+            }
+            )
+
+
+
 # Calculate mean vectors --------------------------------------------------
 
 
 #calculate mean vectors
-mean_vectors = aggregate(angle~ID*light_type,
+mean_vectors = aggregate(angle~ID*brightn*colour,
                          data = cd,
                          FUN = rho.circular
                         )
@@ -140,7 +158,7 @@ mean_vectors = within(mean_vectors,
                        {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
 )
 #plot mean vectors
-boxplot(mean_vector~light_type,
+boxplot(mean_vector~brightn*colour,
         data = mean_vectors,
         ylim = c(0,1),
         col = adjustcolor('blue', alpha.f = 0.2))
@@ -157,16 +175,16 @@ mean_vectors = within(mean_vectors,
 # Fit a Bayesian Beta distributed model -----------------------------------
 
 #set up model formula
-frm_bmod = bf(mean_vector~light_type + # light types affect accuracy
+frm_bmod = bf(mean_vector~brightn*colour + # light types affect accuracy
                             (1|ID), # each individual is more or less oriented
-              phi ~ light_type + # light types affect variance in accuracy
+              phi ~ brightn*colour + # light types affect variance in accuracy
                       (1|ID), # some individuals vary more in accuracy than others
               family = brms::Beta()) 
 #set up model formula with indiv effects on light type
-frm_bmod_maxRE = bf(mean_vector~light_type + # light types affect accuracy
-                            (1 + light_type|ID), # each individual is more or less oriented
-              phi ~ light_type + # light types affect variance in accuracy
-                      (1 + light_type|ID), # some individuals vary more in accuracy than others
+frm_bmod_maxRE = bf(mean_vector~brightn*colour + # light types affect accuracy
+                            (1 + brightn*colour|ID), # each individual is more or less oriented
+              phi ~ brightn*colour + # light types affect variance in accuracy
+                      (1 + brightn*colour|ID), # some individuals vary more in accuracy than others
               family = brms::Beta()) 
 
 #find out the priors needed
@@ -229,7 +247,7 @@ system.time(expr =
                 )
               }
 )
-#takes about 2 minutes
+#takes about 5 minutes
 
 #run and time the model
 system.time(expr = 
@@ -248,7 +266,8 @@ system.time(expr =
                 )
               }
 )
-#takes about 10 minutes
+#takes about 15 minutes
+#Warning: 3 of 4 chains had an E-BFMI less than 0.2.
 
 
 # Check model convergence -------------------------------------------------
@@ -288,11 +307,12 @@ mod_chosen = get(x = dimnames(bmod_lc)[[1]][1])
 cond_eff = conditional_effects(mod_chosen)
 plot(x = cond_eff, 
      points = TRUE, 
-     jitter_width = 0.3, 
      point_args = list(width = 0.3, 
                        col = adjustcolor('blue',
-                                         alpha.f = 0.2)
-                       )
+                                         alpha.f = 0.2),
+                       width = 0.3
+                       ),
+     ask = FALSE
     )
 
 # Calculate model contrasts -----------------------------------------------
@@ -307,7 +327,7 @@ plot(x = cond_eff,
 # . emmeans version -------------------------------------------------------
 require(emmeans)
 em = emmeans::emmeans(mod_chosen,
-                      specs = pairwise~light_type,
+                      specs = pairwise~brightn*colour,
                       regrid = "response" )
 em_con = emmeans::contrast(em,
                            method = "revpairwise")
@@ -321,17 +341,13 @@ print(within(em_sum,
              ) 
       )
 
-## contrast estimate lower.HPD upper.HPD difference
-## gl - gh  -0.26239  -0.34906   -0.1697 *         
-## uh - gh   0.03281   0.00778    0.0625 *         
-## uh - gl   0.29660   0.20086    0.3889 *         
-## ul - gh  -0.25770  -0.30739   -0.2158 *         
-## ul - gl   0.00327  -0.10039    0.0952           
-## ul - uh  -0.29168  -0.32521   -0.2569 *         
-## ul2 - gh -0.11085  -0.30517    0.0622           
-## ul2 - gl  0.14525  -0.04457    0.3315           
-## ul2 - uh -0.14369  -0.33838    0.0188           
-## ul2 - ul  0.14590  -0.06426    0.3171   
+##    contrast estimate lower.HPD upper.HPD difference
+##  l g - h g -0.22378  -0.32262   -0.1694 *         
+##  h u - h g  0.00369  -0.00853    0.0274           
+##  h u - l g  0.23129   0.16242    0.3277 *         
+##  l u - h g -0.28590  -0.32270   -0.2396 *         
+##  l u - l g -0.05479  -0.12318    0.0421           
+##  l u - h u -0.29176  -0.31901   -0.2460 *   
 
 # . Handwritten version ---------------------------------------------------
 
@@ -423,3 +439,13 @@ with(test_statistics,
        )
      }
 )
+
+##           coefficient      z      p
+## 1            Intercept 16.888 0.0000
+## 2             brightnl -9.718 0.0000
+## 3              colouru  0.419 0.6750
+## 4     brightnl:colouru -1.579 0.1144
+## 5        phi_Intercept  6.462 0.0000
+## 6         phi_brightnl  0.381 0.7030
+## 7          phi_colouru  0.581 0.5611
+## 8 phi_brightnl:colouru  0.292 0.7705
