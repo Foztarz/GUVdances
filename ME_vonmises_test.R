@@ -294,7 +294,7 @@ ME_VM = function(x, # angle
                     log = TRUE)  
   #priors on random mu
   nll = nll - dnorm(x = m_kappa,
-                    mean = 2,
+                    mean = 1,
                     sd = 0.1,
                     log = TRUE)
   #priors on random kappa
@@ -349,6 +349,7 @@ system.time(
                ar = angle_rot,
                method = 'BFGS',
                control = list(trace = 6,
+                              REPORT = 1,
                               maxit = 100))
     )
   }
