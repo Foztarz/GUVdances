@@ -320,6 +320,7 @@ ME_VM_opt = function(prm,
         au = au,
         ar = ar
         )
+ return(if(is.finite(nll)){nll}else{1e9})
 }
 
 first_est = c( 
