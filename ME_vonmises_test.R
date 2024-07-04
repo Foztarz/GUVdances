@@ -50,6 +50,10 @@ suppressMessages(#these are disturbing users unnecessarily
 
 #  .  User input -----------------------------------------------------------
 # paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
+set.seed(20240703)#day the script was started
+n_iter = 150 # optimisation iterations
+
+paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
 csv_sep = ','#Is the csv comma separated or semicolon separated? For tab sep, use "\t"
 angle_name = "angles" #The title of the column with angles; NO SPACES PLEASE
 angle_unit = "degrees" # "degrees" or "radians"
