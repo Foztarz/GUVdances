@@ -33,6 +33,19 @@ graphics.off()
 #- Simulate two way
 #- Simulate interaction
 
+# . Load packages ----------------------------------------------------------
+#needs installing before first use (in Rstudio, see automatic message)
+suppressMessages(#these are disturbing users unnecessarily
+  {
+    require(circular)#package for handling circular data
+    require(CircStats)#package for circular hypothesis tests
+    # require(cmdstanr)#package for Bayesian modelling via Stan
+    require(brms)#package for preparing Stan models
+    # require(extraDistr)#package for unusual distributions
+  }
+)
+
+
 # Input Variables ----------------------------------------------------------
 
 #  .  User input -----------------------------------------------------------
