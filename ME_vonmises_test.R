@@ -269,26 +269,27 @@ ME_VM = function(x, # angle
                au = au,
                ar = ar) )
   #for random effects
+  #may be unnecessary
   #on mu
-  nll = nll -sum(
-              dvonmises(x = circular(mz,
-                                     units = au,
-                                     rotation = ar),
-                        mu = circular(0,
-                                      units = au,
-                                      rotation = ar),
-                        kappa = exp(m_kappa),
-                        log = TRUE
-                        )
-                  )
-#on kappa
-  nll = nll -sum(
-              dnorm(x = kz, 
-                        mean = 0,
-                        sd = 1.0,#exp(k_sd),
-                        log = TRUE
-                        )
-                  )
+      # nll = nll -sum(
+      #             dvonmises(x = circular(mz,
+      #                                    units = au,
+      #                                    rotation = ar),
+      #                       mu = circular(0,
+      #                                     units = au,
+      #                                     rotation = ar),
+      #                       kappa = exp(m_kappa),
+      #                       log = TRUE
+      #                       )
+      #                 )
+    #on kappa
+      # nll = nll -sum(
+      #             dnorm(x = kz, 
+      #                       mean = 0,
+      #                       sd = 1.0,#exp(k_sd),
+      #                       log = TRUE
+      #                       )
+      #                 )
   #priors
   #priors on mu
   #mu hyperprior
