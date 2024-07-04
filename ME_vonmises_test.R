@@ -251,8 +251,9 @@ ME_VM = function(x, # angle
   mm[cond_2] = mm[cond_2] + m1
   kk[cond_2] = kk[cond_2] + k1
   #adjust by ID
-  mm = mm + mz
-  kk = kk + kz * exp(k_sd)
+  # mm = mm + mz
+  mm = mm + mz * sqrt(-2*log(A1(exp(m_kappa)))) #convert kappa to sd
+  kk = kk + kz * exp(k_sd) #exponentiate log_kappa
   #convert to degrees if necessary
   if(au %in% 'degrees')
   {
