@@ -262,16 +262,12 @@ ME_VM = function(x, # angle
   }
   #return neg log likelihood
   #for all estimates
-  nll = sum( mapply(FUN = VM_LL,
+  nll = sum( future.apply::future_mapply(FUN = VM_LL,
                x = x,
                m = mm,
                k = exp(kk),
                au = au,
                ar = ar) )
-  # #if this is lower than a circular uniform, return circular uniform -LL
-  # nll = min(c(nll,
-  #             -log(dcircularuniform(circular(x, units = au, rotation = ar)))
-  #           ))
   #for random effects
   #on mu
   nll = nll -sum(
