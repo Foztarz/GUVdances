@@ -217,14 +217,14 @@ VM_LL = function(x, m, k,
                  au = "degrees",
                  ar = "clock")
 {
-  -sum( # add together
-    dvonmises(x = circular(x = x,
+  # -sum( # add together # can only handle one point at a time
+    -dvonmises(x = circular(x = x,
                            units = au,
                            rotation = ar), # probability density for each observed angle
               mu = m, # ML estimated mean
               kappa = k, # ML estimated concentration
               log = TRUE) # on a log scale (i.e. add instead of multiplying)
-  )
+  # )
 }
 
 ME_VM = function(x, # angle
