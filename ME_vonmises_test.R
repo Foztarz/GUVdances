@@ -3,6 +3,7 @@ graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 07 03
 #     MODIFIED:	James Foster              DATE: 2024 07 03
+#     MODIFIED:	James Foster              DATE: 2024 07 04
 #
 #  DESCRIPTION: Load dance angles, fit maximum-likelihood von Mises.
 #               
@@ -14,6 +15,7 @@ graphics.off()
 #             - Adapt delta selection for max random effects model
 #             - Organise data by colour and brightness
 #             - Set and inspect priors
+#	   CHANGES: - attempt to speed up with future_mapply and skipping sums
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. under review
 #
@@ -24,6 +26,10 @@ graphics.off()
 #TODO   
 #- Simulate null model
 #- Simulate one effect
+#- Test w/ optim  +
+#- Test w/ quap
+#- Simulate null model 
+#- Simulate one effect +
 #- Simulate two way
 #- Simulate interaction
 
