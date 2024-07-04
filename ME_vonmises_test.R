@@ -21,6 +21,7 @@ graphics.off()
 #TODO   
 #- Test w/ optim  +
 #- Test w/ quap
+#- Calculate rather than estimate m_kappa
 #- Simulate null model 
 #- Simulate one effect +
 #- Simulate two way
@@ -229,17 +230,17 @@ ME_VM = function(x, # angle
                  k_sd,# random effects sd for log kappa
                  mz,# random effects for mu
                  kz,# random effects for log kappa
-                 au = 'degrees',
-                 ar = 'clock'
+                 au = 'degrees', #angle unit
+                 ar = 'clock' #angle rotation direction
                 )
 {
   #set up population level parameter vectors
-  ln = length(x)
-  mm = rep(m0, times = ln)
-  kk = rep(k0, times = ln)
+  ln = length(x) # data length
+  mm = rep(m0, times = ln) # population mean for all data
+  kk = rep(k0, times = ln) # population kappa for all data
   #adjust by conditions
-  cond_2 = cond %in% unique(cond)[2]
-  mm[cond_2] = mm[cond_2] + m1
+  cond_2 = cond %in% unique(cond)[2] # just two conditions, find index of 2nd
+  mm[cond_2] = mm[cond_2] + m1 # add a condition offset mean
   kk[cond_2] = kk[cond_2] + k1
   #adjust by ID
   # mm = mm + mz
@@ -412,7 +413,7 @@ system.time(
                method = 'BFGS',
                control = list(trace = 6,
                               REPORT = 10,
-                              maxit = 100))
+                              maxit = n_iter))
     )
   }
 )
