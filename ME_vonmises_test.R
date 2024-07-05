@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 07 03
-#     MODIFIED:	James Foster              DATE: 2024 07 04
+#     MODIFIED:	James Foster              DATE: 2024 07 05
 #
 #  DESCRIPTION: Load dance angles, fit maximum-likelihood von Mises.
 #               
@@ -20,8 +20,10 @@ graphics.off()
 #TODO   ---------------------------------------------
 #TODO   
 #- Test w/ optim  +
+#- Simulate small dataset
 #- Test w/ quap
 #- Calculate rather than estimate m_kappa
+#- Optim approach to fixef 
 #- Simulate null model 
 #- Simulate one effect +
 #- Simulate two way
@@ -44,7 +46,7 @@ suppressMessages(#these are disturbing users unnecessarily
 
 #  .  User input -----------------------------------------------------------
 set.seed(20240703)#day the script was started
-n_iter = 150 # optimisation iterations
+n_iter = 1000 # optimisation iterations
 
 paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
 csv_sep = ','#Is the csv comma separated or semicolon separated? For tab sep, use "\t"
@@ -63,7 +65,7 @@ if(sys_win){
 }
 
 # Simulate data (not used) ------------------------------------------------
-n_angles = 44
+n_angles = 20
 # minimum discriminable angle appears to be approx 35°
 kappa_both = A1inv(0.7) #concentration around each trial mean
 logkappa_var = 1.0 #scale of random variation in concentration (log units)
@@ -168,14 +170,22 @@ longdata = with(adata,
 
 # Fit two means -----------------------------------------------------------
 
-two_m = aggregate(x = rad(angle) ~ condition,
+two_m = aggregate(x = circular(angle, 
+                                   units = angle_unit, 
+                                   rotation = angle_rot) ~ 
+                            condition,
                   data = longdata,
                   FUN = mle.vonmises,
                   bias = TRUE)
+two_m = within(two_m,
+               {
+                 ml_est = `circular(angle, units = angle_unit, rotation = angle_rot)`
+               }
+               )
 
-with(two_m$`rad(angle)`[1, ],
+with(two_m$ml_est[1, ],
      {
-arrows.circular(x = circular(deg(mu),  
+arrows.circular(x = circular(mu,  
                              type = 'angles',
                              unit = 'degrees',
                              template = 'geographics',
@@ -187,7 +197,7 @@ arrows.circular(x = circular(deg(mu),
                 col = 'cyan4')
      }
 )
-with(two_m$`rad(angle)`[2, ],
+with(two_m$ml_est[2, ],
      {
 arrows.circular(x = circular(deg(mu),  
                              type = 'angles',
@@ -203,21 +213,330 @@ arrows.circular(x = circular(deg(mu),
 )
 
 
-# Mixed-effects optimisation ----------------------------------------------
-
+## Optim version ---------------------------------------------------------
+#TODO#is this working?!
 VM_LL = function(x, m, k, 
                  au = "degrees",
                  ar = "clock")
 {
-  # -sum( # add together # can only handle one point at a time
-    -dvonmises(x = circular(x = x,
-                           units = au,
-                           rotation = ar), # probability density for each observed angle
-              mu = m, # ML estimated mean
-              kappa = k, # ML estimated concentration
-              log = TRUE) # on a log scale (i.e. add instead of multiplying)
-  # )
+  -dvonmises(x = circular(x = x,
+                          units = au,
+                          rotation = ar), # probability density for each observed angle
+             mu = m, # ML estimated mean
+             kappa = k, # ML estimated concentration
+             log = TRUE) # on a log scale (i.e. add instead of multiplying)
 }
+
+
+ML_VM = function(x, # angle
+                 cond, #condition
+                 m0, #intercept mean
+                 m1, #condition 2 mean
+                 k0, #intercept kappa
+                 k1, #condition 2 kappa 
+                 au = 'degrees', #angle unit
+                 ar = 'clock' #angle rotation direction
+)
+{
+  #set up population level parameter vectors
+  ln = length(x) # data length
+  mm = rep(m0, times = ln) # population mean for all data
+  kk = rep(k0, times = ln) # population kappa for all data
+  #adjust by conditions
+  cond_2 = cond %in% unique(cond)[2] # just two conditions, find index of 2nd
+  mm[cond_2] = mm[cond_2] + m1 # add a condition offset mean
+  kk[cond_2] = kk[cond_2] + k1
+  #convert to degrees if necessary
+  if(au %in% 'degrees')
+  {
+    mm = deg(mm)
+  }
+  #return neg log likelihood
+  #for all estimates
+  nll = sum( future.apply::future_mapply(FUN = VM_LL,
+                                         x = x,
+                                         m = mm,
+                                         k = exp(kk),
+                                         au = au,
+                                         ar = ar) )
+  #priors
+  #priors on mu
+  #mu hyperprior
+  # mlvm = mle.vonmises(circular(x[!cond_2], units = au, rotation  = ar))
+  mlvm = mle.vonmises(circular(x, units = au, rotation  = ar))
+  nll = nll - dvonmises(x = m0,
+                        # mu = circular(0, units = au, rotation = ar),
+                        mu = circular(mlvm$mu, units = au, rotation = ar),
+                        # kappa = 0.1,
+                        kappa = mlvm$kappa,
+                        log = TRUE)
+  nll = nll - dvonmises(x = m1,
+                        mu = circular(0, units = au, rotation = ar),
+                        # kappa = A1inv( sqrt(-log(0.05)/(sum(cond_2))) ), #kappa is smallest sig. mean vector
+                        # kappa = 0.25, #mid level kappa
+                        kappa = mlvm$kappa,
+                        log = TRUE)
+  #priors on kappa
+  nll = nll - dnorm(x = k0, # this is a log kappa!
+                    # mean = log(mlvm$kappa),
+                    mean = 0,
+                    sd = 0.25,
+                    log = TRUE)
+  nll = nll - dnorm(x = k1,
+                    mean = 0,
+                    sd = 0.25,
+                    log = TRUE)
+  
+  
+  
+         arrows.circular(x = circular(deg(m0),  
+                                      type = 'angles',
+                                      unit = au,
+                                      modulo = '2pi',
+                                      zero = pi/2,
+                                      rotation = ar),
+                         y = A1(exp(k0)),
+                         lwd = 1,
+                         length = 0,
+                         col = adjustcolor('cyan2', alpha.f = 0.1)
+         )
+  
+
+         arrows.circular(x = circular(deg(m0+m1),  
+                                      type = 'angles',
+                                      unit = au,
+                                      modulo = '2pi',
+                                      zero = pi/2,
+                                      rotation = ar),
+                         y = A1(exp(k0+k1)),
+                         lwd = 1,
+                         length = 0,
+                         col = adjustcolor('blue2', alpha.f = 0.1)
+         )
+
+  
+  return(nll)
+}
+
+ML_VM_opt = function(prm, 
+                     x = angle,
+                     cond = cond,
+                     ID = ID,
+                     au = 'degrees',
+                     ar = 'clock')
+{
+  nll = ML_VM(x = x,cond = cond,
+              m0 = prm[1],m1 = prm[2],k0 = prm[3],k1 = prm[4],
+              au = au,
+              ar = ar
+  )
+  return(if(is.finite(nll)){nll}else{1e9})
+}
+
+
+#reset seed to distinguish differences in data from differences in starting params
+set.seed(20240703)#day the script was started
+norm_ml = rnorm(4)
+names(norm_ml) = c('m0', 'm1', 'k0', 'k1')
+
+
+#plotting version
+
+par(mar =rep(0,4))
+plot.circular(x = circular(x = adata$angle_1, 
+                           type = 'angles',
+                           unit = angle_unit,
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = 0.5/dt_dim[1],
+col = 'cyan4'
+)
+par(new = T)
+plot.circular(x = circular(x = adata$angle_2, 
+                           type = 'angles',
+                           unit = 'degrees',
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = -0.5/dt_dim[1],
+col = 'darkblue',
+shrink = 1.05,
+axes = F
+)
+
+
+system.time(
+  {
+    oo_ml = with(longdata,
+              optim(par = norm_ml,
+                    fn = ML_VM_opt,
+                    x = angle,
+                    cond = condition,
+                    au = angle_unit,
+                    ar = angle_rot,
+                    method = 'SANN',
+                    control = list(trace = 1,
+                                   REPORT = 10,
+                                   maxit = n_iter,
+                                   abstol = 0))
+    )
+  }
+)
+
+dpar_ml = with(oo_ml, data.frame(t(par)))
+
+with(dpar_ml, 
+     {
+       print(
+         list(
+           deg(m0) %% 360,
+           deg(m0+m1) %% 360,
+           A1(exp(k0)),
+           A1(exp(k0 + k1))
+         ),
+         digits = 3 )
+     }
+)
+
+
+## Plot predictions together ---------------------------------------------
+
+
+with(dpar_ml,
+     {
+       arrows.circular(x = circular(deg(m0),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(exp(k0)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('cyan2', alpha.f = 0.5)
+       )
+     }
+)
+with(dpar_ml,
+     {
+       arrows.circular(x = circular(deg(m0+m1),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(exp(k0+k1)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('blue2', alpha.f = 0.5)
+       )
+     }
+)
+
+
+par(mar =rep(0,4))
+plot.circular(x = circular(x = adata$angle_1, 
+                           type = 'angles',
+                           unit = angle_unit,
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = 0.5/dt_dim[1],
+col = 'cyan4'
+)
+par(new = T)
+plot.circular(x = circular(x = adata$angle_2, 
+                           type = 'angles',
+                           unit = 'degrees',
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = -0.5/dt_dim[1],
+col = 'darkblue',
+shrink = 1.05,
+axes = F
+)
+
+with(two_m$ml_est[1, ],
+     {
+       arrows.circular(x = circular(mu,  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    template = 'geographics',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(kappa),
+                       lwd = 3,
+                       col = 'cyan4')
+     }
+)
+with(two_m$ml_est[2, ],
+     {
+       arrows.circular(x = circular(deg(mu),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    template = 'geographics',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(kappa),
+                       lwd = 3,
+                       col = 'darkblue')
+     }
+)
+
+with(dpar_ml,
+     {
+       arrows.circular(x = circular(deg(m0),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(exp(k0)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('cyan2', alpha.f = 0.5)
+       )
+     }
+)
+with(dpar_ml,
+     {
+       arrows.circular(x = circular(deg(m0+m1),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot),
+                       y = A1(exp(k0+k1)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('blue2', alpha.f = 0.5)
+       )
+     }
+)
+
+
+# Mixed-effects optimisation ----------------------------------------------
+
 
 ME_VM = function(x, # angle
                  cond, #condition
@@ -243,8 +562,8 @@ ME_VM = function(x, # angle
   mm[cond_2] = mm[cond_2] + m1 # add a condition offset mean
   kk[cond_2] = kk[cond_2] + k1
   #adjust by ID
-  # mm = mm + mz
-  mm = mm + mz * sqrt(-2*log(A1(exp(m_kappa)))) #convert kappa to sd
+  mm = mm + mz
+  # mm = mm + mz * sqrt(-2*log(A1(exp(m_kappa)))) #convert kappa to sd
   kk = kk + kz * exp(k_sd) #exponentiate log_kappa
   #convert to degrees if necessary
   if(au %in% 'degrees')
@@ -263,6 +582,16 @@ ME_VM = function(x, # angle
   #for random effects
   #may be unnecessary
   #on mu
+  #just find the raneff SD
+  mle_kappa = mle.vonmises(x =
+                            circular(mz,
+                                    units = au,
+                                    rotation = ar)
+                           )$kappa
+  # nll = nll - dnorm(x = m_kappa, # check that m_kappa is representative
+  #                   mean = log(mle_kappa),
+  #                   sd = 0.1,
+  #                   log = TRUE) # should track as closely as possible
       # nll = nll -sum(
       #             dvonmises(x = circular(mz,
       #                                    units = au,
@@ -289,8 +618,8 @@ ME_VM = function(x, # angle
   nll = nll - dvonmises(x = m0,
                         # mu = circular(0, units = au, rotation = ar),
                         mu = circular(mlvm$mu, units = au, rotation = ar),
-                        # kappa = 0.1,
-                        kappa = mlvm$kappa,
+                        kappa = 0.1,
+                        # kappa = mlvm$kappa,
                         log = TRUE)
   nll = nll - dvonmises(x = m1,
                         mu = circular(0, units = au, rotation = ar),
@@ -310,7 +639,8 @@ ME_VM = function(x, # angle
   #                   mean = 1,
   #                   sd = 0.5,
   #                   log = TRUE)
-  nll = nll - dstudent_t(x = sqrt( -2 * log( A1( exp(m_kappa) ) ) ), #convert to circular SD
+  # nll = nll - dstudent_t(x = sqrt( -2 * log( A1( exp(m_kappa) ) ) ), #convert to circular SD
+  nll = nll - dstudent_t(x = sqrt( -2 * log( A1( mle_kappa ) ) ), #convert to circular SD
                     df = 1,
                     mu = 0,
                     sigma = pi/6, #expect narrow distribution, avoid overfitting
@@ -366,7 +696,7 @@ with(longdata,
 )
 #pring MLE neg LL for reference
 print(
-  with(data.frame(two_m$`rad(angle)`),
+  with(data.frame(two_m$ml_est),
        -sum( c(
          sum(
            dvonmises(
@@ -443,7 +773,7 @@ dpar = with(oo, data.frame(t(par)))
                c(
                  deg(m0) %% 360,
                  deg(m0+m1) %% 360),
- deg(unlist(two_m$`rad(angle)`[,'mu'])) %% 360
+ deg(unlist(two_m$ml_est[,'mu'])) %% 360
  ),
  digits = 5)
            }
@@ -455,7 +785,7 @@ dpar = with(oo, data.frame(t(par)))
                  c(exp(k0),
                    exp(k0 + k1) ),
                    unlist(
-two_m$`rad(angle)`[,'kappa']
+two_m$ml_est[,'kappa']
 ) 
 ),
 digits = 5
@@ -497,7 +827,7 @@ digits = 5
 )
       
 print(
-            with(data.frame(two_m$`rad(angle)`),
+            with(data.frame(two_m$ml_est),
 -sum( c(
      sum(
        dvonmises(
