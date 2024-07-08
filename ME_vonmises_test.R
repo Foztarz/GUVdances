@@ -11,6 +11,7 @@ graphics.off()
 #      OUTPUTS: Plots and test statistics
 #
 #	   CHANGES: - attempt to speed up with future_mapply and skipping sums
+#             - fixed formatting error
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. under review
 #
@@ -20,12 +21,14 @@ graphics.off()
 #TODO   ---------------------------------------------
 #TODO   
 #- Test w/ optim  +
-#- Simulate small dataset
-#- Test w/ quap
-#- Calculate rather than estimate m_kappa
-#- Optim approach to fixef 
-#- Simulate null model 
+#- Simulate small dataset +
+#- Calculate rather than estimate m_kappa +
+#- Optim approach to fixef +
 #- Simulate one effect +
+#- Neaten up
+#- Expand simulated dataset
+#- Test w/ quap
+#- Simulate null model 
 #- Simulate two way
 #- Simulate interaction
 
