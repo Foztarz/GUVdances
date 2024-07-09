@@ -26,6 +26,7 @@ graphics.off()
 #- Optim approach to fixef +
 #- Simulate one effect +
 #- Neaten up
+#- Generalised simulation of multiple indivs w/ multiple obs
 #- Expand simulated dataset
 #- Test w/ quap
 #- Simulate null model 
@@ -49,7 +50,7 @@ suppressMessages(#these are disturbing users unnecessarily
 
 #  .  User input -----------------------------------------------------------
 set.seed(20240708)#day the script was fixed
-n_iter = 1e4 #optimisation iterations
+n_iter = 1e4#4 #optimisation iterations
 
 paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
 csv_sep = ','#Is the csv comma separated or semicolon separated? For tab sep, use "\t"
@@ -72,7 +73,7 @@ n_angles = 44
 # minimum discriminable angle appears to be approx 35°
 kappa_both = A1inv(0.7) #concentration around each trial mean
 logkappa_var = 1.0 #scale of random variation in concentration (log units)
-mu_1 = rcircularuniform(n = 1)#
+mu_1 = 0;rcircularuniform(n = 1)#
 mu_offset = rcircularuniform(n = 1)
 if(paired_data)
 {
@@ -400,12 +401,13 @@ system.time(
                        cond = condition,
                        au = angle_unit,
                        ar = angle_rot,
-                       plotit = FALSE,
+                       plotit = TRUE,
                        method = 'SANN',
                        control = list(trace = 1,
                                       REPORT = 10,
-                                      maxit = n_iter,
-                                      abstol = 0))
+                                      maxit = n_iter/2,
+                                      abstol = 0,
+                                      temp = 0.1))
     )
   }
 )
@@ -591,12 +593,13 @@ system.time(
                     cond = condition,
                     au = angle_unit,
                     ar = angle_rot,
-                    plotit = FALSE,
+                    plotit = TRUE,
                     method = 'SANN',
                     control = list(trace = 1,
                                    REPORT = 10,
-                                   maxit = n_iter,
-                                   abstol = 0))
+                                   maxit = ceiling(n_iter/2),
+                                   abstol = 0,
+                                   temp = 1))
     )
   }
 )
@@ -778,12 +781,15 @@ ME_VM = function(x, # angle
   #adjust by ID
   mm = mm + mz
   # mm = mm + mz * sqrt(-2*log(A1(exp(m_kappa)))) #convert kappa to sd
-  kk = kk + kz * exp(k_sd) #exponentiate log_kappa
+  # kk = kk + kz * exp(k_sd) #exponentiate log_kappa #I think this was wrong
+  kk = kk + kz * k_sd #exponentiate log_kappa
   #convert to degrees if necessary
   if(au %in% 'degrees')
   {
     mm = deg(mm)
     mz = deg(mz)
+    m0 = deg(m0)
+    m1 = deg(m1)
   }
   #return neg log likelihood
   #for all estimates
@@ -796,7 +802,7 @@ ME_VM = function(x, # angle
   #plot for troubleshooting
   if(plotit)
   {
-    arrows.circular(x = circular(deg(m0),  
+    arrows.circular(x = circular(m0,  
                                  type = 'angles',
                                  unit = au,
                                  modulo = '2pi',
@@ -810,7 +816,7 @@ ME_VM = function(x, # angle
     )
     
     
-    arrows.circular(x = circular(deg(m0+m1),  
+    arrows.circular(x = circular(m0+m1,  
                                  type = 'angles',
                                  unit = au,
                                  modulo = '2pi',
@@ -821,6 +827,19 @@ ME_VM = function(x, # angle
                     lwd = 1,
                     length = 0,
                     col = adjustcolor('blue2', alpha.f = 0.1)
+    )    
+    nn = mle.vonmises(circular(mm, units = au, rotation  = ar))
+    arrows.circular(x = circular(nn$mu,  
+                                 type = 'angles',
+                                 unit = au,
+                                 modulo = '2pi',
+                                 zero = pi/2,
+                                 template = 'geographics',
+                                 rotation = ar),
+                    y = A1(nn$kappa),
+                    lwd = 1,
+                    length = 0,
+                    col = adjustcolor('salmon', alpha.f = 0.1)
     )
   }
   
@@ -843,17 +862,22 @@ ME_VM = function(x, # angle
   #mu hyperprior
     # mlvm = mle.vonmises(circular(x[!cond_2], units = au, rotation  = ar))
     # mlvm = mle.vonmises(circular(x, units = au, rotation  = ar))
-    # nll = nll - dvonmises(x = m0,
-    #                       # mu = circular(0, units = au, rotation = ar),
-    #                       mu = circular(mlvm$mu, units = au, rotation = ar),
-    #                       # kappa = 0.1,
-    #                       kappa = mlvm$kappa,
-    #                       log = TRUE)
+  #try to keep m0 at the centre of mz  
+  mlvm = mle.vonmises(circular(m0+mz, units = au, rotation  = ar))
+    nll = nll - dvonmises(x = circular(m0, units = au, rotation  = ar),
+                          # mu = circular(0, units = au, rotation = ar),
+                          mu = circular(mlvm$mu, units = au, rotation = ar),
+                          # kappa = 0.1,
+                          # kappa = mlvm$kappa,
+                          # kappa = A1inv(0.90), # strong prior
+                          kappa = A1inv(0.99), # very strong prior
+                          log = TRUE)
     # nll = nll - dvonmises(x = m1,
     #                       mu = circular(0, units = au, rotation = ar),
     #                       kappa = A1inv( sqrt(-log(0.05)/(sum(cond_2))) ), #kappa is smallest sig. mean vector
     #                       log = TRUE)
   #priors on kappa
+  #could be improved?
   nll = nll - dnorm(x = k0, # this is a log kappa!
                     mean = 0,
                     # mean = log(mlvm$kappa),
@@ -1011,27 +1035,31 @@ system.time(
                au = angle_unit,
                ar = angle_rot,
                plotit = FALSE,#don't plot warmup
-               warmup = TRUE,#parameters are not precise
-               method = 'SANN',
+               warmup = FALSE,#parameters are not precise
+               method = 'SANN',#Nelder-Mead',
                control = list(trace = 6,
                               REPORT = 10,
-                              maxit = ceiling(n_iter/2))
+                              maxit = ceiling(n_iter/2),
+                              abstol = 0,
+                              temp = 1)
               )
     )  
     oo_sample = with(longdata,
               # optim(par = first_est,
-              optim(par = oo_warmup$par+norm_adj,
+              optim(par = oo_warmup$par,#+norm_adj,
                fn = ME_VM_opt,
                x = angle,
                cond = condition,
                ID = ID,
                au = angle_unit,
                ar = angle_rot,
-               plotit = FALSE,
-               method = 'SANN',
+               plotit = TRUE,
+               method = 'SANN',#Nelder-Mead',
                control = list(trace = 6,
                               REPORT = 10,
-                              maxit = ceiling(n_iter/2))
+                              maxit = ceiling(n_iter/2),
+                              abstol = 0,
+                              temp = 0.1)
               )
     )
   }
@@ -1296,3 +1324,4 @@ arrows.circular(x = circular(deg(mu_1+mu_offset),
                  length = 0.1,
                  col = adjustcolor('blue2', alpha.f = 1.0)
  )
+
