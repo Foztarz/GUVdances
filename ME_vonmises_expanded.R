@@ -262,7 +262,7 @@ VM_LL = function(x, m, k,
     #plot for troubleshooting
     if(plotit)
     {
-      arrows.circular(x = circular(deg(m0),  
+      arrows.circular(x = circular(m0,  
                                    type = 'angles',
                                    unit = au,
                                    modulo = '2pi',
@@ -276,7 +276,7 @@ VM_LL = function(x, m, k,
       )
       
       
-      arrows.circular(x = circular(deg(m0+m1),  
+      arrows.circular(x = circular(m0+m1,  
                                    type = 'angles',
                                    unit = au,
                                    modulo = '2pi',
