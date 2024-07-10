@@ -32,7 +32,7 @@ graphics.off()
 #- Simulate null model 
 #- Simulate two way
 #- Simulate interaction
-
+options(warn = 2)
 # . Load packages ----------------------------------------------------------
 #needs installing before first use (in Rstudio, see automatic message)
 suppressMessages(#these are disturbing users unnecessarily
@@ -80,13 +80,13 @@ if(paired_data)
 kappa_indiv = A1inv(0.98) #concentration across individuals (pairs)
 #mean angle in trail 1 for each individual (pair)
 mu1_sim = rvonmises(n = n_angles,
-                      mu = mu_1,#random angle
+                      mu = circular(mu_1, units = "radians", zero = 0, rotation = "counter"),#random angle
                       kappa = kappa_indiv#the wider the distribution of individual biases, the greater the influence of pairing
                       )
 #simulate the full dataset
 sim = data.frame(
                  angle_1 = round(c(suppressWarnings( #rvonmises converts to circular and warns
-                   sapply(X = mu1_sim,
+                   sapply(X = circular(mu1_sim, units = "radians", zero = 0, rotation = "counter"),
                           FUN = rvonmises,
                           n = 1,
                            kappa = exp(log(kappa_both) + rnorm(n = 1, sd = logkappa_var))
@@ -599,7 +599,7 @@ system.time(
                                    REPORT = 10,
                                    maxit = ceiling(n_iter/2),
                                    abstol = 0,
-                                   temp = 1))
+                                   temp = 1)) #temperature of 1 is a Metropolis-Hastings algorithm
     )
   }
 )
