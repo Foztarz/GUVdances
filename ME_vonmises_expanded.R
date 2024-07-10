@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 07 09
-#     MODIFIED:	James Foster              DATE: 2024 07 09
+#     MODIFIED:	James Foster              DATE: 2024 07 10
 #
 #  DESCRIPTION: Load dance angles, fit maximum-likelihood von Mises.
 #               Adapted from ME_vonmises_test.R
@@ -216,18 +216,19 @@ VM_LL = function(x, m, k,
   
   # Mixed-effects optimisation ----------------------------------------------
   
+#TODO try m_kappa as prior (again?)
   
   ME_VM = function(x, # angle
-                   cond, #condition
-                   ID, #individual ID 
+                   cond, #condition !must be a number from 1:n_conditions!
+                   ID, #individual ID !must be an index from 1:n_individuals!
                    m0, #intercept mean
-                   m1, #condition 2 mean
+                   m1, #offset for condition means
                    k0, #intercept kappa
-                   k1, #condition 2 kappa 
+                   k1, #offset for condition log-kappas 
                    # m_kappa, # random effects kappa for mu
                    k_sd,# random effects sd for log kappa
-                   mz,# random effects for mu
-                   kz,# random effects for log kappa
+                   mz = NULL,# random effects for mu
+                   kz = NULL,# random effects for log kappa
                    au = 'degrees', #angle unit
                    ar = 'clock', #angle rotation direction
                    plotit = FALSE
@@ -235,14 +236,22 @@ VM_LL = function(x, m, k,
   {
     #set up population level parameter vectors
     ln = length(x) # data length
+    nc = length(unique(cond[!is.na(cond)])) #number of unique conditions
+    ni = length(unique(ID[!is.na(ID)])) #number of unique individuals
     mm = rep(m0, times = ln) # population mean for all data
     kk = rep(k0, times = ln) # population kappa for all data
     #adjust by conditions
-    mm = mm + (cond-1)*m1 # add a condition offset mean
-    kk = kk + (cond-1)*k1 # add a condition offset kappa
+    if(nc >1)
+    {
+      mm = mm + (cond-1)*m1 # add a condition offset mean
+      kk = kk + (cond-1)*k1 # add a condition offset kappa
+    }
     #adjust by ID
+    if(ni >1)
+    {
     mm = mm + mz[ID]         # add indiv offset mean
     kk = kk + kz[ID] * k_sd  # add indiv offset kappa
+    }
     #convert to degrees if necessary
     if(au %in% 'degrees')
     {
@@ -253,7 +262,8 @@ VM_LL = function(x, m, k,
     }
     #return neg log likelihood
     #for all estimates
-    nll = sum( future.apply::future_mapply(FUN = VM_LL,
+    # nll = sum( future.apply::future_mapply(FUN = VM_LL, #faster without parallel
+    nll = sum( mapply(FUN = VM_LL,
                                            x = x,
                                            m = mm,
                                            k = exp(kk), # convert to kappa
@@ -292,20 +302,14 @@ VM_LL = function(x, m, k,
     
     
     #for random effects
-    #may be unnecessary
+    #fit a von Mises to all random effects means
+    mlvm = mle.vonmises(circular(m0+mz, units = au, rotation  = ar))
     #on mu
-    #just find the raneff SD
-    mle_kappa = mle.vonmises(x =
-                               circular(mz,
-                                        units = au,
-                                        rotation = ar)
-    )$kappa
     #priors
     #priors on mu
     #mu hyperprior
     #try to keep m0 at the centre of mz  
-    mlvm = mle.vonmises(circular(m0+mz, units = au, rotation  = ar))
-    nll = nll - dvonmises(x = m0,
+    nll = nll - dvonmises(x = circular(m0, units = au, rotation = ar),
                           # mu = circular(0, units = au, rotation = ar),
                           mu = circular(mlvm$mu, units = au, rotation = ar),
                           # kappa = 0.1,
@@ -322,11 +326,13 @@ VM_LL = function(x, m, k,
                       sd = 0.5,
                       log = TRUE)  
     #priors on random mu
-    nll = nll - dstudent_t(x = sqrt( -2 * log( A1( mle_kappa ) ) ), #convert to circular SD
+    nll = nll - dstudent_t(
+                           # x = 1 / sqrt( mlvm$kappa ) , #brms rough convert to circular SD
+                           x = sqrt( -2 * log( A1( mlvm$kappa ) ) ), #Mardia convert to circular SD
                            df = 1,
                            mu = 0,
-                           sigma = pi/3, #expect narrow distribution, avoid overfitting
-                           # sigma = pi/6, #expect narrow distribution, avoid overfitting
+                           # sigma = pi/3, #expect narrow distribution, avoid overfitting
+                           sigma = pi/6, #expect narrow distribution, avoid overfitting
                            log = TRUE)
     #priors on random kappa
     nll = nll - dstudent_t(x = exp(k_sd),
@@ -348,7 +354,8 @@ ME_VM_opt = function(prm,
 {
     if(warmup){prm = prm + rnorm(length(prm), sd = 0.1)}
     nll = ME_VM(x = x,cond = cond,ID = ID,
-                m0 = prm[1],m1 = prm[2],k0 = prm[3],k1 = prm[4],#m_kappa = prm[5],k_sd = prm[6],
+                m0 = prm[1],m1 = prm[2],k0 = prm[3],k1 = prm[4],#m_kappa = prm[5],
+                k_sd = prm[5],
                 mz = prm[5+1:length(unique(ID))],
                 kz = prm[5+length(unique(ID)) + 1:length(unique(ID))],
                 au = au,
@@ -379,6 +386,8 @@ names(norm_adj) = names(first_est)
 
 
 
+
+
 system.time(
   {
     oo_warmup = with(sim,
@@ -395,7 +404,8 @@ system.time(
                            method = 'SANN',
                            control = list(trace = 6,
                                           REPORT = 10,
-                                          maxit = ceiling(n_iter/2))
+                                          maxit = ceiling(n_iter/2),
+                                          temp = 1)
                      )
     )  
     oo_sample = with(sim,
@@ -404,14 +414,15 @@ system.time(
                            fn = ME_VM_opt,
                            x = angle,
                            cond = condition,
-                           ID = ID,
+                           ID = indiv,
                            au = angle_unit,
                            ar = angle_rot,
                            plotit = FALSE,
                            method = 'SANN',
                            control = list(trace = 6,
                                           REPORT = 10,
-                                          maxit = ceiling(n_iter/2))
+                                          maxit = ceiling(n_iter/2),
+                                          temp = 0.5)
                      )
     )
   }
@@ -419,3 +430,188 @@ system.time(
 
 dpar = with(oo_sample, data.frame(t(par)))
 
+# Plot predictions --------------------------------------------------------
+
+
+par(mar =rep(0,4))
+with(subset(sim, condition %in% 1),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = angle_unit,
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = 0.5/dt_dim,
+       col = 'cyan4'
+       )
+     }
+)
+par(new = T)
+with(subset(sim, condition %in% 2),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = 'degrees',
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = -0.5/dt_dim[1],
+       col = 'darkblue',
+       shrink = 1.05,
+       axes = F
+       )
+     }
+)
+
+par(new = T)
+with(data.frame(t(oo_sample$par)),
+     {
+       plot.circular(x = circular(x = deg(
+         m0 + sapply(X = paste0('mz_', 1:n_indiv), 
+                     FUN = get, 
+                     envir = as.environment(dpar))
+       ), 
+       type = 'angles',
+       unit = angle_unit,
+       template = 'geographics',
+       modulo = '2pi',
+       zero = pi/2,
+       rotation = angle_rot
+       ),
+       pch = 3,
+       stack = TRUE,
+       bins = 360/5,
+       sep = 0.5/dt_dim[1],
+       col = 'cyan4',
+       shrink = 1.30,
+       axes = F
+       )
+     }
+)
+
+
+
+par(new = T)
+with(dpar,
+     {
+       plot.circular(x = circular(x = deg(
+         m0 + m1 + 
+           sapply(X = paste0('mz_', 1:n_indiv), 
+                  FUN = get, 
+                  envir = as.environment(dpar)) 
+       ), 
+       type = 'angles',
+       unit = 'degrees',
+       modulo = '2pi',
+       zero = pi/2,
+       template = 'geographics',
+       rotation = angle_rot
+       ),
+       pch = 3,
+       stack = TRUE,
+       bins = 360/5,
+       sep = -0.5/dt_dim[1],
+       col = 'darkblue',
+       shrink = 1.35,
+       axes = F
+       )
+     })
+with(dpar,
+     {
+       arrows.circular(x = circular(deg(m0),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    template = 'geographics',
+                                    rotation = angle_rot),
+                       y = A1(exp(k0)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('cyan2', alpha.f = 0.5)
+       )
+     }
+)
+with(dpar,
+     {
+       arrows.circular(x = circular(deg(m0+m1),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    template = 'geographics',
+                                    rotation = angle_rot),
+                       y = A1(exp(k0+k1)),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('blue2', alpha.f = 0.5)
+       )
+     }
+)
+
+
+
+arrows.circular(x = circular(deg(mu_0),  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             template = 'geographics',
+                             zero = 0,
+                             rotation = angle_rot),
+                y = A1(kappa_pop),
+                lwd = 1.5,
+                length = 0.1,
+                col = adjustcolor('cyan4', alpha.f = 1.0)
+)
+
+arrows.circular(x = circular(deg(mu_0+mu_offset),  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             template = 'geographics',
+                             rotation = angle_rot),
+                y = A1(exp(log(kappa_pop)+lk_offset)),
+                lwd = 1.5,
+                length = 0.1,
+                col = adjustcolor('blue2', alpha.f = 1.0)
+)
+
+
+# Discarded ---------------------------------------------------------------
+# benchmarking 
+# #faster w/ future or not?
+# summary(t(replicate(60,
+#                     {
+#                       system.time(
+#                         {
+#                           oo_warmup = with(sim,
+#                                            # optim(par = first_est,
+#                                            optim(par = norm_est,
+#                                                  fn = ME_VM_opt,
+#                                                  x = angle,
+#                                                  cond = condition,
+#                                                  ID = indiv,
+#                                                  au = angle_unit,
+#                                                  ar = angle_rot,
+#                                                  plotit = FALSE,#don't plot warmup
+#                                                  warmup = TRUE,#parameters are not precise
+#                                                  method = 'SANN',
+#                                                  control = list(trace = 0,
+#                                                                 REPORT = 10,
+#                                                                 maxit = 10,
+#                                                                 temp = 1)
+#                                            )
+#                           )  
+#                         }
+#                       )
+#                     })))
