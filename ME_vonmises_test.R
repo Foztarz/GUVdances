@@ -878,10 +878,12 @@ ME_VM = function(x, # angle
                     mean = 0,
                     # mean = log(mlvm$kappa),
                     sd = 0.5,
+                    # sd = 1.0,
                     log = TRUE)
   nll = nll - dnorm(x = k1,
                     mean = 0,
                     sd = 0.5,
+                    # sd = 1.0,
                     log = TRUE)  
   #priors on random mu
   # nll = nll - dnorm(x = m_kappa,
@@ -899,7 +901,8 @@ ME_VM = function(x, # angle
   nll = nll - dstudent_t(x = exp(k_sd),
                     df = 3,
                     mu = 0,
-                    sigma = 1.0,
+                    sigma = 0.5,
+                    # sigma = 1.0,
                     log = TRUE)
   return(nll)
 }
@@ -1115,13 +1118,45 @@ Warmup_HMC = function(hmcp = c(2, 0.05, 0.0), fun, pr, iter = 1e2)
 #   }
 # )
 
+
+par(mar =rep(0,4))
+plot.circular(x = circular(x = adata$angle_1, 
+                           type = 'angles',
+                           unit = angle_unit,
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = 0.5/dt_dim[1],
+col = 'cyan4'
+)
+par(new = T)
+plot.circular(x = circular(x = adata$angle_2, 
+                           type = 'angles',
+                           unit = 'degrees',
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = -0.5/dt_dim[1],
+col = 'darkblue',
+shrink = 1.05,
+axes = F
+)
+
 system.time(
   {
 oo_hmc = hmc(f = ME_VM_HMC, 
                   init = oo_warmup$par, 
                   numit = 20, 
                   L = 5, 
-                  eps = 0.01, 
+                  eps = 0.05, 
                   mass = 0.9)
 }
 )
