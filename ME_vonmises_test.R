@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 07 03
-#     MODIFIED:	James Foster              DATE: 2024 07 08
+#     MODIFIED:	James Foster              DATE: 2024 07 10
 #
 #  DESCRIPTION: Load dance angles, fit maximum-likelihood von Mises.
 #               
@@ -25,23 +25,19 @@ graphics.off()
 #- Calculate rather than estimate m_kappa +
 #- Optim approach to fixef +
 #- Simulate one effect +
-#- Neaten up
-#- Generalised simulation of multiple indivs w/ multiple obs
-#- Expand simulated dataset
+#- Neaten up +
+#- Test w/ hmc  +
 #- Test w/ quap
 #- Simulate null model 
-#- Simulate two way
-#- Simulate interaction
-options(warn = 2)
+
+# options(warn = 2) #to catch bad circular conversions
 # . Load packages ----------------------------------------------------------
 #needs installing before first use (in Rstudio, see automatic message)
 suppressMessages(#these are disturbing users unnecessarily
   {
     require(circular)#package for handling circular data
     require(CircStats)#package for circular hypothesis tests
-    # require(cmdstanr)#package for Bayesian modelling via Stan
     require(brms)#package for preparing Stan models
-    # require(extraDistr)#package for unusual distributions
   }
 )
 
@@ -1022,7 +1018,7 @@ shrink = 1.05,
 axes = F
 )
 
-
+# working poorly
 system.time(
   {
     oo_warmup = with(longdata,
@@ -1059,10 +1055,75 @@ system.time(
                               REPORT = 10,
                               maxit = ceiling(n_iter/2),
                               abstol = 0,
-                              temp = 0.1)
+                              temp = 0.5#0.1
+                              )
               )
     )
   }
+)
+
+# Test w/ Hamiltonian Monte Carlo -----------------------------------------
+#extremely slow and difficult to find appropriate parameters
+
+require(rhmc)
+ME_VM_HMC = function(prm)
+{
+  with(longdata,
+       {
+        ME_VM_opt(prm = prm,
+                  x = angle,
+                  cond = condition,
+                  ID = ID,
+                  au = angle_unit,
+                  ar = angle_rot,
+                  plotit = TRUE
+                  )
+       }
+  )
+}
+
+#warmup
+Warmup_HMC = function(hmcp = c(2, 0.05, 0.0), fun, pr, iter = 1e2)
+{
+  -hmc(f = fun, 
+      init = pr, 
+      numit = iter, 
+      L = abs(ceiling(hmcp[1])), 
+      eps = hmcp[2], 
+      mass = hmcp[3])$ar
+}
+
+#TODO find good starting values to make warmup more efficient
+# system.time(
+#   {
+#     hmc_par = optim(#par = c(16, 0.3, 0.1),
+#                     par = c(2, 0.01, 0.9),
+#                     fn = Warmup_HMC,
+#                     fun = ME_VM_HMC,
+#                     pr = oo_warmup$par,
+#                     iter = 5e0,
+#                     method = "L-BFGS-B",
+#                     lower = c(1, 0, 0),
+#                     upper = c(30, 0.99, 0.99),
+#                     control = list(trace = 6,
+#                                    REPORT = 10,
+#                                    maxit = 10,
+#                                    abstol = 1-0.9,
+#                                    temp = 0.5#0.1
+#                     )
+#                     )
+#   }
+# )
+
+system.time(
+  {
+oo_hmc = hmc(f = ME_VM_HMC, 
+                  init = oo_warmup$par, 
+                  numit = 20, 
+                  L = 5, 
+                  eps = 0.01, 
+                  mass = 0.9)
+}
 )
 
 dpar = with(oo_sample, data.frame(t(par)))
