@@ -46,6 +46,7 @@ suppressMessages(#these are disturbing users unnecessarily
 
 #  .  User input -----------------------------------------------------------
 set.seed(20240708)#day the script was fixed
+set.seed(20240703)#day the script was fixed
 n_iter = 1e4#4 #optimisation iterations
 
 paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
@@ -401,7 +402,7 @@ system.time(
                        method = 'SANN',
                        control = list(trace = 1,
                                       REPORT = 10,
-                                      maxit = n_iter/2,
+                                      maxit = n_iter/4,
                                       abstol = 0,
                                       temp = 0.1))
     )
@@ -593,7 +594,7 @@ system.time(
                     method = 'SANN',
                     control = list(trace = 1,
                                    REPORT = 10,
-                                   maxit = ceiling(n_iter/2),
+                                   maxit = ceiling(n_iter/4),
                                    abstol = 0,
                                    temp = 1)) #temperature of 1 is a Metropolis-Hastings algorithm
     )
@@ -877,12 +878,12 @@ ME_VM = function(x, # angle
   nll = nll - dnorm(x = k0, # this is a log kappa!
                     mean = 0,
                     # mean = log(mlvm$kappa),
-                    sd = 0.5,
+                    sd = 0.3,
                     # sd = 1.0,
                     log = TRUE)
   nll = nll - dnorm(x = k1,
                     mean = 0,
-                    sd = 0.5,
+                    sd = 0.3,
                     # sd = 1.0,
                     log = TRUE)  
   #priors on random mu
@@ -901,7 +902,7 @@ ME_VM = function(x, # angle
   nll = nll - dstudent_t(x = exp(k_sd),
                     df = 3,
                     mu = 0,
-                    sigma = 0.5,
+                    sigma = 0.3,
                     # sigma = 1.0,
                     log = TRUE)
   return(nll)
@@ -1154,12 +1155,15 @@ system.time(
   {
 oo_hmc = hmc(f = ME_VM_HMC, 
                   init = oo_warmup$par, 
-                  numit = 20, 
+                  numit = 10, 
                   L = 5, 
                   eps = 0.05, 
                   mass = 0.9)
 }
 )
+
+# Extract parameters ------------------------------------------------------
+
 
 dpar = with(oo_sample, data.frame(t(par)))
 
@@ -1273,7 +1277,7 @@ digits = 5
 # Plot predictions --------------------------------------------------------
 
 
-par(mar =rep(0,4))
+par(mar =rep(0,4), pty = 's')
 plot.circular(x = circular(x = adata$angle_1, 
                            type = 'angles',
                            unit = angle_unit,

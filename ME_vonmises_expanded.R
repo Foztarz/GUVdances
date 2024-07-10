@@ -319,11 +319,11 @@ VM_LL = function(x, m, k,
     #priors on kappa
     nll = nll - dnorm(x = k0, # this is a log kappa!
                       mean = 0,
-                      sd = 0.5,
+                      sd = 0.4,#on exp scale 2x larger or smaller
                       log = TRUE)
     nll = nll - dnorm(x = k1,
                       mean = 0,
-                      sd = 0.5,
+                      sd = 0.4,
                       log = TRUE)  
     #priors on random mu
     nll = nll - dstudent_t(
@@ -338,7 +338,7 @@ VM_LL = function(x, m, k,
     nll = nll - dstudent_t(x = exp(k_sd),
                            df = 3,
                            mu = 0,
-                           sigma = 1.0,
+                           sigma = 0.4,#probably shouldn't be larger than for fixef
                            log = TRUE)
     return(nll)
   }
