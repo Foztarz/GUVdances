@@ -1289,9 +1289,10 @@ plot.circular(x = circular(x = adata$angle_1,
 stack = TRUE,
 bins = 360/5,
 sep = 0.5/dt_dim[1],
-col = 'cyan4'
+col = 'cyan4',
+pty = 's'
 )
-par(new = T)
+par(new = T, pty = 's')
 plot.circular(x = circular(x = adata$angle_2, 
                            type = 'angles',
                            unit = 'degrees',
@@ -1311,7 +1312,7 @@ axes = F
 
 
 
-par(new = T)
+par(new = T, pty = 's')
 with(data.frame(t(oo_sample$par)),
            {
              plot.circular(x = circular(x = deg(
@@ -1339,7 +1340,7 @@ with(data.frame(t(oo_sample$par)),
 
 
       
-par(new = T)
+par(new = T, pty = 's')
 with(dpar,
      {
        plot.circular(x = circular(x = deg(
