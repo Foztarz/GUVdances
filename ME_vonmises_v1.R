@@ -172,7 +172,7 @@ mod_v1 = cmdstanr::cmdstan_model(stan_file = #I wrote this myself
 #compiles
 
 #fit model
-system.time(
+system.time(#approx 4 min/100 iterations
   {
 fit_v1 = mod_v1$sample(data = stan_data,
                        chains = 4,
@@ -184,6 +184,16 @@ fit_v1 = mod_v1$sample(data = stan_data,
 }
 )
 
+    # All 4 chains finished successfully.
+    # Mean chain execution time: 1127.9 seconds.
+    # Total execution time: 1310.6 seconds.
+    # 
+    # Warning: 100 of 400 (25.0%) transitions hit the maximum treedepth limit of 10.
+    # See https://mc-stan.org/misc/warnings for details.
+    # 
+    # user  system elapsed 
+    # 27.78    5.21 1313.20 
+
 #summary of fitted parameters
 sm = fit_v1$summary()
 print(sm)
@@ -192,6 +202,7 @@ print(sm)
 dw = fit_v1$draws()
 
 require(bayesplot)
-mcmc_hist(fit_v1$draws('Intercept'))
+mcmc_trace(dw, pars = 'Intercept')
+mcmc_trace(dw, pars = 'Intercept_kappa')
 
-dwdf = as_draws_df(dw)
+
