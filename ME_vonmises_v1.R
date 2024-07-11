@@ -139,8 +139,11 @@ cd = within(cd,
 )
 
 # Make into standata ------------------------------------------------------
-form_v1 = bf( angle ~ light_type + (light_type |bee),
-              kappa ~ light_type + (light_type |bee),
+# form_v1 = bf( angle ~ light_type + (light_type |bee),
+#               kappa ~ light_type + (light_type |bee),
+#               family = von_mises)			
+form_v1 = bf( angle ~ light_type + (1 |bee),
+              kappa ~ light_type + (1 |bee),
               family = von_mises)			
 
 stan_data  = make_standata(
@@ -161,14 +164,34 @@ write.table(br_code,
 
 
 # Fit model ---------------------------------------------------------------
-mod_v1 = cmdstanr::cmdstan_model(stan_file = 
+#compile the model
+mod_v1 = cmdstanr::cmdstan_model(stan_file = #I wrote this myself
                                    file.path( dirname(path_file), 
-                                             'ME_vonmises_v1.stan')#I wrote this myself
+                                             'ME_vonmises_v1.1.stan')
                                  )
+#compiles
+
+#fit model
+system.time(
+  {
 fit_v1 = mod_v1$sample(data = stan_data,
                        chains = 4,
-                       iter_warmup = 2000,
-                       iter_sampling = 2000,
+                       parallel_chains = 4,
+                       iter_warmup = 500,
+                       iter_sampling = 100,
                        adapt_delta = 0.95
                       )
+}
+)
 
+#summary of fitted parameters
+sm = fit_v1$summary()
+print(sm)
+
+#get posterior draws
+dw = fit_v1$draws()
+
+require(bayesplot)
+mcmc_hist(fit_v1$draws('Intercept'))
+
+dwdf = as_draws_df(dw)
