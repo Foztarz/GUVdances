@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 07 10
-#     MODIFIED:	James Foster              DATE: 2024 07 10
+#     MODIFIED:	James Foster              DATE: 2024 07 12
 #
 #  DESCRIPTION: Load dance angles, calculate mean vectors and fit beta regression
 #               to the mean vectors via brms.
@@ -167,7 +167,7 @@ write.table(br_code,
 #compile the model
 mod_v1 = cmdstanr::cmdstan_model(stan_file = #I wrote this myself
                                    file.path( dirname(path_file), 
-                                             'ME_vonmises_v1.1.stan')
+                                             'ME_vonmises_v1.2.stan') # circular prior
                                  )
 #compiles
 
@@ -203,6 +203,6 @@ dw = fit_v1$draws()
 
 require(bayesplot)
 mcmc_trace(dw, pars = 'Intercept')
-mcmc_trace(dw, pars = 'Intercept_kappa')
+# mcmc_trace(dw, pars = 'Intercept_kappa')
 
 
