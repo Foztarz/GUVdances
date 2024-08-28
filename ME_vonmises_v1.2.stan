@@ -71,6 +71,43 @@ functions {
        return normal_lpdf(y | mu, sqrt(1 / kappa));
      }
    }
+   //circular functions
+     // convert angle to modulo [-pi, pi]
+   real mod_circular(real y){
+     return(atan2(  sin(y), cos(y) ) ); // the output will always be in [-pi,pi]
+   }   
+   // convert array of angles to modulo [-pi, pi]
+   vector mod_circular_array(vector y, int N){
+     array[N] real yy ;
+     for (n in 1:N) {
+       yy[n] = atan2(  sin(y[n]), cos(y[n]) ) ; 
+     }
+     return(y ); // the output will always be in [-pi,pi]
+   }
+   // calculate the mean angle of a circular distribution (in radians)
+   real mean_circular(vector y, int N){
+      real sumsin = 0;
+      real sumcos = 0;
+     for (n in 1:N){
+       sumsin += sin(y[n]);
+       sumcos += cos(y[n]);
+     }
+     sumsin = sumsin/N;
+     sumcos = sumcos/N;
+     return(atan2(  sumsin, sumcos) );
+   }
+    // calculate the mean array length for a circular distribution
+   real rho_circular(vector y, int N){
+      real sumsin = 0;
+      real sumcos = 0;
+     for (n in 1:N){
+       sumsin += sin(y[n]);
+       sumcos += cos(y[n]);
+     }
+     sumsin = sumsin/N;
+     sumcos = sumcos/N;
+     return(sqrt(  sumsin^2 + sumcos^2)/N );
+   }
 }
 data {
   int<lower=1> N;  // total number of observations
@@ -101,7 +138,8 @@ transformed data {
   matrix[N, Kc_kappa] Xc_kappa;  // centered version of X_kappa without an intercept
   vector[Kc_kappa] means_X_kappa;  // column means of X_kappa before centering
   for (i in 2:K) {
-    means_X[i - 1] = mean(X[, i]);
+    // means_X[i - 1] = mean(X[, i]);
+     means_X[i - 1] = mean_circular(X[, i], num_elements(X[, i])); //this should be the circular mean
     Xc[, i - 1] = X[, i] - means_X[i - 1];
   }
   for (i in 2:K_kappa) {
@@ -114,7 +152,8 @@ parameters {
   real Intercept;  // temporary intercept for centered predictors
   vector[Kc_kappa] b_kappa;  // regression coefficients
   real Intercept_kappa;  // temporary intercept for centered predictors
-  vector<lower=0>[M_1] sd_1;  // group-level standard deviations
+  //not needed for circular?
+  // vector<lower=0>[M_1] sd_1;  // group-level standard deviations
   array[M_1] vector[N_1] z_1;  // standardized group-level effects
   vector<lower=0>[M_2] sd_2;  // group-level standard deviations
   array[M_2] vector[N_2] z_2;  // standardized group-level effects
@@ -123,14 +162,23 @@ transformed parameters {
   vector[N_1] r_1_1;  // actual group-level effects
   vector[N_2] r_2_kappa_1;  // actual group-level effects
   real lprior = 0;  // prior contributions to the log posterior
-  r_1_1 = (sd_1[1] * (z_1[1]));
+  // real cmean = mean_circular(z_1[1], N_1); //calculate the mean of all individuals
+  real cmean = mean_circular(Y, N); //calculate the mean of all individuals
+  real crho = rho_circular(Y, N); //calculate the mean of all individuals
+  // r_1_1 = (sd_1[1] * (z_1[1]));
+  r_1_1 =  mod_circular_array(z_1[1], N_1);
   r_2_kappa_1 = (sd_2[1] * (z_2[1]));
-  lprior += student_t_lpdf(Intercept | 3, 0, 2.5);
-  lprior += normal_lpdf(Intercept_kappa | 5.0, 0.8);
-  lprior += student_t_lpdf(sd_1 | 3, 0, 2.5)
-    - 1 * student_t_lccdf(0 | 3, 0, 2.5);
-  lprior += student_t_lpdf(sd_2 | 3, 0, 2.5)
-    - 1 * student_t_lccdf(0 | 3, 0, 2.5);
+  // lprior += student_t_lpdf(Intercept | 3, 0, 2.5);//prior for intercept at 171°?!
+  // lprior += student_t_lpdf(mod_circular(Intercept) | 3, cmean, 2.5);//prior for intercept at mean of raneff
+  lprior += von_mises_lpdf(mod_circular(Intercept) | cmean, 2*crho+crho^3+(5*crho^5)/6);//prior for intercept at mean of raneff
+  // lprior += normal_lpdf(Intercept_kappa | 5.0, 0.8);//this seems like a pathological prior!
+  lprior += normal_lpdf(Intercept_kappa | 0, 0.35);//expect kappa in (0.5, 2) 
+  // lprior += student_t_lpdf(sd_1 | 3, 0, 2.5)
+  //   - 1 * student_t_lccdf(0 | 3, 0, 2.5);
+  // lprior += student_t_lpdf(sd_2 | 3, 0, 2.5)
+  //   - 1 * student_t_lccdf(0 | 3, 0, 2.5);
+  lprior += student_t_lpdf(sd_2 | 3, 0, 0.35)
+    - 1 * student_t_lccdf(0 | 3, 0, 0.35); //sigma same scale as for other kappa prior
 }
 model {
   // likelihood including constants
@@ -149,7 +197,8 @@ model {
       // add more terms to the linear predictor
       kappa[n] += r_2_kappa_1[J_2[n]] * Z_2_kappa_1[n];
     }
-    mu = inv_tan_half(mu);
+    // mu = inv_tan_half(mu);
+    mu = mod_circular_array(mu, N);
     kappa = exp(kappa);
     for (n in 1:N) {
       target += von_mises2_lpdf(Y[n] | mu[n], kappa[n]);
@@ -157,13 +206,18 @@ model {
   }
   // priors including constants
   target += lprior;
-  target += std_normal_lpdf(z_1[1]);
+  // target += std_normal_lpdf(z_1[1]); //no prior
   target += std_normal_lpdf(z_2[1]);
 }
 generated quantities {
   // actual population-level intercept
-  real b_Intercept = Intercept - dot_product(means_X, b);
+  // real b_Intercept = Intercept - dot_product(means_X, b);
+  real b_Intercept = mod_circular( Intercept - dot_product(means_X, b) );
   // actual population-level intercept
   real b_kappa_Intercept = Intercept_kappa - dot_product(means_X_kappa, b_kappa);
+   // actual group-level mu //syntax error?
+  vector[N_1] animal_mu_offset = mod_circular_array(r_1_1, N_1);// find offset in [-pi, pi]
+  // actual group-level rho //syntax error?
+  real animal_mu_rho = rho_circular(r_1_1, N_1);//how do I extract this?
 }
 

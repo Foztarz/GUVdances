@@ -1,50 +1,44 @@
 #FOR A 'CLEAN' RUN, PRESS ctrl+shift+F10 to RESTART Rstudio
 graphics.off()
 # Details ---------------------------------------------------------------
-#       AUTHOR:	James Foster              DATE: 2024 07 10
-#     MODIFIED:	James Foster              DATE: 2024 07 12
+#       AUTHOR:	James Foster              DATE: 2024 08 13
+#     MODIFIED:	James Foster              DATE: 2024 08 13
 #
-#  DESCRIPTION: Load dance angles, calculate mean vectors and fit beta regression
-#               to the mean vectors via brms.
+#  DESCRIPTION: Reorganise data and print out to csv
 #               
 #       INPUTS: 
 #               
-#      OUTPUTS: Plots and test statistics
+#      OUTPUTS: csv
 #
 #	   CHANGES: - 
-#   REFERENCES: Bürkner, P.-C., 2018. 
-#               Advanced Bayesian Multilevel Modeling with the R Package brms.
-#               The R Journal 10, 395–411. 
-#               https://doi.org/10.32614/RJ-2018-017
-# 
-#               
+#
+#   REFERENCES: Natalie Cooper & Pen-Yuan Hsing, 2017 
+#               A Guide to Reproducible Code in Ecology and Evolution
+#               British Ecological Society 
+#               https://britishecologicalsociety.org/wp-content/uploads/2017/12/guide-to-reproducible-code.pdf
 #
 #    EXAMPLES:  
 #
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Load data  +
-#- Random intercepts model
-#- Run model
-#- Extract results  
-#- Get modelling consistent 
-#- Eliminate divergent transitions
-#- Handwrite hypothesis tests for all contrasts
+#- Load data  
+#- Reorganise
+#- Add solar azimuth
+
 # Useful functions --------------------------------------------------------
 
-# . Load packages ----------------------------------------------------------
+## Load packages ----------------------------------------------------------
 #needs installing before first use (in Rstudio, see automatic message)
 suppressMessages(#these are disturbing users unnecessarily
   {
     require(circular)#package for handling circular data
-    require(cmdstanr)#package for Bayesian modelling via Stan
-    require(brms)#package for preparing Stan models
+    require(oce)#package for calculating sun azimuth
   }
 )
 
 
-# . General functions -----------------------------------------------------
+## General functions -----------------------------------------------------
 
 Mod360.180 = function(x)
 {#use atan2 to convert any angle to the range (-180,180)
@@ -57,8 +51,7 @@ Mod360.180 = function(x)
 
 
 
-
-# . System parameters -----------------------------------------------------
+## System parameters -----------------------------------------------------
 
 #Check the operating system and assign a logical flag (T or F)
 sys_win = Sys.info()[['sysname']] == 'Windows'
@@ -70,7 +63,7 @@ if(sys_win){
   ltp  =  Sys.getenv('HOME')#Life was easier on Mac
 }
 
-# . Select file ---------------------------------------------------------
+## Select file ---------------------------------------------------------
 
 # set path to file
 if(sys_win){#choose.files is only available on Windows
@@ -105,6 +98,7 @@ cd = within(cd,
               signed_angle = Mod360.180(bearing)  # bearing between -180 and 180
               angle = circular(rad(signed_angle),# bearing between -pi and pi
                                rotation = 'clock') # circular format suppresses later warnings
+              rm(bee); rm(signed_angle);
             }
 )
 
@@ -127,6 +121,8 @@ u_id_both = u_id[idx_both]
 
 
 # Reorganise data ---------------------------------------------------------
+
+## Split condition into component parts ----------------------------------
 cd = within(cd,
             {
               col_bright = do.call(what = rbind,
@@ -135,74 +131,81 @@ cd = within(cd,
               )
               colour = col_bright[,1]
               brightn = col_bright[,2]
+              rm(col_bright); rm(light_type); 
             }
 )
 
-# Make into standata ------------------------------------------------------
-# form_v1 = bf( angle ~ light_type + (light_type |bee),
-#               kappa ~ light_type + (light_type |bee),
-#               family = von_mises)			
-form_v1 = bf( angle ~ light_type + (1 |bee),
-              kappa ~ light_type + (1 |bee),
-              family = von_mises)			
 
-stan_data  = make_standata(
-                formula = form_v1,
-                data = cd
-              )
+## Add time --------------------------------------------------------------
 
-br_code = make_stancode(
-  formula = form_v1,
-  data = cd
-)	
-#brms can't handle random effects in von_mises distributions (& others)
-#save this stancode and rewrite it in the style of "handwritten.uvMEmises6-1.stan"
-write.table(br_code, 
-            file = file.path(dirname(path_file), 
-                             'BRMS_vonmises_v1.stan'),
-            col.names = F, row.names = F, quote = F)					
-
-
-# Fit model ---------------------------------------------------------------
-#compile the model
-mod_v1 = cmdstanr::cmdstan_model(stan_file = #I wrote this myself
-                                   file.path( dirname(path_file), 
-                                             'ME_vonmises_v1.2.stan') # circular prior
-                                 )
-#compiles
-
-#fit model
-system.time(#approx 4 min/100 iterations
-  {
-fit_v1 = mod_v1$sample(data = stan_data,
-                       chains = 4,
-                       parallel_chains = 4,
-                       iter_warmup = 500,
-                       iter_sampling = 100,
-                       adapt_delta = 0.95
-                      )
+IDtocode = function(x)
+{
+  tp = strsplit(x = as.character(x),
+                    split = '\\.')[[1]]
+  tcode = paste0(tp[1], '-', tp[2], '-', tp[3], ' ',
+                 tp[4], ':', tp[5], ':00'
+                 )
+  return(tcode)
 }
+
+cd = within(cd,
+            {
+              time = sub(pattern = '^...........',
+                         x = ID,
+                         replacement = '')
+              time_code = sapply(X = ID, FUN = IDtocode)
+              cet_time =  as.POSIXct(time_code, tz = "Europe/Berlin", format = "%Y-%m-%d %H:%M:%OS")#CET time
+              utc_time =  as.POSIXct(cet_time, tz = "UTC")#UTC time
+              rm(time_code); rm(time)
+            }
 )
 
-    # All 4 chains finished successfully.
-    # Mean chain execution time: 1127.9 seconds.
-    # Total execution time: 1310.6 seconds.
-    # 
-    # Warning: 100 of 400 (25.0%) transitions hit the maximum treedepth limit of 10.
-    # See https://mc-stan.org/misc/warnings for details.
-    # 
-    # user  system elapsed 
-    # 27.78    5.21 1313.20 
+# Add sun azimuth ---------------------------------------------------------
+# Breitengrad: 50.806299; Längengrad: 8.811341
 
-#summary of fitted parameters
-sm = fit_v1$summary()
-print(sm)
+#handling function (sunAngle is bad with NAs and vectors)
+GetSaz = function(tm,
+                  lon,
+                  lat)
+{
+  if(!is.na(tm))
+  {
+    oce::sunAngle(
+    t = tm,
+    longitude = lon,
+    latitude = lat,
+    useRefraction = TRUE)$azimuth
+  }else
+  {
+    tm
+  }
+}
 
-#get posterior draws
-dw = fit_v1$draws()
+#add sun azimuth
+cd = within(cd, 
+            {
+            sun_az = mapply(
+                   FUN = GetSaz,
+                   tm = utc_time,
+                   lon = 8.811341,
+                   lat = 50.806299)
+            }
+            )
 
-require(bayesplot)
-mcmc_trace(dw, pars = 'Intercept')
-# mcmc_trace(dw, pars = 'Intercept_kappa')
+#convert to signed radians for modelling
+cd = within(cd, 
+            {
+            sun_az_rad = circular(rad(Mod360.180(sun_az)),# bearing between -pi and pi
+                             rotation = 'clock') # circular format suppresses later warnings
+            rm(utc_time)
+            }
+            )
 
 
+# Write out table ---------------------------------------------------------
+
+write.table(x = cd,
+            file = file.path(dirname(path_file), "colour_dance_reorg.csv"),
+            sep = ',',
+            row.names = FALSE
+            )
