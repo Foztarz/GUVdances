@@ -78,7 +78,7 @@ inv_softplus = function(x)
 Softpl_to_meanvec = function(x)
 {
   circular::A1(
-    inverse_softplus(x)
+    inv_softplus(x)
   )
 }
 
@@ -145,7 +145,7 @@ if(sys_win){
 # Simulate data  ------------------------------------------------
 n_angles = 44
 # minimum discriminable angle appears to be approx 35°
-kappa_both = A1inv(0.7) #concentration around each trial mean
+kappa_both = A1inv(0.9);A1inv(0.7) #concentration around each trial mean
 logkappa_var = 1.0 #scale of random variation in concentration (log units)
 mu_1 = rad(185);rcircularuniform(n = 1)#
 mu_offset = rad(30);rcircularuniform(n = 1)
@@ -272,11 +272,11 @@ prior_nlvm = get_prior(formula = formula_nlvm,
 
 prior_nlvm = within(prior_nlvm,
                     {
-                    prior[nlpar %in% 'mu'] = 'normal(0, pi())'
+                    prior[nlpar %in% 'muangle'] = 'normal(0, pi())'
                     }
                     )
 #set up the modulo function
-moducirc_fun = "
+mod_circular_fun = "
   real mod_circular(real y) {
     return atan2(sin(y), cos(y));
   }
@@ -301,7 +301,7 @@ real mu_circ = mod_circular(b_muangle[1]);
 real mu_offs = mod_circular(b_muangle[2]);
 "
   
-stan_var = stanvar(scode = moducirc_fun, block = "functions") + 
+stan_var = stanvar(scode = mod_circular_fun, block = "functions") + 
               stanvar(scode = mu_gen, block = "genquant")
 
 # . Short dummy run to check the influence of the priors ------------------
@@ -397,13 +397,181 @@ plot(
                       ndraws = 2e2,
                       effects = 'condition')
 )
+
+
+# Linear model sanity check -----------------------------------------------
+#set up model fit
+formula_lm = bf(
+  #set up a formula for the curve as a whole,
+  formula = rad_angle ~ condition + (1|ID),
+  nl = FALSE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
+
+prior_lm = get_prior(formula = formula_lm,
+                         data = longdata)
+
+prior_lm = within(prior_lm,
+                      {
+                        prior[prior %in% ''] = 'normal(0, 3)'
+                      }
+)
+
+
+# . Short dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    dummy_fitlm = brm( formula = formula_lm, # using our nonlinear formula
+                       data = longdata, # our data
+                       prior = prior_lm, # our priors 
+                       sample_prior = 'only', #ignore the data to check the influence of the priors
+                       iter = 300, # short run for 300 iterations
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+
+# . Short run to check the convergence ------------------
+
+
+# short run
+system.time(
+  {
+    short_fitlm = brm( formula = formula_lm, # using our nonlinear formula
+                       data = longdata, # our data
+                       prior = prior_lm, # our priors 
+                       iter = 300, # short run for 300 iterations
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)# . Full run to check the convergence ------------------
+
+
+# full run
+system.time(
+  {
+    full_fitlm = brm( formula = formula_lm, # using our nonlinear formula
+                       data = longdata, # our data
+                       prior = prior_lm, # our priors 
+                       iter = 1000, # full run for 1000 iterations
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+# . Plot LM with simulated data -----------------------------------------------------
+
+par(mar =rep(0,4))
+plot.circular(x = circular(x = adata$angle_1, 
+                           type = 'angles',
+                           unit = angle_unit,
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = 0.5/dt_dim[1],
+col = 'cyan4'
+)
+par(new = T)
+plot.circular(x = circular(x = adata$angle_2, 
+                           type = 'angles',
+                           unit = 'degrees',
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+),
+stack = TRUE,
+bins = 360/5,
+sep = -0.5/dt_dim[1],
+col = 'darkblue',
+shrink = 1.05,
+axes = F
+)
+
+
+arrows.circular(x = circular(deg(mu_1),  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             template = 'geographics',
+                             rotation = angle_rot),
+                y = A1(kappa_both),
+                lwd = 1,
+                length = 0,
+                col = adjustcolor('cyan4', alpha.f = 1.0)
+)
+arrows.circular(x = circular(deg(mu_1 + mu_offset),  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             template = 'geographics',
+                             rotation = angle_rot),
+                y = A1(kappa_both),
+                lwd = 1,
+                length = 0,
+                col = adjustcolor('blue2', alpha.f = 1.0)
+)
+
+sm_lm = summary(full_fitlm, robust = TRUE)
+prms_lm = with(sm_lm, rbind(fixed, spec_pars))
+est_lm = data.frame(t(t(prms_lm)['Estimate',]))
+with(est_lm,
+     {
+       arrows.circular(x = circular(deg(Intercept ),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    template = 'geographics',
+                                    rotation = angle_rot),
+                       y = 1/(sigma^2),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('cyan2', alpha.f = 0.5)
+       )
+     }
+)
+with(est_lm,
+     {
+       arrows.circular(x = circular(deg(Intercept  + condition),  
+                                    type = 'angles',
+                                    unit = 'degrees',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    template = 'geographics',
+                                    rotation = angle_rot),
+                       y = 1/(sigma^2),
+                       lwd = 5,
+                       length = 0,
+                       col = adjustcolor('blue2', alpha.f = 0.5)
+       )
+     }
+)
+
+
+
 # Nonlinear ME Stan version --------------------------------------------------
 
 
 #set up model fit
 formula_nlvmme = bf(
   #set up a formula for the curve as a whole,
-  formula = rad_angle ~ moducirc(muangle),
+  formula = rad_angle ~ mod_circular(muangle),
   muangle ~  condition + (1|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
   kappa ~ condition + (1|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
   family = von_mises(link = "identity",
@@ -517,57 +685,52 @@ plot(full_fitme,
 fx_names = names(fixef(full_fitme)[,1])
 nm_angle_vars = fx_names[grepl(pattern = 'angle', x = fx_names)]
 trans_lst = replicate(n = length(nm_angle_vars),
-                      expr = moducirc,
+                      expr = mod_circular,
                       simplify = FALSE)
 names(trans_lst) = paste0('b_', nm_angle_vars)
 
 
 
 # . von Mises specific diagnostics ----------------------------------------
-#convert softplus-kappa to mean vector estimate
-A1sp = function(x){A1(inverse_softplus(x))}
-#convert circular to normalised
-NZmoducirc = function(x)
-{
-  mn = mean.circular(x)
-  return(moducirc(x - mn) + mn)
-}
-#function to construct the transformation list
-Make_vmtrans = function(mod,
-                        angfun = NZmoducirc,
-                        kapfun = A1sp)
-{
-  fx_nm = names(fixef(mod)[,1])
-  nm_ang = fx_nm[grepl(pattern = 'mu', x = fx_nm)]
-  nm_kap = fx_nm[grepl(pattern = 'kappa', x = fx_nm)]
-  tlst = c(replicate(n = length(nm_ang),
-                          expr = angfun,
-                          simplify = FALSE),
-                replicate(n = length(nm_kap),
-                          expr = kapfun,
-                          simplify = FALSE) )
-  names(tlst) = paste0('b_', c(nm_ang, nm_kap))
-  return(tlst)
-}
-
-PlotVMfix = function(mod,
-                     angfun = NZmoducirc,
-                     kapfun = A1sp)
-{
-  plot(mod,
-       nvariables = 10,
-       variable = "^b_", 
-       transformations = Make_vmtrans(mod, angfun, kapfun),
-       regex = TRUE)
-}
+# #convert softplus-kappa to mean vector estimate
+# A1sp = function(x){A1(inv_softplus(x))}
+# #convert circular to normalised
+# NZmod_circular = function(x)
+# {
+#   mn = mean.circular(x)
+#   return(mod_circular(x - mn) + mn)
+# }
+# #function to construct the transformation list
+# Make_vmtrans = function(mod,
+#                         angfun = NZmod_circular,
+#                         kapfun = A1sp)
+# {
+#   fx_nm = names(fixef(mod)[,1])
+#   nm_ang = fx_nm[grepl(pattern = 'mu', x = fx_nm)]
+#   nm_kap = fx_nm[grepl(pattern = 'kappa', x = fx_nm)]
+#   tlst = c(replicate(n = length(nm_ang),
+#                           expr = angfun,
+#                           simplify = FALSE),
+#                 replicate(n = length(nm_kap),
+#                           expr = kapfun,
+#                           simplify = FALSE) )
+#   names(tlst) = paste0('b_', c(nm_ang, nm_kap))
+#   return(tlst)
+# }
+# 
+# PlotVMfix = function(mod,
+#                      angfun = NZmod_circular,
+#                      kapfun = A1sp)
+# {
+#   plot(mod,
+#        nvariables = 10,
+#        variable = "^b_", 
+#        transformations = Make_vmtrans(mod, angfun, kapfun),
+#        regex = TRUE)
+# }
 
 PlotVMfix(full_fit)
 PlotVMfix(full_fitme)
-# PlotVMfix(full_fit_LP)
-plot(full_fit_LP,
-     variable = "^b_mu", 
-     transformations = nztrans_lst,
-     regex = TRUE)
 
 
 plot(full_fitme,
@@ -664,7 +827,7 @@ with(est,
                                     zero = pi/2,
                                     template = 'geographics',
                                     rotation = angle_rot),
-                       y = A1(inverse_softplus(kappa_Intercept)),
+                       y = A1(inv_softplus(kappa_Intercept)),
                        lwd = 5,
                        length = 0,
                        col = adjustcolor('cyan2', alpha.f = 0.5)
@@ -680,7 +843,7 @@ with(est,
                                     zero = pi/2,
                                     template = 'geographics',
                                     rotation = angle_rot),
-                       y = A1(inverse_softplus(kappa_Intercept + kappa_condition)),
+                       y = A1(inv_softplus(kappa_Intercept + kappa_condition)),
                        lwd = 5,
                        length = 0,
                        col = adjustcolor('blue2', alpha.f = 0.5)
@@ -688,9 +851,10 @@ with(est,
      }
 )
 
+loo_lm = loo(full_fitlm)
 loo_vm = loo(full_fit)
 loo_vmme = loo(full_fitme)
-loo_compare(loo_vm, loo_vmme)
+loo_compare(loo_lm, loo_vm, loo_vmme)
 
 # Test w/ real data -------------------------------------------------------
 
@@ -756,9 +920,9 @@ system.time(
 fx_names = names(fixef(full_fit_LP)[,1])
 nm_angle_vars = fx_names[grepl(pattern = 'angle', x = fx_names)]
 nm_kappa_vars = fx_names[grepl(pattern = 'kappa', x = fx_names)]
-A1sp = function(x){A1(inverse_softplus(x))}
+A1sp = function(x){A1(inv_softplus(x))}
 trans_lst = c(replicate(n = length(nm_angle_vars),
-                      expr = moducirc,
+                      expr = mod_circular,
                       simplify = FALSE),
               replicate(n = length(nm_kappa_vars),
                       expr = A1sp,
@@ -774,13 +938,13 @@ plot(full_fit_LP,
      transformations = trans_lst,
      regex = TRUE)
 
-NZmoducirc = function(x)
+NZmod_circular = function(x)
 {
   mn = mean.circular(x)
-  return(moducirc(x - mn))
+  return(mod_circular(x - mn))
 }
 nztrans_lst = replicate(n = length(trans_lst),
-                        expr = NZmoducirc, 
+                        expr = NZmod_circular, 
                         simplify = FALSE)
 names(nztrans_lst) = names(trans_lst)
 plot(full_fit_LP,
