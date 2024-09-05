@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 08 28
+#     MODIFIED:	James Foster              DATE: 2024 09 05
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -10,7 +10,9 @@ graphics.off()
 #               
 #      OUTPUTS: Plots and test statistics
 #
-#	   CHANGES: - 
+#	   CHANGES: - More comprehensive simulation
+#             - Added von Mises random effects      
+#             - t-dist von Mises random effects      
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -33,8 +35,9 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Test for angles close to 180
-#- Compare circular and Gaussian raneff
+#- Test for angles close to 180 +
+#- Compare circular and Gaussian raneff +
+#- Softplus raneff kappa
 #- Simulate continuous fixed effects
 
 # . Load packages ----------------------------------------------------------
@@ -122,131 +125,157 @@ PlotVMfix = function(mod,
 
 # Input Variables ----------------------------------------------------------
 
-#  .  User input -----------------------------------------------------------
-set.seed(20240708)#day the script was fixed
-n_iter = 1e4#4 #optimisation iterations
+# Input Variables ----------------------------------------------------------
 
-paired_data = TRUE # Are the data in the two columns paired (each from the same animal or group)?
+#  .  User input -----------------------------------------------------------
+set.seed(20240905)#day the simulation was updated
+n_iter = 1e4 #optimisation iterations
+
 csv_sep = ','#Is the csv comma separated or semicolon separated? For tab sep, use "\t"
 angle_name = "angles" #The title of the column with angles; NO SPACES PLEASE
 angle_unit = "degrees" # "degrees" or "radians"
 angle_rot = "counter" # "clock" or "counter"
 
 #Check the operating system and assign a logical flag (T or F)
-sys_win <- Sys.info()[['sysname']] == 'Windows'
+sys_win = Sys.info()[['sysname']] == 'Windows'
 #User profile instead of home directory
-if(sys_win){
-  #get rid of all the backslashes
-  ltp <- gsub('\\\\', '/', Sys.getenv('USERPROFILE'))#Why does windows have to make this so difficult
+if(sys_win)
+{#get rid of all the backslashes
+  ltp  =  gsub(pattern = '\\\\', replacement = '/', x = Sys.getenv('USERPROFILE'))#Why does windows have to make this so difficult
 }else{#Root directory should be the "HOME" directory on a Mac (or Linux?)
-  ltp <- Sys.getenv('HOME')#Life was easier on Mac
+  ltp  = Sys.getenv('HOME')#Life was easier on Mac
 }
 
 # Simulate data  ------------------------------------------------
-n_angles = 44
+n_indiv = 10 # Number of random-effects groups
+n_trials = 10 # Number of observations per random-effects group
+n_conditions = 2 # Number of different conditions
 # minimum discriminable angle appears to be approx 35°
-kappa_both = A1inv(0.9);A1inv(0.7) #concentration around each trial mean
-logkappa_var = 1.0 #scale of random variation in concentration (log units)
-mu_1 = rad(185);rcircularuniform(n = 1)#
-mu_offset = rad(30);rcircularuniform(n = 1)
-if(paired_data)
-{
-kappa_indiv = A1inv(0.98) #concentration across individuals (pairs)
-#mean angle in trail 1 for each individual (pair)
-mu1_sim = rvonmises(n = n_angles,
-                      mu = circular(mu_1, units = "radians", zero = 0, rotation = "counter"),#random angle
-                      kappa = kappa_indiv#the wider the distribution of individual biases, the greater the influence of pairing
-                      )
+kappa_pop = A1inv(0.7) #concentration around each trial mean
+logkappa_var = 0.5 #scale of random variation in concentration (log units)
+mu_0 = rcircularuniform(n = 1,
+                        control.circular = list(units = angle_unit,
+                                                rotation = angle_rot)
+)#population intercept
+mu_offset = c(0,
+              circular(5, 
+                       units = angle_unit,
+                      rotation = angle_rot)
+              # rcircularuniform(n = n_conditions - 1, 
+              #                  control.circular = list(units = angle_unit,
+              #                                          rotation = angle_rot)
+              )#condition change in heading
+lk_offset = c(0, 
+              rnorm(n = n_conditions-1,
+                    mean = 0,
+                    sd = 0)
+)#condition change in precision
+lk_indiv = log( A1inv(0.98) ) #concentration across individuals (pairs)
+#trials
+trials = rep(x = 1:n_trials, times = n_indiv*n_conditions)
+#individuals
+indivs = rep( x = sort( rep(1:n_indiv, times = n_trials) ),
+              times = n_conditions)
+#conditions
+conds = sort( rep(1:n_conditions - 1, times = n_indiv*n_trials) )
+#mean angle in trail 1 for each individual 
+mu0_sim = rvonmises(n = n_indiv,
+                    mu = mu_0,#random angle
+                    kappa = exp(lk_indiv)#the wider the distribution of individual biases, the greater the influence of pairing
+)
+#log precision in trail 1 for each individual 
+lk0_sim = rnorm(n = n_indiv,
+                mean = log(kappa_pop),
+                sd = logkappa_var)
+#all conditional means
+mu_all =  mu0_sim[indivs] + mu_offset[conds+1]
+lk_all =  lk0_sim[indivs] + lk_offset[conds+1]
+# mu_all =  c( 
+#               t( 
+#                 rep(1, times = n_conditions) %*% t(mu0_sim) + #repeat indiv mean across conditions
+#                 rep(c(0,mu_offset), times = n_conditions) #add condition mean
+#                 )#collapse lengthways
+#             )
+# #all conditional kappas
+# lk_all =  c( 
+#               t( 
+#                 rep(1, times = n_conditions) %*% t(lk0_sim) + #repeat indiv mean across conditions
+#                 rep(c(0,kappa_offset), times = n_conditions) #add condition mean
+#                 )#collapse lengthways
+#             )
+
 #simulate the full dataset
 sim = data.frame(
-                 angle_1 = round(c(suppressWarnings( #rvonmises converts to circular and warns
-                   sapply(X = circular(mu1_sim, units = "radians", zero = 0, rotation = "counter"),
-                          FUN = rvonmises,
-                          n = 1,
-                           kappa = exp(log(kappa_both) + rnorm(n = 1, sd = logkappa_var))
-                   )
-                 ))*180/pi),#convert to angles and round to nearest degree
-                 angle_2 = round(c(suppressWarnings( #rvonmises converts to circular and warns
-                             sapply(X =mu1_sim + mu_offset,# true difference,
-                                    FUN = rvonmises,
-                                    n = 1,
-                                    kappa = exp(log(kappa_both) + rnorm(n = 1, sd = logkappa_var))
-                             )
-                 ))*180/pi) #convert to angles and round to nearest degree
-                 )
-}else
-{
-n_angles2 = ceiling(0.75*n_angles)
-mu1_sim = rcircularuniform(n = 1,control.circular = list(units = angle_unit))
-sim = data.frame(
-                 angle_1 = round(c(suppressWarnings( #rvonmises converts to circular and warns
-                   rvonmises(n = n_angles,
-                             mu = circular(x = mu1_sim, units = angle_unit),
-                           kappa = exp(log(kappa_both) + rnorm(n = 1, sd = logkappa_var))
-                   )
-                 ))),#convert to angles and round to nearest degree
-                 angle_2 = round(c(suppressWarnings( #rvonmises converts to circular and warns
-                   rvonmises(n = n_angles2,
-                             mu = circular(x = mu1_sim+deg(mu_offset), units = angle_unit),
-                             kappa = exp(log(kappa_both) + rnorm(n = 1, sd = logkappa_var))
-                   )
-                 ),
-                 circular(x = rep(x = NA, times = n_angles - n_angles2),
-                         units = angle_unit) #convert to angles and round to nearest degree
-                 ) )
-                )
-}
+  indiv = indivs,
+  trial = trials,
+  condition = conds,
+  angle = round( #round to the nearest angle (typical resolution)
+    mapply(FUN = rvonmises,
+           n = 1,
+           mu = lapply(X = mu_all,
+                       FUN = circular,
+                       units = angle_unit,
+                       rotation = angle_rot),
+           kappa = exp(lk_all)
+    )
+  )
+)
 # #save somewhere the user likely keeps data
 # write.table(x = sim,
 #             file = file.path(ltp,'Documents', "simulated_angles.csv"),
 #             sep = csv_sep,
 #             row.names = FALSE
 #             )
-adata = sim
-dt_dim = dim(adata)
+dt_dim = n_indiv*n_trials
+
 # Plot simulated data -----------------------------------------------------
 
 par(mar =rep(0,4))
-plot.circular(x = circular(x = adata$angle_1, 
-                           type = 'angles',
-                           unit = angle_unit,
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = 0.5/dt_dim[1],
-col = 'cyan4'
+with(subset(sim, condition %in% 0),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = angle_unit,
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = 0.5/dt_dim,
+       col = 'cyan4'
+       )
+     }
 )
 par(new = T)
-plot.circular(x = circular(x = adata$angle_2, 
-                           type = 'angles',
-                           unit = 'degrees',
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = -0.5/dt_dim[1],
-col = 'darkblue',
-shrink = 1.05,
-axes = F
+with(subset(sim, condition %in% 1),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = 'degrees',
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = -0.5/dt_dim[1],
+       col = 'darkblue',
+       shrink = 1.05,
+       axes = F
+       )
+     }
 )
 
 # Organise data ----------------------------------------------------------
 IDs = paste0(sort(rep(LETTERS, times = 26)), letters)
-longdata = with(adata,
-                data.frame(angle = c(angle_1, angle_2),
-                           ID = rep(IDs[1:dt_dim[1]], times = 2),
-                           condition = sort(rep(0:1, times = dt_dim[1]))
-                           )
-                )
+sim = within(sim,
+           {ID = IDs[indivs]}
+            )
 
-longdata = within(longdata,
+sim = within(sim,
                   {
                   rad_angle = rad(Mod360.180(angle))
                   }
@@ -268,7 +297,7 @@ formula_nlvm = bf(
   nl = TRUE)
 
 prior_nlvm = get_prior(formula = formula_nlvm,
-          data = longdata)
+          data = sim)
 
 prior_nlvm = within(prior_nlvm,
                     {
@@ -312,7 +341,7 @@ stan_var = stanvar(scode = mod_circular_fun, block = "functions") +
 system.time(
   {
     dummy_fit = brm( formula = formula_nlvm, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvm, # our priors 
                      stanvars = stan_var,
                      sample_prior = 'only', #ignore the data to check the influence of the priors
@@ -344,7 +373,7 @@ conditional_effects(dummy_fit)
 system.time(
   {
     short_fit = brm( formula = formula_nlvm, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvm, # our priors 
                      stanvars = stan_var,
                      iter = 300, # short run for 300 iterations (less than 300 gives insufficient warmup time)
@@ -374,7 +403,7 @@ plot(
 system.time(
   {
     full_fit = brm( formula = formula_nlvm, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvm, # our priors 
                      stanvars = stan_var,
                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
@@ -407,7 +436,7 @@ formula_lm = bf(
   nl = FALSE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
 prior_lm = get_prior(formula = formula_lm,
-                         data = longdata)
+                         data = sim)
 
 prior_lm = within(prior_lm,
                       {
@@ -424,7 +453,7 @@ prior_lm = within(prior_lm,
 system.time(
   {
     dummy_fitlm = brm( formula = formula_lm, # using our nonlinear formula
-                       data = longdata, # our data
+                       data = sim, # our data
                        prior = prior_lm, # our priors 
                        sample_prior = 'only', #ignore the data to check the influence of the priors
                        iter = 300, # short run for 300 iterations
@@ -443,7 +472,7 @@ system.time(
 system.time(
   {
     short_fitlm = brm( formula = formula_lm, # using our nonlinear formula
-                       data = longdata, # our data
+                       data = sim, # our data
                        prior = prior_lm, # our priors 
                        iter = 300, # short run for 300 iterations
                        chains = 4, # 4 chains in parallel
@@ -458,7 +487,7 @@ system.time(
 system.time(
   {
     full_fitlm = brm( formula = formula_lm, # using our nonlinear formula
-                       data = longdata, # our data
+                       data = sim, # our data
                        prior = prior_lm, # our priors 
                        iter = 1000, # full run for 1000 iterations
                        chains = 4, # 4 chains in parallel
@@ -471,57 +500,65 @@ system.time(
 # . Plot LM with simulated data -----------------------------------------------------
 
 par(mar =rep(0,4))
-plot.circular(x = circular(x = adata$angle_1, 
-                           type = 'angles',
-                           unit = angle_unit,
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = 0.5/dt_dim[1],
-col = 'cyan4'
+with(subset(sim, condition %in% 0),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = angle_unit,
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = 0.5/dt_dim,
+       col = 'cyan4'
+       )
+     }
 )
 par(new = T)
-plot.circular(x = circular(x = adata$angle_2, 
-                           type = 'angles',
-                           unit = 'degrees',
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = -0.5/dt_dim[1],
-col = 'darkblue',
-shrink = 1.05,
-axes = F
+with(subset(sim, condition %in% 1),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = 'degrees',
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = -0.5/dt_dim[1],
+       col = 'darkblue',
+       shrink = 1.05,
+       axes = F
+       )
+     }
 )
 
 
-arrows.circular(x = circular(deg(mu_1),  
+arrows.circular(x = circular(mu_0,  
                              type = 'angles',
                              unit = 'degrees',
                              modulo = '2pi',
                              zero = pi/2,
                              template = 'geographics',
                              rotation = angle_rot),
-                y = A1(kappa_both),
+                y = A1(kappa_pop),
                 lwd = 1,
                 length = 0,
                 col = adjustcolor('cyan4', alpha.f = 1.0)
 )
-arrows.circular(x = circular(deg(mu_1 + mu_offset),  
+arrows.circular(x = circular(mu_0 + mu_offset[2],  
                              type = 'angles',
                              unit = 'degrees',
                              modulo = '2pi',
                              zero = pi/2,
                              template = 'geographics',
                              rotation = angle_rot),
-                y = A1(kappa_both),
+                y = A1(exp(log(kappa_pop) + lk_offset[2])),
                 lwd = 1,
                 length = 0,
                 col = adjustcolor('blue2', alpha.f = 1.0)
@@ -579,7 +616,7 @@ formula_nlvmme = bf(
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
 prior_nlvmme = get_prior(formula = formula_nlvmme,
-          data = longdata)
+          data = sim)
 
 prior_nlvmme = within(prior_nlvmme,
                     {
@@ -601,7 +638,7 @@ prior_nlvmme = within(prior_nlvmme,
 system.time(
   {
     dummy_fitme = brm( formula = formula_nlvmme, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvmme, # our priors 
                      stanvars = stan_var,
                      sample_prior = 'only', #ignore the data to check the influence of the priors
@@ -632,7 +669,7 @@ conditional_effects(dummy_fit, spaghetti = TRUE)
 system.time(
   {
     short_fitme = brm( formula = formula_nlvmme, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvmme, # our priors 
                      stanvars = stan_var,
                      iter = 300, # short run for 300 iterations (less than 300 gives insufficient warmup time)
@@ -666,7 +703,7 @@ plot(
 system.time(
   {
     full_fitme = brm( formula = formula_nlvmme, # using our nonlinear formula
-                     data = longdata, # our data
+                     data = sim, # our data
                      prior = prior_nlvmme, # our priors 
                      stanvars = stan_var,
                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
@@ -755,70 +792,247 @@ plot(
                       effects = 'condition')
 )
 
+# Nonlinear vM-ME Stan version --------------------------------------------------
+
+
+#set up model fit
+formula_nlvmmevm = bf(
+  #set up a formula for the curve as a whole,
+  formula = rad_angle ~ mod_circular(muangle + zmu),
+  muangle ~  condition, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  zmu ~  0+ID, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  kappa ~ condition + (1|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  family = von_mises(link = "identity",
+                     link_kappa = 'softplus'),
+  nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
+
+prior_nlvmmevm = get_prior(formula = formula_nlvmmevm,
+                         data = sim)
+
+prior_nlvmmevm = within(prior_nlvmmevm,
+                      {
+                        prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'normal(0, pi())'
+                        prior[nlpar %in% 'muangle' & class %in% 'b'] = 'normal(0, pi())'
+                        prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises(0, zkappa)'
+                        prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises(0, zkappa)'
+                        prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(0.5, 1.0)'
+                        prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.0)'
+                        # prior[nlpar %in% 'muangle'] = 'von_mises(0, 0.5)'
+                        # lb[nlpar %in% 'muangle'] = -pi
+                        # ub[nlpar %in% 'muangle'] = pi
+                      }
+) + set_prior("target += student_t_lpdf(zkappa | 1, 0, 2)", check = FALSE)
+
+zkappa_var = stanvar(scode = "  real<lower=0> zkappa;", block = "parameters") + 
+  stanvar(scode = "
+          real kappa_id = zkappa;
+          ", 
+          block = 'genquant')
+
+stanvars = stan_var + zkappa_var
+
+# . Short dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    dummy_fitmevm = brm( formula = formula_nlvmmevm, # using our nonlinear formula
+                       data = sim, # our data
+                       prior = prior_nlvmmevm, # our priors 
+                       stanvars = stanvars,
+                       sample_prior = 'only', #ignore the data to check the influence of the priors
+                       iter = 300, # short run for 300 iterations
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+
+plot(dummy_fitmevm,
+     variable = '^mu_',
+     regex = TRUE)
+plot(dummy_fitmevm,
+     variable = '^kappa_',
+     regex = TRUE)
+plot(dummy_fitmevm)
+#
+
+#
+
+#
+
+#
+
+#
+
+#
+
+#
+
+conditional_effects(dummy_fitmevm, spaghetti = TRUE)
+
+
+# . To check that estimation works  ---------------------------------------
+# Run the model for a small number of iterations to check that it is possible to 
+# estimate all parameters. This may be the point where we encounter numerical errors
+# if the formula or priors are misspecified.
+# e.g. if the formula returns estimates of correct choice rate outside of [0,1].
+
+# Short run
+system.time(
+  {
+    short_fitmevm = brm( formula = formula_nlvmmevm, # using our nonlinear formula
+                       data = sim, # our data
+                       prior = prior_nlvmmevm, # our priors 
+                       stanvars = stanvars,
+                       iter = 300, # short run for 300 iterations (less than 300 gives insufficient warmup time)
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+plot(short_fitmevm,
+     variable = '^mu_',
+     regex = TRUE)
+plot(short_fitmevm,
+     variable = '^kappa_',
+     regex = TRUE)
+plot(short_fitmevm, 
+     nvariables = 10,
+     variable = "^b_", 
+     regex = TRUE)
+summary(short_fitmevm)
+
+plot(
+  conditional_effects(x = short_fitmevm, 
+                      spaghetti = TRUE, 
+                      ndraws = 2e2,
+                      effects = 'condition')
+)
+
+# . Full runs -------------------------------------------------------------
+
+
+# Full run
+system.time(
+  {
+    full_fitmevm = brm( formula = formula_nlvmmevm, # using our nonlinear formula
+                      data = sim, # our data
+                      prior = prior_nlvmmevm, # our priors 
+                      stanvars = stanvars,
+                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
+                      chains = 4, # 4 chains in parallel
+                      cores = 4, # on 4 CPUs
+                      init = 0,
+                      refresh = 0, # don't echo chain progress
+                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+plot(full_fitmevm,
+     variable = "^mu_", 
+     regex = TRUE)
+plot(full_fitmevm,
+     variable = "^kappa_", 
+     regex = TRUE)
+
+plot(full_fitmevm,
+     nvariables = 10,
+     variable = "^sd_", 
+     regex = TRUE)
+
+summary(full_fitmevm)
+rhat(full_fitmevm,
+     pars = "^mu_", 
+     regex = TRUE)
+
+plot(
+  conditional_effects(x = full_fitmevm, 
+                      spaghetti = TRUE, 
+                      ndraws = 2e2,
+                      effects = 'condition')
+)
+
+
 
 # Plot simulated data -----------------------------------------------------
 
 par(mar =rep(0,4))
-plot.circular(x = circular(x = adata$angle_1, 
-                           type = 'angles',
-                           unit = angle_unit,
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = 0.5/dt_dim[1],
-col = 'cyan4'
+with(subset(sim, condition %in% 0),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = angle_unit,
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = 0.5/dt_dim,
+       col = 'cyan4'
+       )
+     }
 )
 par(new = T)
-plot.circular(x = circular(x = adata$angle_2, 
-                           type = 'angles',
-                           unit = 'degrees',
-                           template = 'geographics',
-                           modulo = '2pi',
-                           zero = pi/2,
-                           rotation = angle_rot
-),
-stack = TRUE,
-bins = 360/5,
-sep = -0.5/dt_dim[1],
-col = 'darkblue',
-shrink = 1.05,
-axes = F
+with(subset(sim, condition %in% 1),
+     {
+       plot.circular(x = circular(x = angle, 
+                                  type = 'angles',
+                                  unit = 'degrees',
+                                  template = 'geographics',
+                                  modulo = '2pi',
+                                  zero = pi/2,
+                                  rotation = angle_rot
+       ),
+       stack = TRUE,
+       bins = 360/5,
+       sep = -0.5/dt_dim[1],
+       col = 'darkblue',
+       shrink = 1.05,
+       axes = F
+       )
+     }
 )
 
 
-arrows.circular(x = circular(deg(mu_1),  
-                            type = 'angles',
-                            unit = 'degrees',
-                            modulo = '2pi',
-                            zero = pi/2,
-                            template = 'geographics',
-                            rotation = angle_rot),
-               y = A1(kappa_both),
-               lwd = 1,
-               length = 0,
-               col = adjustcolor('cyan4', alpha.f = 1.0)
+arrows.circular(x = circular(mu_0,  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             template = 'geographics',
+                             rotation = angle_rot),
+                y = A1(kappa_pop),
+                lwd = 1,
+                length = 0,
+                col = adjustcolor('cyan4', alpha.f = 1.0)
 )
-arrows.circular(x = circular(deg(mu_1 + mu_offset),  
-                            type = 'angles',
-                            unit = 'degrees',
-                            modulo = '2pi',
-                            zero = pi/2,
-                            template = 'geographics',
-                            rotation = angle_rot),
-               y = A1(kappa_both),
-               lwd = 1,
-               length = 0,
-               col = adjustcolor('blue2', alpha.f = 1.0)
+arrows.circular(x = circular(mu_0 + mu_offset[2],  
+                             type = 'angles',
+                             unit = 'degrees',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             template = 'geographics',
+                             rotation = angle_rot),
+                y = A1(exp(log(kappa_pop) + lk_offset[2])),
+                lwd = 1,
+                length = 0,
+                col = adjustcolor('blue2', alpha.f = 1.0)
 )
 
-sm = summary(full_fitme, robust = TRUE)
-prms = with(sm, rbind(fixed, spec_pars))
-est = data.frame(t(t(prms)['Estimate',]))
-with(est,
+
+sm_vm = summary(full_fitmevm, robust = TRUE)
+prms_vm = with(sm_vm, rbind(fixed, spec_pars))
+est_vm = data.frame(t(t(prms_vm)['Estimate',]))
+with(est_vm,
      {
        arrows.circular(x = circular(deg(mu_circ),  
                                     type = 'angles',
@@ -854,7 +1068,8 @@ with(est,
 loo_lm = loo(full_fitlm)
 loo_vm = loo(full_fit)
 loo_vmme = loo(full_fitme)
-loo_compare(loo_lm, loo_vm, loo_vmme)
+loo_vmmevm = loo(full_fitmevm)
+loo_compare(loo_lm, loo_vm, loo_vmme, loo_vmmevm)
 
 # Test w/ real data -------------------------------------------------------
 
