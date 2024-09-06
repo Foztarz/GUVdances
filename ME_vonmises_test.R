@@ -813,19 +813,21 @@ prior_nlvmmevm = within(prior_nlvmmevm,
                       {
                         prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'normal(0, pi())'
                         prior[nlpar %in% 'muangle' & class %in% 'b'] = 'normal(0, pi())'
-                        prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises(0, zkappa)'
-                        prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises(0, zkappa)'
+                        prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises(0, log1p_exp(zkappa))'
+                        prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises(0, log1p_exp(zkappa))'
                         prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(0.5, 1.0)'
                         prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.0)'
                         # prior[nlpar %in% 'muangle'] = 'von_mises(0, 0.5)'
                         # lb[nlpar %in% 'muangle'] = -pi
                         # ub[nlpar %in% 'muangle'] = pi
                       }
-) + set_prior("target += student_t_lpdf(zkappa | 1, 0, 2)", check = FALSE)
+) + 
+  # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 1, 0, 0.25)", check = FALSE) 
+ set_prior("target += normal_lpdf(log1p_exp(zkappa) | 0,3)", check = FALSE)
 
-zkappa_var = stanvar(scode = "  real<lower=0> zkappa;", block = "parameters") + 
+zkappa_var = stanvar(scode = "  real zkappa;", block = "parameters") + 
   stanvar(scode = "
-          real kappa_id = zkappa;
+          real kappa_id = log1p_exp(zkappa);
           ", 
           block = 'genquant')
 
@@ -907,6 +909,7 @@ plot(short_fitmevm,
      nvariables = 10,
      variable = "^b_", 
      regex = TRUE)
+
 summary(short_fitmevm)
 
 plot(
@@ -1048,7 +1051,7 @@ with(est_vm,
        )
      }
 )
-with(est,
+with(est_vm,
      {
        arrows.circular(x = circular(deg(mu_circ + mu_offs),  
                                     type = 'angles',
