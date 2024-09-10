@@ -826,8 +826,8 @@ prior_nlvmmevm = get_prior(formula = formula_nlvmmevm,
 
 prior_nlvmmevm = within(prior_nlvmmevm,
                       {
-                        prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'normal(0, pi())'
-                        prior[nlpar %in% 'muangle' & class %in% 'b'] = 'normal(0, pi())'
+                        prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'von_mises3(0, 1.5)'#'normal(0, pi())'
+                        prior[nlpar %in% 'muangle' & class %in% 'b'] = 'von_mises3(0, 1.5)'#'normal(0, pi())'
                         prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa))'
                         prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa))'
                         prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(0.5, 1.0)'
