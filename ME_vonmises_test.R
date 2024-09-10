@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 09 05
+#     MODIFIED:	James Foster              DATE: 2024 09 10
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -37,7 +37,10 @@ graphics.off()
 #TODO   
 #- Test for angles close to 180 +
 #- Compare circular and Gaussian raneff +
-#- Softplus raneff kappa
+#- Softplus raneff kappa  +
+#- Plot predictions
+#- Check hypothesis tests
+#- Model comparison hypothesis tests
 #- Simulate continuous fixed effects
 
 # . Load packages ----------------------------------------------------------
@@ -310,6 +313,17 @@ mod_circular_fun = "
     return atan2(sin(y), cos(y));
   }
 "
+#set up a von Mises PDF that converts to modulo (adapted from BRMS default)
+von_mises3_fun = "
+real von_mises3_lpdf(real y, real mu, real kappa) {
+     if (kappa < 100) {
+       return von_mises_lpdf(y | mu, kappa);
+     } else {
+       return normal_lpdf(mod_circular(y) | mu, sqrt(1 / kappa));
+     }
+   }
+"
+#a circular mean that might be useful
 meancirc_fun = "
    // calculate the mean angle of a circular distribution (in radians)
    real mean_circular(vector y, int N){
@@ -324,13 +338,14 @@ meancirc_fun = "
      return(atan2(  sumsin, sumcos) );
    }
 "
-#generate 
+#generate modulo outputs
 mu_gen <- "
 real mu_circ = mod_circular(b_muangle[1]);
 real mu_offs = mod_circular(b_muangle[2]);
 "
   
 stan_var = stanvar(scode = mod_circular_fun, block = "functions") + 
+  stanvar(scode = von_mises3_fun, block = "functions") + 
               stanvar(scode = mu_gen, block = "genquant")
 
 # . Short dummy run to check the influence of the priors ------------------
@@ -813,8 +828,8 @@ prior_nlvmmevm = within(prior_nlvmmevm,
                       {
                         prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'normal(0, pi())'
                         prior[nlpar %in% 'muangle' & class %in% 'b'] = 'normal(0, pi())'
-                        prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises(0, log1p_exp(zkappa))'
-                        prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises(0, log1p_exp(zkappa))'
+                        prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa))'
+                        prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa))'
                         prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(0.5, 1.0)'
                         prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.0)'
                         # prior[nlpar %in% 'muangle'] = 'von_mises(0, 0.5)'
@@ -831,7 +846,7 @@ zkappa_var = stanvar(scode = "  real zkappa;", block = "parameters") +
           ", 
           block = 'genquant')
 
-stanvars = stan_var + zkappa_var
+stanvars = stan_var + zkappa_var #+ zmu_var
 
 # . Short dummy run to check the influence of the priors ------------------
 
@@ -964,8 +979,29 @@ plot(
 
 
 
-# Plot simulated data -----------------------------------------------------
+# Plot NLvM-ME predictions against simulated data --------------------------
 
+#Get fixef predictions
+sm_vm = summary(full_fitmevm, robust = TRUE)
+prms_vm = with(sm_vm, rbind(fixed, spec_pars))
+est_vm = data.frame(t(t(prms_vm)['Estimate',]))
+#Get raneff predictions
+cf_vm = coef(full_fitmevm)$ID[,,'kappa_Intercept']
+rn = rownames(prms_vm)
+rn_zmu = rn[grep(pattern = 'zmu',
+                 x = rn)]
+colnames(cf_vm) = colnames(prms_vm)[1:4]
+#these are likely wrong for zmu
+ran_prms_vm = rbind(cf_vm, prms_vm[rn_zmu,1:4])
+#all pred
+full_fitmevm_cond =brms::conditional_effects(full_fitmevm, 
+                                     method = 'posterior_epred', #
+                                     cores =  parallel::detectCores()-1,
+                                     conditions = sim,
+                                     effects = c('condition', 'ID'))
+#all draws
+full_fitmevm_draws = brms::as_draws_df(full_fitmevm) 
+names(full_fitmevm_cond$condition)
 par(mar =rep(0,4))
 with(subset(sim, condition %in% 0),
      {
@@ -1031,10 +1067,6 @@ arrows.circular(x = circular(mu_0 + mu_offset[2],
                 col = adjustcolor('blue2', alpha.f = 1.0)
 )
 
-
-sm_vm = summary(full_fitmevm, robust = TRUE)
-prms_vm = with(sm_vm, rbind(fixed, spec_pars))
-est_vm = data.frame(t(t(prms_vm)['Estimate',]))
 with(est_vm,
      {
        arrows.circular(x = circular(deg(mu_circ),  
