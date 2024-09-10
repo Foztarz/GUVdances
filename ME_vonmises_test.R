@@ -1105,6 +1105,11 @@ loo_vm = loo(full_fit)
 loo_vmme = loo(full_fitme)
 loo_vmmevm = loo(full_fitmevm)
 loo_compare(loo_lm, loo_vm, loo_vmme, loo_vmmevm)
+#             elpd_diff se_diff
+# full_fitmevm   0.0       0.0  
+# full_fitme    -0.3       0.7  
+# full_fit     -19.7       6.2  
+# full_fitlm   -61.0      13.8  
 
 # Test w/ real data -------------------------------------------------------
 
