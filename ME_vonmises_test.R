@@ -15,6 +15,7 @@ graphics.off()
 #             - t-dist von Mises random effects      
 #             - Weibull dist von Mises random effects kappa
 #             - plotting predictions for random effects (working well)
+#             - model hypothesis testing
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -41,8 +42,11 @@ graphics.off()
 #- Compare circular and Gaussian raneff +
 #- Softplus raneff kappa  +
 #- Plot predictions +
-#- Check hypothesis tests
-#- Model comparison hypothesis tests
+#- Check hypothesis tests +
+#- Model comparison hypothesis tests + 
+#- Extract circular fixed effects medians
+#- Simulate random slopes
+#- Model random slopes
 #- Simulate continuous fixed effects
 
 # . Load packages ----------------------------------------------------------
@@ -157,12 +161,15 @@ n_conditions = 2 # Number of different conditions
 # minimum discriminable angle appears to be approx 35°
 kappa_pop = A1inv(0.7) #concentration around each trial mean
 logkappa_var = 0.5 #scale of random variation in concentration (log units)
-mu_0 = rcircularuniform(n = 1,
-                        control.circular = list(units = angle_unit,
-                                                rotation = angle_rot)
+mu_0 = circular(x = 175,
+                units = angle_unit,
+                rotation = angle_rot
+# mu_0 = rcircularuniform(n = 1,
+#                         control.circular = list(units = angle_unit,
+#                                                 rotation = angle_rot)
 )#population intercept
 mu_offset = c(0,
-              circular(15,#5, 
+              circular(20,#5, 
                        units = angle_unit,
                       rotation = angle_rot)
               # rcircularuniform(n = n_conditions - 1, 
@@ -841,7 +848,7 @@ prior_nlvmmevm = get_prior(formula = formula_nlvmmevm,
 
 prior_nlvmmevm = within(prior_nlvmmevm,
                       {
-                        prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'von_mises3(0, 1.5)'#'normal(0, pi())'
+                        prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'von_mises3(0, 0.1)'#'von_mises3(0, 1.5)'#'normal(0, pi())'
                         prior[nlpar %in% 'muangle' & class %in% 'b'] = 'von_mises3(0, 1.5)'#'normal(0, pi())'
                         prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa))'
                         prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa))'
@@ -1355,17 +1362,31 @@ with(est_vm,
      }
 )
 
+
+
+# Compare model types -----------------------------------------------------
+
+
 loo_lm = loo(full_fitlm)
 loo_vm = loo(full_fit)
 loo_vmme = loo(full_fitme)
 loo_vmmevm = loo(full_fitmevm)
 loo_compare(loo_lm, loo_vm, loo_vmme, loo_vmmevm)
+# mu_0 = 275
+# mu_offset = 5
 #             elpd_diff se_diff
 # full_fitmevm   0.0       0.0  
 # full_fitme    -0.3       0.7  
 # full_fit     -19.7       6.2  
 # full_fitlm   -61.0      13.8  
 
+# mu_0 = 175
+# mu_offset = 20
+#             elpd_diff se_diff
+# full_fitmevm    0.0       0.0 
+# full_fitme     -1.7       0.4 
+# full_fit       -7.1       4.9 
+# full_fitlm   -178.7      13.3 
 
 # Hypothesis tests via model comparison -----------------------------------
 
@@ -1490,6 +1511,16 @@ loo_compare(loo(full_fitlm), loo(full_fit_lm_nocond))
 #                   elpd_diff se_diff
 # full_fit_lm_nocond  0.0       0.0   #no effect model chosen
 # full_fitlm         -1.1       0.8   #clear support for no condition difference
+# > mu_offset[2]
+# [1] 15
+#                   elpd_diff se_diff
+# full_fit_lm_nocond  0.0       0.0   
+# full_fitlm         -0.7       0.3   
+# > mu_offset[2]
+# [1] 20
+#                   elpd_diff se_diff # pareto_k > 0.7 in model 'full_fitlm'
+# full_fit_lm_nocond  0.0       0.0   #no effect model chosen
+# full_fitlm         -1.3       0.5   #clear support for no condition difference
 
 # . . Nonlinear vM with linear mixed effects --------------------------------
 loo_compare(loo(full_fitme), loo(full_fit_nlvmme_nocond))
@@ -1503,7 +1534,20 @@ loo_compare(loo(full_fitme), loo(full_fit_nlvmme_nocond))
 #                         elpd_diff se_diff
 # full_fitme              0.0       0.0   #effect model chosen
 # full_fit_nlvmme_nocond -0.2       1.7   #no clear support for condition difference
-
+# > mu_offset[2]
+# [1] 15
+#                       elpd_diff se_diff
+# full_fitme              0.0       0.0  #effect model chosen 
+# full_fit_nlvmme_nocond -2.1       2.4   #support is not completely clear
+#             Estimate Est.Error l-95% CI u-95% CI Rhat
+# mu_offs     0.28      0.11     0.05     0.51 1.00 # summary does support effect
+# > mu_offset[2]
+# [1] 20
+#                       elpd_diff se_diff
+# full_fitme              0.0       0.0   #effect model chosen
+# full_fit_nlvmme_nocond -4.6       3.1   #clear support for condition difference
+#             Estimate Est.Error l-95% CI u-95% CI Rhat
+# mu_offs     0.36      0.12     0.13     0.59 1.00
 
 # . . Nonlinear vM with von Mises mixed effects --------------------------------
 loo_compare(loo(full_fitmevm), loo(full_fit_nlvmmevm_nocond))
@@ -1519,6 +1563,20 @@ loo_compare(loo(full_fitmevm), loo(full_fit_nlvmmevm_nocond))
 # full_fit_nlvmmevm_nocond -0.6       1.6   #no clear support for condition difference                               
 #             Estimate Est.Error l-95% CI u-95% CI Rhat
 # mu_offs      0.17      0.11    -0.04     0.39 1.00
+# > mu_offset[2]
+# [1] 15
+#                         elpd_diff se_diff
+# full_fitmevm              0.0       0.0   #effect model chosen
+# full_fit_nlvmmevm_nocond -1.9       2.2   #support not completely clear
+#             Estimate Est.Error l-95% CI u-95% CI Rhat
+# mu_offs      0.26      0.12     0.01     0.50 1.01 # summary does support effect
+# > mu_offset[2]
+# [1] 20
+#                         elpd_diff se_diff
+# full_fitmevm              0.0       0.0   #effect model chosen
+# full_fit_nlvmmevm_nocond -4.4       2.9   #clear support for condition difference
+#             Estimate Est.Error l-95% CI u-95% CI Rhat
+# mu_offs      0.34      0.11     0.11     0.57 1.00
 
 # Test w/ real data -------------------------------------------------------
 
