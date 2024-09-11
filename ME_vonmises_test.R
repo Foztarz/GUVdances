@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 09 10
+#     MODIFIED:	James Foster              DATE: 2024 09 11
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -13,6 +13,8 @@ graphics.off()
 #	   CHANGES: - More comprehensive simulation
 #             - Added von Mises random effects      
 #             - t-dist von Mises random effects      
+#             - Weibull dist von Mises random effects kappa
+#             - plotting predictions for random effects (working well)
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -38,7 +40,7 @@ graphics.off()
 #- Test for angles close to 180 +
 #- Compare circular and Gaussian raneff +
 #- Softplus raneff kappa  +
-#- Plot predictions
+#- Plot predictions +
 #- Check hypothesis tests
 #- Model comparison hypothesis tests
 #- Simulate continuous fixed effects
@@ -128,8 +130,7 @@ PlotVMfix = function(mod,
 
 # Input Variables ----------------------------------------------------------
 
-# Input Variables ----------------------------------------------------------
-
+all_plots = FALSE # to speed up
 #  .  User input -----------------------------------------------------------
 set.seed(20240905)#day the simulation was updated
 n_iter = 1e4 #optimisation iterations
@@ -161,7 +162,7 @@ mu_0 = rcircularuniform(n = 1,
                                                 rotation = angle_rot)
 )#population intercept
 mu_offset = c(0,
-              circular(5, 
+              circular(15,#5, 
                        units = angle_unit,
                       rotation = angle_rot)
               # rcircularuniform(n = n_conditions - 1, 
@@ -232,7 +233,8 @@ sim = data.frame(
 dt_dim = n_indiv*n_trials
 
 # Plot simulated data -----------------------------------------------------
-
+# if(all_plots)
+# {
 par(mar =rep(0,4))
 with(subset(sim, condition %in% 0),
      {
@@ -271,7 +273,7 @@ with(subset(sim, condition %in% 1),
        )
      }
 )
-
+# }
 # Organise data ----------------------------------------------------------
 IDs = paste0(sort(rep(LETTERS, times = 26)), letters)
 sim = within(sim,
@@ -368,14 +370,16 @@ system.time(
   }
 )
 # On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+if(all_plots)
+{
 plot(dummy_fit,
      variable = '^mu_',
      regex = TRUE)
 plot(dummy_fit,
      variable = '^kappa',
      regex = TRUE)
-
-conditional_effects(dummy_fit)
+}
+#conditional_effects(dummy_fit)
 
 
 # . To check that estimation works  ---------------------------------------
@@ -398,18 +402,20 @@ system.time(
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
+if(all_plots)
+{
 plot(short_fit)
 plot(short_fit,
      variable = '^mu_',
      regex = TRUE)
 summary(short_fit)
-
-plot(
-  conditional_effects(x = short_fit, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+}
+# plot(
+#   #conditional_effects(x = short_fit, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 # . Full runs -------------------------------------------------------------
 
@@ -429,18 +435,19 @@ system.time(
   }
 )
 
+if(all_plots){
 plot(full_fit,
      variable = '^mu_',
      regex = TRUE)
 plot(full_fit)
 summary(full_fit)
-
-plot(
-  conditional_effects(x = short_fit, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+}
+# plot(
+#   #conditional_effects(x = short_fit, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 
 # Linear model sanity check -----------------------------------------------
@@ -513,7 +520,8 @@ system.time(
 )
 
 # . Plot LM with simulated data -----------------------------------------------------
-
+if(all_plots)
+{
 par(mar =rep(0,4))
 with(subset(sim, condition %in% 0),
      {
@@ -578,10 +586,12 @@ arrows.circular(x = circular(mu_0 + mu_offset[2],
                 length = 0,
                 col = adjustcolor('blue2', alpha.f = 1.0)
 )
-
+}
 sm_lm = summary(full_fitlm, robust = TRUE)
 prms_lm = with(sm_lm, rbind(fixed, spec_pars))
 est_lm = data.frame(t(t(prms_lm)['Estimate',]))
+if(all_plots)
+{
 with(est_lm,
      {
        arrows.circular(x = circular(deg(Intercept ),  
@@ -614,7 +624,7 @@ with(est_lm,
        )
      }
 )
-
+}
 
 
 # Nonlinear ME Stan version --------------------------------------------------
@@ -624,8 +634,8 @@ with(est_lm,
 formula_nlvmme = bf(
   #set up a formula for the curve as a whole,
   formula = rad_angle ~ mod_circular(muangle),
-  muangle ~  condition + (1|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
-  kappa ~ condition + (1|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  muangle ~  condition + (1|ID), #linear random effects that will be converted to (-pi,pi)
+  kappa ~ condition + (1|ID), #linear random effects that will be converted to inv_softplus(kappa)
   family = von_mises(link = "identity",
                      link_kappa = 'softplus'),
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
@@ -665,13 +675,13 @@ system.time(
   }
 )
 # On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
-
+if(all_plots){
 plot(dummy_fitme,
      variable = '^mu_',
      regex = TRUE)
 plot(dummy_fitme)
-
-conditional_effects(dummy_fit, spaghetti = TRUE)
+}
+#conditional_effects(dummy_fit, spaghetti = TRUE)
 
 
 # . To check that estimation works  ---------------------------------------
@@ -694,7 +704,8 @@ system.time(
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
-
+if(all_plots)
+{
 plot(short_fitme,
      variable = '^mu_',
      regex = TRUE)
@@ -703,13 +714,13 @@ plot(short_fitme,
      variable = "^b_", 
      regex = TRUE)
 summary(short_fitme)
-
-plot(
-  conditional_effects(x = short_fit, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+}
+# plot(
+  #conditional_effects(x = short_fit, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 # . Full runs -------------------------------------------------------------
 
@@ -730,10 +741,12 @@ system.time(
   }
 )
 
+if(all_plots)
+{
 plot(full_fitme,
      variable = "^mu_", 
      regex = TRUE)
-
+}
 fx_names = names(fixef(full_fitme)[,1])
 nm_angle_vars = fx_names[grepl(pattern = 'angle', x = fx_names)]
 trans_lst = replicate(n = length(nm_angle_vars),
@@ -780,7 +793,8 @@ names(trans_lst) = paste0('b_', nm_angle_vars)
 #        transformations = Make_vmtrans(mod, angfun, kapfun),
 #        regex = TRUE)
 # }
-
+if(all_plots)
+{
 PlotVMfix(full_fit)
 PlotVMfix(full_fitme)
 
@@ -796,16 +810,17 @@ plot(full_fitme,
      regex = TRUE)
 
 summary(full_fitme)
+}
 rhat(full_fitme,
      pars = "^mu_", 
      regex = TRUE)
 
-plot(
-  conditional_effects(x = short_fit, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+# plot(
+  #conditional_effects(x = short_fit, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 # Nonlinear vM-ME Stan version --------------------------------------------------
 
@@ -837,16 +852,82 @@ prior_nlvmmevm = within(prior_nlvmmevm,
                         # ub[nlpar %in% 'muangle'] = pi
                       }
 ) + 
+  # by default sd prior student_t(3,0,2.5) would assume pooling, what is circular equivalent?
+ # set_prior("target += normal_lpdf(log1p_exp(zkappa) | 1,3)", 
+ #           check = FALSE) 
+ set_prior("target += weibull_lpdf(log1p_exp(zkappa) | 1.6, 5)", 
+           check = FALSE)
   # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 1, 0, 0.25)", check = FALSE) 
- set_prior("target += normal_lpdf(log1p_exp(zkappa) | 0,3)", check = FALSE)
+#circular SD (Mardia, 1972) = sqrt(-2*log(rho))
+# if kappa = 1, SD = deg(sqrt(-2*log(A1(1.0)))) = 73°
+#moderate pooling sd = 90°, kappa = A1inv(exp((rad(90)^2)/(-2))) = 0.61
+#high pooling sd = 30°, kappa = A1inv(exp((rad(30)^2)/(-2))) = 4.21
+#extreme pooling sd = 10°, kappa = A1inv(exp((rad(10)^2)/(-2))) = 33.33
+xx = seq(from  = -15, to  = 15, length.out = 1e3)
+if(all_plots)
+{
+plot(x = A1(log(1+exp(xx))),
+     y = dnorm(log(1+exp(xx)), mean = 1, sd = 3),
+     type = 'l',
+     xlab = 'rho of kappa_id',
+     ylab = 'probability density',
+     main = 'zkappa prior, normal(0,3)',
+     lwd = 2,
+     col = 5,
+     xlim = c(0,1),
+     ylim = c(0,0.2)
+     )
+abline(h = 0, v = 0)
+}
+#weibull median is shape*(log(2)^(1/scale))
+#target median = 1.5
+#target scale
+wscale = 5
+wshape = 1.5/(log(2)^(1/wscale))
+if(all_plots)
+{
+plot(x = log(1+exp(xx)),
+     y = dweibull(log(1+exp(xx)), shape = 1.6, scale = 5),
+     type = 'l',
+     xlab = 'kappa_id',
+     ylab = 'probability density',
+     main = 'zkappa prior, Weilbull(1,1)',
+     lwd = 2,
+     col = 6,
+     xlim = c(0,10),
+     ylim = c(0,0.2)
+     )
+abline(h = 0, v = 0)
+
+plot(x = A1(log(1+exp(xx))),
+     y = dweibull(log(1+exp(xx)), shape = 1.6, scale = 5),
+     type = 'l',
+     xlab = 'rho of kappa_id',
+     ylab = 'probability density',
+     main = 'zkappa prior, Weilbull(1,1)',
+     lwd = 2,
+     col = 6,
+     xlim = c(0,1),
+     ylim = c(0,0.2)
+     )
+abline(h = 0, v = 0)
+}
+    
 
 zkappa_var = stanvar(scode = "  real zkappa;", block = "parameters") + 
   stanvar(scode = "
           real kappa_id = log1p_exp(zkappa);
           ", 
           block = 'genquant')
+zmu_var = stanvar(scode = "
+           vector[K_zmu] zmu_id;  // regression coefficients;
+           for (i in 1:K_zmu){
+            zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
+           }
+          ", 
+          block = 'genquant')
 
-stanvars = stan_var + zkappa_var #+ zmu_var
+stanvars = stan_var + zkappa_var + zmu_var
 
 # . Short dummy run to check the influence of the priors ------------------
 
@@ -860,7 +941,7 @@ system.time(
                        prior = prior_nlvmmevm, # our priors 
                        stanvars = stanvars,
                        sample_prior = 'only', #ignore the data to check the influence of the priors
-                       iter = 300, # short run for 300 iterations
+                       iter = 1000, #300, # short run for 300 iterations
                        chains = 4, # 4 chains in parallel
                        cores = 4, # on 4 CPUs
                        refresh = 0, # don't echo chain progress
@@ -868,14 +949,20 @@ system.time(
   }
 )
 # On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
-
+if(all_plots)
+  {
 plot(dummy_fitmevm,
      variable = '^mu_',
      regex = TRUE)
 plot(dummy_fitmevm,
      variable = '^kappa_',
      regex = TRUE)
+plot(dummy_fitmevm,
+     variable = '^zmu_id',
+     nvariables = 5,
+     regex = TRUE)
 plot(dummy_fitmevm)
+}
 #
 
 #
@@ -890,7 +977,7 @@ plot(dummy_fitmevm)
 
 #
 
-conditional_effects(dummy_fitmevm, spaghetti = TRUE)
+#conditional_effects(dummy_fitmevm, spaghetti = TRUE)
 
 
 # . To check that estimation works  ---------------------------------------
@@ -914,25 +1001,34 @@ system.time(
   }
 )
 
+if(all_plots)
+{
 plot(short_fitmevm,
      variable = '^mu_',
      regex = TRUE)
 plot(short_fitmevm,
      variable = '^kappa_',
      regex = TRUE)
+plot(short_fitmevm,
+     variable = '^zmu_id',
+     nvariables = 10,
+     regex = TRUE)
+
+
 plot(short_fitmevm, 
      nvariables = 10,
      variable = "^b_", 
      regex = TRUE)
 
 summary(short_fitmevm)
+}
 
-plot(
-  conditional_effects(x = short_fitmevm, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+# plot(
+#   #conditional_effects(x = short_fitmevm, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 # . Full runs -------------------------------------------------------------
 
@@ -953,12 +1049,20 @@ system.time(
   }
 )
 
+if(all_plots)
+{
 plot(full_fitmevm,
      variable = "^mu_", 
      regex = TRUE)
 plot(full_fitmevm,
      variable = "^kappa_", 
      regex = TRUE)
+plot(full_fitmevm,
+     variable = '^zmu_id',
+     nvariables = 5,
+     regex = TRUE)
+
+
 
 plot(full_fitmevm,
      nvariables = 10,
@@ -966,42 +1070,193 @@ plot(full_fitmevm,
      regex = TRUE)
 
 summary(full_fitmevm)
+}
 rhat(full_fitmevm,
      pars = "^mu_", 
      regex = TRUE)
 
-plot(
-  conditional_effects(x = full_fitmevm, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+# plot(
+#   #conditional_effects(x = full_fitmevm, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 
 
 # Plot NLvM-ME predictions against simulated data --------------------------
 
+
+# . Collect fixed effects predictions -------------------------------------
 #Get fixef predictions
 sm_vm = summary(full_fitmevm, robust = TRUE)
 prms_vm = with(sm_vm, rbind(fixed, spec_pars))
 est_vm = data.frame(t(t(prms_vm)['Estimate',]))
-#Get raneff predictions
+
+# . Collect random effects predictions ------------------------------------
+Cpal = colorRampPalette(colors = c(2:6,
+                                   'seagreen',
+                                   # 'salmon',
+                                   # 'slategray3',
+                                   'orange',
+                                   'navajowhite4'
+                                   ))
+id_cols = sample(x = Cpal(n = n_indiv),
+                 size = n_indiv,
+                 replace = FALSE)
+# [1] "#E59B14" "#DF536B" "#3EB0A2" "#BA22C0" "#24B0E5" "#626078" "#8A9630"
+# [8] "#8B795E" "#7DB455" "#3ACAE0"
+
+#Get raneff predictions for kappa
 cf_vm = coef(full_fitmevm)$ID[,,'kappa_Intercept']
+#We can collect linear scaled predictions for zmu
+#these could potentially be wrong if the estimate is close to +-pi
 rn = rownames(prms_vm)
 rn_zmu = rn[grep(pattern = 'zmu',
                  x = rn)]
 colnames(cf_vm) = colnames(prms_vm)[1:4]
 #these are likely wrong for zmu
 ran_prms_vm = rbind(cf_vm, prms_vm[rn_zmu,1:4])
+
 #all pred
-full_fitmevm_cond =brms::conditional_effects(full_fitmevm, 
-                                     method = 'posterior_epred', #
-                                     cores =  parallel::detectCores()-1,
-                                     conditions = sim,
-                                     effects = c('condition', 'ID'))
+# full_fitmevm_cond =brms::#conditional_effects(full_fitmevm, 
+#                                      method = 'posterior_epred', #
+#                                      cores =  parallel::detectCores()-1,
+#                                      conditions = sim,
+#                                      effects = c('condition', 'ID'))
 #all draws
-full_fitmevm_draws = brms::as_draws_df(full_fitmevm) 
-names(full_fitmevm_cond$condition)
+full_fitmevm_zmu_draws = brms::as_draws_df(full_fitmevm,
+                                       variable = 'zmu_id') 
+# sapply(X = full_fitmevm_zmu_draws[1:n_indiv,],
+#        FUN = hist,
+#        breaks = 1e2)
+deg_pred = circular(x = deg(full_fitmevm_zmu_draws +
+                              est_vm$muangle_Intercept),
+                    type = 'angles',
+                    unit = angle_unit,
+                    template = 'geographics',
+                    modulo = '2pi',
+                    zero = pi/2,
+                    rotation = angle_rot)
+deg_pred = deg_pred[,1:n_indiv]#exclude non-estimated parameters
+
+# with(subset(sim, condition %in% 0),
+#      {
+#        plot.circular(x = circular(x = angle, 
+#                                   type = 'angles',
+#                                   unit = angle_unit,
+#                                   template = 'geographics',
+#                                   modulo = '2pi',
+#                                   zero = pi/2,
+#                                   rotation = angle_rot
+#        ),
+#        stack = TRUE,
+#        bins = 360/5,
+#        sep = 0.5/dt_dim,
+#        col = 'cyan4'
+#        )
+#      }
+# )
+
+
+par(mar =rep(0,4),
+    mfrow = rep(x = ceiling(sqrt(n_indiv)), 
+                times = 2),
+    pty = 's')
+for(i in unique(indivs))
+{
+  with(subset(x = sim,
+              subset = indiv %in% i &
+                condition %in% 0      ),
+       {
+  plot.circular(x = circular(x = angle,
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+  ),
+  sep = 2/dt_dim[1],
+  stack = TRUE,
+  bins = 360/5,
+  col = adjustcolor(id_cols[i], alpha.f = 200/256)
+  ) 
+  }
+  )
+ par(new = T)
+ plot.circular(x = circular(x = NULL, 
+                           type = 'angles',
+                           unit = 'degrees',
+                           template = 'geographics',
+                           modulo = '2pi',
+                           zero = pi/2,
+                           rotation = angle_rot
+              ),
+              shrink = 1.05,
+              axes = F
+              )
+ points.circular(x = circular(x = deg_pred[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+                             ),
+       sep = -1e-3,
+       stack = TRUE,
+       bins = 360,
+       col = adjustcolor(id_cols[i], alpha.f = 1/256)
+       ) 
+  arrows.circular(x = median.circular(circular(x = mu0_sim[i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+                             )),
+                  y = A1(exp(lk_all[i])),
+                  length =0, 
+                  lwd = 1,
+                   col = adjustcolor(id_cols[i], alpha.f = 1)
+       )  
+  arrows.circular(x = median.circular(circular(x = deg_pred[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+                             )),
+                  y = A1(inv_softplus(
+                    est_vm$kappa_Intercept + cf_vm[i,'Estimate']
+                    )
+                    ),
+                  lwd = 5,
+                  length = 0,
+                   col = adjustcolor(id_cols[i], alpha.f = 0.2)
+       )
+}
+plot(x = NULL,
+     xlim = c(-1,1),
+     ylim = c(-1,1),
+     axes = F,
+     xlab = '',
+     ylab = '')
+legend(x = 'center',
+       legend = c('true mean',
+                  'simulated data',
+                  'model estimates',
+                  'model median'),
+       pch = c(NA, 20, 19 , NA),
+       lwd = c(2, 2, 2, 5),
+       lty = c(1,NA,NA,1),
+       col = c(gray(level = rep(0, 4),
+                  alpha = c(1, 1, 0.5, 0.5)) )
+       )
+
 par(mar =rep(0,4))
 with(subset(sim, condition %in% 0),
      {
@@ -1111,6 +1366,160 @@ loo_compare(loo_lm, loo_vm, loo_vmme, loo_vmmevm)
 # full_fit     -19.7       6.2  
 # full_fitlm   -61.0      13.8  
 
+
+# Hypothesis tests via model comparison -----------------------------------
+
+
+# . Refit without effect of condition -------------------------------------
+
+
+# . . Linear model version --------------------------------------------------
+formula_lm_nocond = update(object = formula_lm,
+                           .~. - condition)
+prior_lm_nocond = subset(prior_lm,
+                         subset = !(coef %in% 'condition') & 
+                                   !(class %in% 'b')
+                           )
+
+# Full run
+system.time(
+  {
+    full_fit_lm_nocond = brm( formula = formula_lm_nocond, # using our nonlinear formula
+                      data = sim, # our data
+                      prior = prior_lm_nocond, # our priors 
+                      # stanvars = stan_var,#not needed
+                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
+                      chains = 4, # 4 chains in parallel
+                      cores = 4, # on 4 CPUs
+                      init = 0,
+                      refresh = 0, # don't echo chain progress
+                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+if(all_plots)
+{
+plot(full_fit_lm_nocond)
+}
+
+# . . Nonlinear vM with linear mixed effects --------------------------------
+
+
+
+formula_nlvmme_nocond = formula_nlvmme
+formula_nlvmme_nocond$pforms = within(formula_nlvmme_nocond$pforms,
+                                      {
+                                      muangle = update(muangle, .~. - condition)
+                                      # kappa = '1 + (1|ID)'
+                                      }) 
+
+prior_nlvmme_nocond = subset(prior_nlvmme,
+                         subset = !(coef %in% 'condition' & nlpar %in% 'muangle')
+                           )
+
+# Full run
+system.time(
+  {
+    full_fit_nlvmme_nocond = brm( formula = formula_nlvmme_nocond, # using our nonlinear formula
+                      data = sim, # our data
+                      prior = prior_nlvmme_nocond, # our priors 
+                      stanvars = stanvar(scode = mod_circular_fun, block = "functions") + 
+                                  stanvar(scode = von_mises3_fun, block = "functions"),
+                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
+                      chains = 4, # 4 chains in parallel
+                      cores = 4, # on 4 CPUs
+                      init = 0,
+                      refresh = 0, # don't echo chain progress
+                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+if(all_plots)
+{
+plot(full_fit_nlvmme_nocond)
+}
+# . . Nonlinear vM with von Mises mixed effects --------------------------------
+
+
+
+formula_nlvmmevm_nocond = formula_nlvmmevm
+formula_nlvmmevm_nocond$pforms = within(formula_nlvmmevm_nocond$pforms,
+                                      {
+                                      muangle = update(muangle, .~. - condition)
+                                      # kappa = '1 + (1|ID)'
+                                      }) 
+
+prior_nlvmmevm_nocond = subset(prior_nlvmmevm,
+                         subset = !(coef %in% 'condition' & nlpar %in% 'muangle')
+                           )
+
+# Full run
+system.time(
+  {
+    full_fit_nlvmmevm_nocond = brm( formula = formula_nlvmmevm_nocond, # using our nonlinear formula
+                      data = sim, # our data
+                      prior = prior_nlvmmevm_nocond, # our priors 
+                      stanvars = stanvar(scode = mod_circular_fun, block = "functions") + 
+                                  stanvar(scode = von_mises3_fun, block = "functions") + 
+                                  zkappa_var + zmu_var,
+                      iter = 1000, # short run for 1000 iterations (less than 300 gives insufficient warmup time)
+                      chains = 4, # 4 chains in parallel
+                      cores = 4, # on 4 CPUs
+                      init = 0,
+                      refresh = 0, # don't echo chain progress
+                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+if(all_plots)
+{
+plot(full_fit_nlvmmevm_nocond)
+}
+
+# . Model comparison ------------------------------------------------------
+
+
+# . . Linear model version --------------------------------------------------
+loo_compare(loo(full_fitlm), loo(full_fit_lm_nocond))
+# > mu_offset[2]
+# [1] 5°
+#                   elpd_diff se_diff
+# full_fit_lm_nocond  0.0       0.0   #no effect model chosen
+# full_fitlm         -0.5       0.9   #no clear support for condition difference
+# > mu_offset[2]
+# [1] 10
+#                   elpd_diff se_diff
+# full_fit_lm_nocond  0.0       0.0   #no effect model chosen
+# full_fitlm         -1.1       0.8   #clear support for no condition difference
+
+# . . Nonlinear vM with linear mixed effects --------------------------------
+loo_compare(loo(full_fitme), loo(full_fit_nlvmme_nocond))
+# > mu_offset[2]
+# [1] 5°
+#                       elpd_diff se_diff
+# full_fit_nlvmme_nocond  0.0       0.0   #no effect model chosen
+# full_fitme             -0.8       0.9   #no clear support for condition difference
+# > mu_offset[2]
+# [1] 10
+#                         elpd_diff se_diff
+# full_fitme              0.0       0.0   #effect model chosen
+# full_fit_nlvmme_nocond -0.2       1.7   #no clear support for condition difference
+
+
+# . . Nonlinear vM with von Mises mixed effects --------------------------------
+loo_compare(loo(full_fitmevm), loo(full_fit_nlvmmevm_nocond))
+# > mu_offset[2]
+# [1] 5°
+#                         elpd_diff se_diff
+# full_fit_nlvmmevm_nocond  0.0       0.0   #no effect model chosen
+# full_fitmevm             -0.5       0.8   #no clear support for condition difference
+# > mu_offset[2]
+# [1] 10
+#                           elpd_diff se_diff
+# full_fitmevm              0.0       0.0   #effect model chosen
+# full_fit_nlvmmevm_nocond -0.6       1.6   #no clear support for condition difference                               
+#             Estimate Est.Error l-95% CI u-95% CI Rhat
+# mu_offs      0.17      0.11    -0.04     0.39 1.00
+
 # Test w/ real data -------------------------------------------------------
 
 
@@ -1215,12 +1624,12 @@ plot(full_fit_LP,
 
 summary(full_fit_LP, robust = TRUE)
 
-plot(
-  conditional_effects(x = full_fit_LP, 
-                      spaghetti = TRUE, 
-                      ndraws = 2e2,
-                      effects = 'condition')
-)
+# plot(
+#   #conditional_effects(x = full_fit_LP, 
+#                       spaghetti = TRUE, 
+#                       ndraws = 2e2,
+#                       effects = 'condition')
+# )
 
 
 
