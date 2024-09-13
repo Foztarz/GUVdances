@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 09 11
+#     MODIFIED:	James Foster              DATE: 2024 09 12
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -44,6 +44,9 @@ graphics.off()
 #- Plot predictions +
 #- Check hypothesis tests +
 #- Model comparison hypothesis tests + 
+#- Test with more individuals
+#- Unwrap circular estimates
+#- Plot estimates against simulations
 #- Extract circular fixed effects medians
 #- Simulate random slopes
 #- Model random slopes
@@ -77,6 +80,15 @@ mod_circular = function(x)
 {
   atan2(y = sin(x),
         x = cos(x))
+}
+
+#the unwrapped (no discontinuities)
+unwrap_circular = function(x)
+{
+  mux = mean.circular(x = circular(x = x, template = 'none'))
+  centx = atan2(y = sin(x - mux),
+        x = cos(x  - mux))
+  unwrx = centx + mux
 }
 
 #invert the softplus link
@@ -155,7 +167,7 @@ if(sys_win)
 }
 
 # Simulate data  ------------------------------------------------
-n_indiv = 10 # Number of random-effects groups
+n_indiv = 50#10 # Number of random-effects groups
 n_trials = 10 # Number of observations per random-effects group
 n_conditions = 2 # Number of different conditions
 # minimum discriminable angle appears to be approx 35°
@@ -169,7 +181,7 @@ mu_0 = circular(x = 175,
 #                                                 rotation = angle_rot)
 )#population intercept
 mu_offset = c(0,
-              circular(20,#5, 
+              circular(5, 
                        units = angle_unit,
                       rotation = angle_rot)
               # rcircularuniform(n = n_conditions - 1, 
@@ -326,7 +338,7 @@ mod_circular_fun = "
 von_mises3_fun = "
 real von_mises3_lpdf(real y, real mu, real kappa) {
      if (kappa < 100) {
-       return von_mises_lpdf(y | mu, kappa);
+       return von_mises_lpdf(mod_circular(y) | mu, kappa);
      } else {
        return normal_lpdf(mod_circular(y) | mu, sqrt(1 / kappa));
      }
@@ -335,6 +347,33 @@ real von_mises3_lpdf(real y, real mu, real kappa) {
 #a circular mean that might be useful
 meancirc_fun = "
    // calculate the mean angle of a circular distribution (in radians)
+   real mean_circular(vector y, int N){
+      real sumsin = 0;
+      real sumcos = 0;
+     for (n in 1:N){
+       sumsin += sin(y[n]);
+       sumcos += cos(y[n]);
+     }
+     sumsin = sumsin/N;
+     sumcos = sumcos/N;
+     return(atan2(  sumsin, sumcos) );
+   }
+"
+#could unwrap estimate; not especially useful as only one estimate per iteration
+unwrapcirc_fun = "
+   // calculate the unwrapped version (no discontinuities)
+vector unwrap_circular(vector y, int N)
+{
+
+  mux = mean_circular(y, N);
+  centx = y - mux;
+  for(n in 1:N)
+  {
+  centx[n] = mod_circular(centx[n])
+  }
+  unwrx = centx + mux
+  return(unwrx)
+}
    real mean_circular(vector y, int N){
       real sumsin = 0;
       real sumcos = 0;
@@ -1099,6 +1138,19 @@ rhat(full_fitmevm,
 sm_vm = summary(full_fitmevm, robust = TRUE)
 prms_vm = with(sm_vm, rbind(fixed, spec_pars))
 est_vm = data.frame(t(t(prms_vm)['Estimate',]))
+#all draws for circular variables
+full_fitmevm_mu_circ_draws = brms::as_draws_df(full_fitmevm,
+                                                    variable = 'mu_circ') 
+uw_mu_circ = unwrap_circular(full_fitmevm_mu_circ_draws$mu_circ)
+full_fitmevm_mu_offs_draws = brms::as_draws_df(full_fitmevm,
+                                                    variable = 'mu_offs') 
+uw_mu_offset = unwrap_circular(full_fitmevm_mu_offs_draws$mu_offs)
+est_vm$muangle_Intercept = median.circular(uw_mu_circ)
+est_vm$muangle_condition = median.circular(uw_mu_offset)
+# sapply(X = full_fitmevm_zmu_draws[1:n_indiv,],
+#        FUN = hist,
+#        breaks = 1e2)
+
 
 # . Collect random effects predictions ------------------------------------
 Cpal = colorRampPalette(colors = c(2:6,
@@ -1125,12 +1177,6 @@ colnames(cf_vm) = colnames(prms_vm)[1:4]
 #these are likely wrong for zmu
 ran_prms_vm = rbind(cf_vm, prms_vm[rn_zmu,1:4])
 
-#all pred
-# full_fitmevm_cond =brms::#conditional_effects(full_fitmevm, 
-#                                      method = 'posterior_epred', #
-#                                      cores =  parallel::detectCores()-1,
-#                                      conditions = sim,
-#                                      effects = c('condition', 'ID'))
 #all draws
 full_fitmevm_zmu_draws = brms::as_draws_df(full_fitmevm,
                                        variable = 'zmu_id') 
@@ -1164,6 +1210,9 @@ deg_pred = deg_pred[,1:n_indiv]#exclude non-estimated parameters
 #        )
 #      }
 # )
+
+
+# . plot circular random effects ------------------------------------------
 
 
 par(mar =rep(0,4),
@@ -1246,23 +1295,9 @@ for(i in unique(indivs))
                    col = adjustcolor(id_cols[i], alpha.f = 0.2)
        )
 }
-plot(x = NULL,
-     xlim = c(-1,1),
-     ylim = c(-1,1),
-     axes = F,
-     xlab = '',
-     ylab = '')
-legend(x = 'center',
-       legend = c('true mean',
-                  'simulated data',
-                  'model estimates',
-                  'model median'),
-       pch = c(NA, 20, 19 , NA),
-       lwd = c(2, 2, 2, 5),
-       lty = c(1,NA,NA,1),
-       col = c(gray(level = rep(0, 4),
-                  alpha = c(1, 1, 0.5, 0.5)) )
-       )
+
+# . circular fixed effects ------------------------------------------------
+
 
 par(mar =rep(0,4))
 with(subset(sim, condition %in% 0),
@@ -1360,6 +1395,29 @@ with(est_vm,
                        col = adjustcolor('blue2', alpha.f = 0.5)
        )
      }
+)
+
+# . Model estimates -------------------------------------------------------
+
+# . Add legend ------------------------------------------------------------
+plot(x = NULL,
+     xlim = c(-1,1),
+     ylim = c(-1,1),
+     axes = F,
+     xlab = '',
+     ylab = '')
+
+legend(x = 'center',
+       legend = c('true mean',
+                  'simulated data',
+                  'model estimates',
+                  'model median'),
+       pch = c(NA, 20, 19 , NA),
+       lwd = c(2, 2, 2, 5),
+       lty = c(1,NA,NA,1),
+       col = c(gray(level = rep(0, 4),
+                    alpha = c(1, 1, 0.5, 0.5)) ),
+       cex = 1.2*sqrt(10/n_indiv)
 )
 
 
