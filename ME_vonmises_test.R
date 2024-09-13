@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 09 12
+#     MODIFIED:	James Foster              DATE: 2024 09 13
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -16,6 +16,8 @@ graphics.off()
 #             - Weibull dist von Mises random effects kappa
 #             - plotting predictions for random effects (working well)
 #             - model hypothesis testing
+#             - unwrapping posterior
+#             - less informative priors on kappa
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -181,7 +183,7 @@ mu_0 = circular(x = 175,
 #                                                 rotation = angle_rot)
 )#population intercept
 mu_offset = c(0,
-              circular(5, 
+              circular(20, 
                        units = angle_unit,
                       rotation = angle_rot)
               # rcircularuniform(n = n_conditions - 1, 
@@ -193,7 +195,7 @@ lk_offset = c(0,
                     mean = 0,
                     sd = 0)
 )#condition change in precision
-lk_indiv = log( A1inv(0.98) ) #concentration across individuals (pairs)
+lk_indiv = log( A1inv(0.75) ) #log( A1inv(0.98) ) #concentration across individuals (pairs)
 #trials
 trials = rep(x = 1:n_trials, times = n_indiv*n_conditions)
 #individuals
@@ -888,20 +890,20 @@ prior_nlvmmevm = get_prior(formula = formula_nlvmmevm,
 prior_nlvmmevm = within(prior_nlvmmevm,
                       {
                         prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'von_mises3(0, 0.1)'#'von_mises3(0, 1.5)'#'normal(0, pi())'
-                        prior[nlpar %in% 'muangle' & class %in% 'b'] = 'von_mises3(0, 1.5)'#'normal(0, pi())'
+                        prior[nlpar %in% 'muangle' & class %in% 'b'] = 'von_mises3(0, 1.0)'#'normal(0, pi())'
                         prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa))'
                         prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa))'
-                        prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(0.5, 1.0)'
-                        prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.0)'
-                        # prior[nlpar %in% 'muangle'] = 'von_mises(0, 0.5)'
-                        # lb[nlpar %in% 'muangle'] = -pi
-                        # ub[nlpar %in% 'muangle'] = pi
+                        prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(1.5, 5.0)'
+                        prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 5.0)'
+                        prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 5.0)' # default too restrictive?
                       }
 ) + 
   # by default sd prior student_t(3,0,2.5) would assume pooling, what is circular equivalent?
  # set_prior("target += normal_lpdf(log1p_exp(zkappa) | 1,3)", 
  #           check = FALSE) 
- set_prior("target += weibull_lpdf(log1p_exp(zkappa) | 1.6, 5)", 
+ # set_prior("target += weibull_lpdf(log1p_exp(zkappa) | 1.6, 5)", 
+           # check = FALSE) 
+set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 5)", 
            check = FALSE)
   # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 1, 0, 0.25)", check = FALSE) 
 #circular SD (Mardia, 1972) = sqrt(-2*log(rho))
@@ -909,11 +911,11 @@ prior_nlvmmevm = within(prior_nlvmmevm,
 #moderate pooling sd = 90°, kappa = A1inv(exp((rad(90)^2)/(-2))) = 0.61
 #high pooling sd = 30°, kappa = A1inv(exp((rad(30)^2)/(-2))) = 4.21
 #extreme pooling sd = 10°, kappa = A1inv(exp((rad(10)^2)/(-2))) = 33.33
-xx = seq(from  = -15, to  = 15, length.out = 1e3)
+xx = seq(from  = -50, to  = 50, length.out = 1e3)
 if(all_plots)
 {
-plot(x = A1(log(1+exp(xx))),
-     y = dnorm(log(1+exp(xx)), mean = 1, sd = 3),
+plot(x = A1(inv_softplus(xx)),
+     y = dnorm(inv_softplus(xx), mean = 1, sd = 3),
      type = 'l',
      xlab = 'rho of kappa_id',
      ylab = 'probability density',
@@ -933,8 +935,8 @@ wscale = 5
 wshape = 1.5/(log(2)^(1/wscale))
 if(all_plots)
 {
-plot(x = log(1+exp(xx)),
-     y = dweibull(log(1+exp(xx)), shape = 1.6, scale = 5),
+plot(x = inv_softplus(xx),
+     y = dweibull(inv_softplus(xx), shape = 1.6, scale = 5),
      type = 'l',
      xlab = 'kappa_id',
      ylab = 'probability density',
@@ -946,8 +948,8 @@ plot(x = log(1+exp(xx)),
      )
 abline(h = 0, v = 0)
 
-plot(x = A1(log(1+exp(xx))),
-     y = dweibull(log(1+exp(xx)), shape = 1.6, scale = 5),
+plot(x = A1(inv_softplus(xx)),
+     y = dweibull(inv_softplus(xx), shape = 1.6, scale = 5),
      type = 'l',
      xlab = 'rho of kappa_id',
      ylab = 'probability density',
@@ -963,8 +965,8 @@ abline(v = A1(exp(lk_indiv)), col = 2)
 #t-distribution?
 if(all_plots)
 {
-plot(x = A1(log(1+exp(xx))),
-     y = brms::dstudent_t(log(1+exp(xx)), df = 3, mu = 1.5, sigma = 10),
+plot(x = A1(inv_softplus(xx)),
+     y = brms::dstudent_t(inv_softplus(xx), df = 3, mu = 5, sigma = 5),
      type = 'l',
      xlab = 'rho of kappa_id',
      ylab = 'probability density',
@@ -1119,7 +1121,14 @@ plot(full_fitmevm,
      variable = "^mu_", 
      regex = TRUE)
 plot(full_fitmevm,
+     variable = "^b_kappa_", 
+     regex = TRUE)
+plot(full_fitmevm,
      variable = "^kappa_", 
+     regex = TRUE)
+plot(full_fitmevm,
+     nvariables = 10,
+     variable = "^sd_", 
      regex = TRUE)
 plot(full_fitmevm,
      variable = '^zmu_id',
@@ -1128,10 +1137,6 @@ plot(full_fitmevm,
 
 
 
-plot(full_fitmevm,
-     nvariables = 10,
-     variable = "^sd_", 
-     regex = TRUE)
 
 summary(full_fitmevm)
 }
@@ -1413,8 +1418,12 @@ with(est_vm,
                        col = adjustcolor('blue2', alpha.f = 0.5)
        )
      }
+     
 )
-
+title(main = 'fixed effects',
+      line = -3,
+      cex.main = 0.5
+      )
 # . Model estimates -------------------------------------------------------
 
 #all draws
@@ -1429,7 +1438,7 @@ stripchart(x = round(inv_softplus(b_kappa_Intercept), digits = 2),
            col = gray(level = 0.5, alpha = 0.25),
            method = 'stack',
            vertical = TRUE,
-           ylim = c(0, 5),
+           ylim = c(0, max(inv_softplus(b_kappa_Intercept))),
            xlim = c(1,2)+c(-1,1)*0.25,
            offset = 0.01,
            mgp = c(0,1,0.5),
@@ -1456,7 +1465,7 @@ stripchart(x = round(
            col = gray(level = 0.5, alpha = 0.25),
            method = 'stack',
            vertical = TRUE,
-           ylim = c(-1, 1)*2.5,
+           ylim = c(-1, 1)*max(abs(inv_softplus(b_kappa_Intercept + b_kappa_condition) - inv_softplus(b_kappa_Intercept))),
            xlim = c(1,2)+c(-1,1)*0.25,
   offset = 0.01,
   mgp = c(0,1,0.5),
@@ -1480,13 +1489,42 @@ abline(h = exp(log(kappa_pop) + lk_offset) - kappa_pop,
 with(full_fitmevm_fixed_draws,
      {
 stripchart(x = round(
+  sd_ID__kappa_Intercept, 
+  digits = 2),
+           pch = 20,
+           col = gray(level = 0.5, alpha = 0.25),
+           method = 'stack',
+           vertical = TRUE,
+            ylim = c(0, max(sd_ID__kappa_Intercept)),
+           xlim = c(1,2)+c(-1,1)*0.25,
+  offset = 0.01,
+  mgp = c(0,1,0.5),
+  cex.main = 0.5, 
+  bty = 'n')
+       title(main = 'Kappa SD',
+             line = 0.1,
+             cex.main = 0.5)
+       abline(h = 0)
+       abline(h = median( 
+         sd_ID__kappa_Intercept
+             ),
+              col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+              lwd = 5)
+     }
+)
+abline(h = inv_softplus(exp(logkappa_var)),
+       col = 2,
+       lwd = 2)
+with(full_fitmevm_fixed_draws,
+     {
+stripchart(x = round(
   kappa_id, 
   digits = 2),
            pch = 20,
            col = gray(level = 0.5, alpha = 0.25),
            method = 'stack',
            vertical = TRUE,
-            ylim = c(0, 25),
+            ylim = c(0, max(kappa_id)),
            xlim = c(1,2)+c(-1,1)*0.25,
   offset = 0.01,
   mgp = c(0,1,0.5),
