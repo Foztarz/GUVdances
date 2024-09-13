@@ -924,6 +924,7 @@ plot(x = A1(log(1+exp(xx))),
      ylim = c(0,0.2)
      )
 abline(h = 0, v = 0)
+abline(v = A1(exp(lk_indiv)), col = 2)
 }
 #weibull median is shape*(log(2)^(1/scale))
 #target median = 1.5
@@ -957,8 +958,25 @@ plot(x = A1(log(1+exp(xx))),
      ylim = c(0,0.2)
      )
 abline(h = 0, v = 0)
+abline(v = A1(exp(lk_indiv)), col = 2)
 }
-    
+#t-distribution?
+if(all_plots)
+{
+plot(x = A1(log(1+exp(xx))),
+     y = brms::dstudent_t(log(1+exp(xx)), df = 3, mu = 1.5, sigma = 10),
+     type = 'l',
+     xlab = 'rho of kappa_id',
+     ylab = 'probability density',
+     main = 'zkappa prior, student_t(3,1.5,3)',
+     lwd = 2,
+     col = 5,
+     xlim = c(0,1),
+     ylim = c(0,0.2)
+)
+abline(h = 0, v = 0)
+abline(v = A1(exp(lk_indiv)), col = 2)
+}   
 
 zkappa_var = stanvar(scode = "  real zkappa;", block = "parameters") + 
   stanvar(scode = "
@@ -1215,10 +1233,10 @@ deg_pred = deg_pred[,1:n_indiv]#exclude non-estimated parameters
 # . plot circular random effects ------------------------------------------
 
 
+par(pty = 's')#sometimes gets skipped? Needs to come first
 par(mar =rep(0,4),
     mfrow = rep(x = ceiling(sqrt(n_indiv)), 
-                times = 2),
-    pty = 's')
+                times = 2) )
 for(i in unique(indivs))
 {
   with(subset(x = sim,
@@ -1399,7 +1417,99 @@ with(est_vm,
 
 # . Model estimates -------------------------------------------------------
 
+#all draws
+full_fitmevm_fixed_draws = brms::as_draws_df(full_fitmevm,
+                                           regex ='^b_') 
+par(mar = c(0,3,4,0),
+    bty = 'n')
+with(full_fitmevm_fixed_draws,
+     {
+stripchart(x = round(inv_softplus(b_kappa_Intercept), digits = 2),
+           pch = 20,
+           col = gray(level = 0.5, alpha = 0.25),
+           method = 'stack',
+           vertical = TRUE,
+           ylim = c(0, 5),
+           xlim = c(1,2)+c(-1,1)*0.25,
+           offset = 0.01,
+           mgp = c(0,1,0.5),
+           cex.main = 0.5, 
+           bty = 'n')
+ title(main = 'Population kappa',
+       line = 0.1,
+       cex.main = 0.5)
+       abline(h = median(inv_softplus(b_kappa_Intercept)),
+              col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+              lwd = 5)
+     }
+)
+abline(h = kappa_pop,
+       col = 2,
+       lwd = 2)
+
+with(full_fitmevm_fixed_draws,
+     {
+stripchart(x = round(
+  inv_softplus(b_kappa_Intercept + b_kappa_condition) - inv_softplus(b_kappa_Intercept), 
+  digits = 2),
+           pch = 20,
+           col = gray(level = 0.5, alpha = 0.25),
+           method = 'stack',
+           vertical = TRUE,
+           ylim = c(-1, 1)*2.5,
+           xlim = c(1,2)+c(-1,1)*0.25,
+  offset = 0.01,
+  mgp = c(0,1,0.5),
+  cex.main = 0.5, 
+  bty = 'n')
+       title(main = 'Condition effect on kappa',
+             line = 0.1,
+             cex.main = 0.5)
+       abline(h = 0)
+       abline(h = median( 
+         inv_softplus(b_kappa_Intercept + b_kappa_condition) - inv_softplus(b_kappa_Intercept)
+             ),
+              col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+              lwd = 5)
+     }
+)
+abline(h = exp(log(kappa_pop) + lk_offset) - kappa_pop,
+       col = 2,
+       lwd = 2)
+
+with(full_fitmevm_fixed_draws,
+     {
+stripchart(x = round(
+  kappa_id, 
+  digits = 2),
+           pch = 20,
+           col = gray(level = 0.5, alpha = 0.25),
+           method = 'stack',
+           vertical = TRUE,
+            ylim = c(0, 25),
+           xlim = c(1,2)+c(-1,1)*0.25,
+  offset = 0.01,
+  mgp = c(0,1,0.5),
+  cex.main = 0.5, 
+  bty = 'n')
+       title(main = 'Random effects kappa',
+             line = 0.1,
+             cex.main = 0.5)
+       abline(h = 0)
+       abline(h = median( 
+         kappa_id
+             ),
+              col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+              lwd = 5)
+     }
+)
+abline(h = exp(lk_indiv),
+       col = 2,
+       lwd = 2)
+
 # . Add legend ------------------------------------------------------------
+par(mar = rep(0,4),
+    bty = 'o')
 plot(x = NULL,
      xlim = c(-1,1),
      ylim = c(-1,1),
@@ -1415,8 +1525,10 @@ legend(x = 'center',
        pch = c(NA, 20, 19 , NA),
        lwd = c(2, 2, 2, 5),
        lty = c(1,NA,NA,1),
-       col = c(gray(level = rep(0, 4),
-                    alpha = c(1, 1, 0.5, 0.5)) ),
+       col = c(gray(level = rep(0, 3),
+                    alpha = c(1, 1, 0.5)),
+               adjustcolor(col = 'cyan4',
+                           alpha.f = 0.5)),
        cex = 1.2*sqrt(10/n_indiv)
 )
 
