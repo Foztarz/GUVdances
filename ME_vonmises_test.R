@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 28
-#     MODIFIED:	James Foster              DATE: 2024 09 13
+#     MODIFIED:	James Foster              DATE: 2024 09 23
 #
 #  DESCRIPTION: Fit hierarchical maximum-likelihood von Mises.
 #               
@@ -18,6 +18,7 @@ graphics.off()
 #             - model hypothesis testing
 #             - unwrapping posterior
 #             - less informative priors on kappa
+#             - random effects on condition
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -46,12 +47,12 @@ graphics.off()
 #- Plot predictions +
 #- Check hypothesis tests +
 #- Model comparison hypothesis tests + 
-#- Test with more individuals
-#- Unwrap circular estimates
-#- Plot estimates against simulations
-#- Extract circular fixed effects medians
+#- Test with more individuals +
+#- Unwrap circular estimates  +
+#- Plot estimates against simulations +
+#- Extract circular fixed effects medians +
+#- Model random slopes  +
 #- Simulate random slopes
-#- Model random slopes
 #- Simulate continuous fixed effects
 
 # . Load packages ----------------------------------------------------------
@@ -175,6 +176,7 @@ n_conditions = 2 # Number of different conditions
 # minimum discriminable angle appears to be approx 35°
 kappa_pop = A1inv(0.7) #concentration around each trial mean
 logkappa_var = 0.5 #scale of random variation in concentration (log units)
+logkappa_indiv_var = 0.1 #scale of random variation in concentration (log units)
 mu_0 = circular(x = 175,
                 units = angle_unit,
                 rotation = angle_rot
@@ -190,12 +192,16 @@ mu_offset = c(0,
               #                  control.circular = list(units = angle_unit,
               #                                          rotation = angle_rot)
               )#condition change in heading
+#condition change in precision
 lk_offset = c(0, 
               rnorm(n = n_conditions-1,
                     mean = 0,
                     sd = 0)
-)#condition change in precision
+)
+#kappa across individuals
 lk_indiv = log( A1inv(0.75) ) #log( A1inv(0.98) ) #concentration across individuals (pairs)
+#kappa across individual offsets
+lk_indiv_offset = log( A1inv(0.90) ) #concentration across individual offsets
 #trials
 trials = rep(x = 1:n_trials, times = n_indiv*n_conditions)
 #individuals
@@ -203,18 +209,34 @@ indivs = rep( x = sort( rep(1:n_indiv, times = n_trials) ),
               times = n_conditions)
 #conditions
 conds = sort( rep(1:n_conditions - 1, times = n_indiv*n_trials) )
-#mean angle in trail 1 for each individual 
+#mean angle in condition 2 for each individual 
 mu0_sim = rvonmises(n = n_indiv,
                     mu = mu_0,#random angle
                     kappa = exp(lk_indiv)#the wider the distribution of individual biases, the greater the influence of pairing
 )
+#mean angle chagne to condition 2 for each individual 
+mu1_sim = rvonmises(n = n_indiv,
+                    mu = circular(0, 
+                                  units = angle_unit,
+                                  rotation = angle_rot),#population mean
+                    kappa = exp(lk_indiv_offset)#the wider the distribution of individual biases, the greater the influence of pairing
+                    )
 #log precision in trail 1 for each individual 
 lk0_sim = rnorm(n = n_indiv,
                 mean = log(kappa_pop),
                 sd = logkappa_var)
+#log precision change for condition 2 for each individual 
+lk1_sim = rnorm(n = n_indiv,
+                mean = 0,
+                sd = logkappa_indiv_var)
+#TODO check this works!
 #all conditional means
-mu_all =  mu0_sim[indivs] + mu_offset[conds+1]
-lk_all =  lk0_sim[indivs] + lk_offset[conds+1]
+mu_all =  mu0_sim[indivs] + 
+          mu_offset[conds+1] + 
+          conds*mu1_sim
+lk_all =  lk0_sim[indivs] + 
+          lk_offset[conds+1] + 
+          conds*lk1_sim
 # mu_all =  c( 
 #               t( 
 #                 rep(1, times = n_conditions) %*% t(mu0_sim) + #repeat indiv mean across conditions
@@ -1152,6 +1174,224 @@ rhat(full_fitmevm,
 # )
 
 
+# NLvMME Slopes Stan version --------------------------------------------------
+
+
+#set up model fit
+formula_nlvmme_slope = bf(
+  #set up a formula for the curve as a whole,
+  formula = rad_angle ~ mod_circular(muangle + zmu),
+  muangle ~  condition, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  zmu ~  0+ID+ID:condition, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  kappa ~ condition + (1+condition|ID), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  family = von_mises(link = "identity",
+                     link_kappa = 'softplus'),
+  nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
+
+prior_nlvmme_slope = get_prior(formula = formula_nlvmme_slope,
+                           data = sim)
+
+prior_nlvmme_slope = within(prior_nlvmme_slope,
+                        {
+                          prior[nlpar %in% 'muangle' & coef %in% 'Intercept'] = 'von_mises3(0, 0.1)'#'von_mises3(0, 1.5)'#'normal(0, pi())'
+                          prior[nlpar %in% 'muangle' & class %in% 'b'] = 'von_mises3(0, 1.0)'#'normal(0, pi())'
+                          prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa))'
+                          prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa))'
+                          prior[nlpar %in% 'zmu' & class %in% 'b' 
+                                & grepl(pattern = 'condition', 
+                                        x = coef)] = 'von_mises3(0, log1p_exp(zkappa_condition))'
+                          prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(1.5, 5.0)'
+                          prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 5.0)'
+                          prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 5.0)' # default too restrictive?
+                        }
+) + 
+  # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 2.5)", 
+  #           check = FALSE)+ 
+  # set_prior("target += student_t_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 5, 2.5)", 
+  #           check = FALSE)
+  set_prior("target += gamma_lpdf(log1p_exp(zkappa) | 3, 0.25)", 
+            check = FALSE)+ 
+  set_prior("target += gamma_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 0.25)", 
+            check = FALSE)
+#circular SD (Mardia, 1972) = sqrt(-2*log(rho))
+# if kappa = 1, SD = deg(sqrt(-2*log(A1(1.0)))) = 73°
+#moderate pooling sd = 90°, kappa = A1inv(exp((rad(90)^2)/(-2))) = 0.61
+#high pooling sd = 30°, kappa = A1inv(exp((rad(30)^2)/(-2))) = 4.21
+#extreme pooling sd = 10°, kappa = A1inv(exp((rad(10)^2)/(-2))) = 33.33
+xx = seq(from  = -50, to  = 50, length.out = 1e3)
+#t-distribution?
+if(all_plots)
+{
+  #the t-distributed prior appears to bias towards low values
+  plot(x = A1(inv_softplus(xx)),
+       # y = brms::dstudent_t(inv_softplus(xx),
+       #                      df = 3, 
+       #                      mu = 30,
+       #                      sigma = 30),       
+       y = dnorm(inv_softplus(xx),
+                            mean = 5,
+                            sd = 20),
+       type = 'l',
+       xlab = 'rho of kappa_id',
+       ylab = 'probability density',
+       main = 'zkappa prior, normal(5,20)',
+       lwd = 2,
+       col = 5,
+       xlim = c(0,1),
+       ylim = c(0,0.2)
+  )
+  #gamma would bias away from low values
+  plot(x = A1(inv_softplus(xx)),
+       y = dgamma(inv_softplus(xx), shape = 3, rate = 0.25),
+       type = 'l',
+       xlab = 'rho of kappa_id',
+       ylab = 'probability density',
+       main = 'zkappa prior, gamma(3,0.25)',
+       lwd = 2,
+       col = 6,
+       xlim = c(0,1),
+       ylim = c(0,0.2)
+  )
+  abline(h = 0, v = 0)
+  abline(v = A1(exp(lk_indiv)), col = 2)
+}   
+
+zkappa_var_slope = stanvar(scode = 
+"  real zkappa;
+   real zkappa_condition;",
+                    block = "parameters") + 
+  stanvar(scode = "
+  real kappa_id = log1p_exp(zkappa);
+  real kappa_id_condition = log1p_exp(zkappa+zkappa_condition);
+          ", 
+          block = 'genquant')
+zmu_var_slope = stanvar(scode = "
+           vector[N_1] zmu_id;  // regression coefficients per indiv;
+           vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+           for (i in 1:N_1){
+            zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
+            zmu_id_condition[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
+           }
+          ", 
+                  block = 'genquant')
+
+stanvars_slope = stan_var + zkappa_var_slope + zmu_var_slope
+
+# . Short dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    dummy_fitmevm_slope = brm( formula = formula_nlvmme_slope, # using our nonlinear formula
+                         data = sim, # our data
+                         prior = prior_nlvmme_slope, # our priors 
+                         stanvars = stanvars_slope,
+                         sample_prior = 'only', #ignore the data to check the influence of the priors
+                         iter = 1000, #300, # short run for 300 iterations
+                         chains = 4, # 4 chains in parallel
+                         cores = 4, # on 4 CPUs
+                         refresh = 0, # don't echo chain progress
+                         backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+if(all_plots)
+{
+  plot(dummy_fitmevm_slope,
+       variable = '^mu_',
+       regex = TRUE)
+  plot(dummy_fitmevm_slope,
+       variable = '^kappa_id',
+       regex = TRUE)
+  plot(dummy_fitmevm_slope,
+       variable = '^zkappa',
+       nvariables = 5,
+       regex = TRUE)
+  plot(dummy_fitmevm_slope,
+       variable = 'zmu_id',
+       nvariables = 5)
+  plot(dummy_fitmevm_slope,
+       variable = 'zmu_id_condition',
+       nvariables = 5)
+  plot(dummy_fitmevm_slope)
+}
+
+# . Short run to check the convergence ------------------
+
+
+# short run
+system.time(
+  {
+    short_nlvmme_slope = brm( formula = formula_nlvmme_slope, # using our nonlinear formula
+                       data = sim, # our data
+                       prior = prior_nlvmme_slope, # our priors 
+                       stanvars = stanvars_slope,
+                       iter =300, # short run for 300 iterations
+                       chains = 4, # 4 chains in parallel
+                       cores = 4, # on 4 CPUs
+                       refresh = 0, # don't echo chain progress
+                       backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+    }
+)
+if(all_plots)
+{
+  plot(short_nlvmme_slope,
+       variable = '^mu_',
+       regex = TRUE)
+  plot(short_nlvmme_slope,
+       variable = '^kappa_id',
+       regex = TRUE)
+  plot(dummy_fitmevm_slope,
+       variable = '^zkappa',
+       regex = TRUE)
+  plot(short_nlvmme_slope,
+       variable = 'zmu_id',
+       nvariables = 5)
+  plot(short_nlvmme_slope,
+       variable = 'zmu_id_condition',
+       nvariables = 5)
+  plot(short_nlvmme_slope)
+}
+
+
+# . Full run to check the convergence ------------------
+
+
+# full run
+system.time(
+  {
+    full_nlvmme_slope = brm( formula = formula_nlvmme_slope, # using our nonlinear formula
+                             data = sim, # our data
+                             prior = prior_nlvmme_slope, # our priors 
+                             stanvars = stanvars_slope,
+                             iter = 1000, #300, # short run for 300 iterations
+                             chains = 4, # 4 chains in parallel
+                             cores = 4, # on 4 CPUs
+                             refresh = 0, # don't echo chain progress
+                             backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+if(all_plots)
+{
+  plot(full_nlvmme_slope,
+       variable = '^mu_',
+       regex = TRUE)
+  plot(full_nlvmme_slope,
+       variable = '^kappa_id',
+       regex = TRUE)
+  plot(dummy_fitmevm_slope,
+       variable = '^zkappa',
+       regex = TRUE)
+  plot(full_nlvmme_slope,
+       variable = 'zmu_id',
+       nvariables = 5)
+  plot(full_nlvmme_slope,
+       variable = 'zmu_id_condition',
+       nvariables = 5)
+  plot(full_nlvmme_slope)
+}
 
 # Plot NLvM-ME predictions against simulated data --------------------------
 
