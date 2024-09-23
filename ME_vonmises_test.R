@@ -1211,7 +1211,9 @@ prior_nlvmme_slope = within(prior_nlvmme_slope,
   #           check = FALSE)
   set_prior("target += gamma_lpdf(log1p_exp(zkappa) | 3, 0.25)", 
             check = FALSE)+ 
-  set_prior("target += gamma_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 0.25)", 
+  # set_prior("target += gamma_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 0.25)", 
+  #           check = FALSE)
+  set_prior("target += normal_lpdf(zkappa_condition | 0, 3)", 
             check = FALSE)
 #circular SD (Mardia, 1972) = sqrt(-2*log(rho))
 # if kappa = 1, SD = deg(sqrt(-2*log(A1(1.0)))) = 73°
@@ -1343,7 +1345,7 @@ if(all_plots)
   plot(short_nlvmme_slope,
        variable = '^kappa_id',
        regex = TRUE)
-  plot(dummy_fitmevm_slope,
+  plot(short_nlvmme_slope,
        variable = '^zkappa',
        regex = TRUE)
   plot(short_nlvmme_slope,
@@ -1381,7 +1383,7 @@ if(all_plots)
   plot(full_nlvmme_slope,
        variable = '^kappa_id',
        regex = TRUE)
-  plot(dummy_fitmevm_slope,
+  plot(full_nlvmme_slope,
        variable = '^zkappa',
        regex = TRUE)
   plot(full_nlvmme_slope,
