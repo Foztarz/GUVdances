@@ -1221,7 +1221,9 @@ prior_nlvmme_slope = within(prior_nlvmme_slope,
 #high pooling sd = 30°, kappa = A1inv(exp((rad(30)^2)/(-2))) = 4.21
 #extreme pooling sd = 10°, kappa = A1inv(exp((rad(10)^2)/(-2))) = 33.33
 xx = seq(from  = -50, to  = 50, length.out = 1e3)
-#t-distribution?
+#TODO
+#Clean up, this was all unnecessary.
+# zkappa condition was high because ALL individuals responded in the same way!
 if(all_plots)
 {
   #the t-distributed prior appears to bias towards low values
