@@ -925,8 +925,10 @@ prior_nlvmmevm = within(prior_nlvmmevm,
  #           check = FALSE) 
  # set_prior("target += weibull_lpdf(log1p_exp(zkappa) | 1.6, 5)", 
            # check = FALSE) 
-set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 5)", 
-           check = FALSE)
+# set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 5)", 
+#            check = FALSE)
+set_prior("target += student_t_lpdf(zkappa | 3, 5, 5)", 
+           check = FALSE) # should also be fine
   # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 1, 0, 0.25)", check = FALSE) 
 #circular SD (Mardia, 1972) = sqrt(-2*log(rho))
 # if kappa = 1, SD = deg(sqrt(-2*log(A1(1.0)))) = 73°
@@ -989,6 +991,20 @@ if(all_plots)
 {
 plot(x = A1(inv_softplus(xx)),
      y = brms::dstudent_t(inv_softplus(xx), df = 3, mu = 5, sigma = 5),
+     type = 'l',
+     xlab = 'rho of kappa_id',
+     ylab = 'probability density',
+     main = 'zkappa prior, student_t(3,1.5,3)',
+     lwd = 2,
+     col = 5,
+     xlim = c(0,1),
+     ylim = c(0,0.2)
+)
+abline(h = 0, v = 0)
+abline(v = A1(exp(lk_indiv)), col = 2)
+#beyond softplus link?
+plot(x = A1(inv_softplus(xx)),
+     y = brms::dstudent_t(xx, df = 3, mu = 5, sigma = 5),
      type = 'l',
      xlab = 'rho of kappa_id',
      ylab = 'probability density',
@@ -1205,16 +1221,20 @@ prior_nlvmme_slope = within(prior_nlvmme_slope,
                           prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 5.0)' # default too restrictive?
                         }
 ) + 
-  # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 2.5)", 
-  #           check = FALSE)+ 
-  # set_prior("target += student_t_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 5, 2.5)", 
-  #           check = FALSE)
-  set_prior("target += gamma_lpdf(log1p_exp(zkappa) | 3, 0.25)", 
-            check = FALSE)+ 
-  # set_prior("target += gamma_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 0.25)", 
-  #           check = FALSE)
-  set_prior("target += normal_lpdf(zkappa_condition | 0, 3)", 
+  set_prior("target += student_t_lpdf(zkappa | 3, 5, 2.5)",
+            check = FALSE)+
+  set_prior("target += student_t_lpdf(zkappa_condition | 3, 5, 2.5)",
             check = FALSE)
+  # set_prior("target += student_t_lpdf(log1p_exp(zkappa) | 3, 5, 2.5)",
+  #           check = FALSE)+
+  # set_prior("target += student_t_lpdf(log1p_exp(zkappa_condition) | 3, 5, 2.5)",
+  #           check = FALSE)
+  # set_prior("target += gamma_lpdf(log1p_exp(zkappa) | 3, 0.25)", 
+  #           check = FALSE)+ 
+  # # set_prior("target += gamma_lpdf(log1p_exp(zkappa+zkappa_condition) | 3, 0.25)", 
+  # #           check = FALSE)
+  # set_prior("target += normal_lpdf(zkappa_condition | 0, 3)", 
+  #           check = FALSE)
 #circular SD (Mardia, 1972) = sqrt(-2*log(rho))
 # if kappa = 1, SD = deg(sqrt(-2*log(A1(1.0)))) = 73°
 #moderate pooling sd = 90°, kappa = A1inv(exp((rad(90)^2)/(-2))) = 0.61
