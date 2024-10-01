@@ -117,6 +117,44 @@ NormCirc = function(x,
   return(mod_circular(x - mn) + mn)
 }
 ## von Mises model inspection functions ----------------------------------
+
+#histograms on a vertical axis
+
+VertHist = function(data,
+                    breaks = 1e2,
+                    ylab = 'data',
+                    xlab = 'density',
+                    main = '',
+                    col = 'gray',
+                    border = NA,
+                    ...)
+{
+  hst = hist(x = data,
+             breaks = breaks,
+             plot = FALSE)
+  with(hst,
+       {
+         plot(x = NULL,
+              xlim = c(0, max(density)),
+              ylim = range(mids),
+              xlab = xlab,
+              ylab = ylab,
+              main = main)
+         for(i in 1:length(mids))
+         {
+           rect(xleft = 0,
+                xright = density[i],
+                ybottom = breaks[i], 
+                ytop = breaks[i + 1],
+                col = col,
+                border = border,
+                ...
+           )
+         }
+       }
+  )
+}
+
 #function to construct the transformation list
 Make_vmtrans = function(mod,
                         angfun = NormCirc,
@@ -890,12 +928,10 @@ full_int_slope_fixed_draws = brms::as_draws_df(full_int_slope,
                                              regex ='^b_') 
 par(mar = c(0,3,4,0),
     bty = 'n')
-nn = with(full_int_slope_fixed_draws,
-          hist(x = inv_softplus(b_kappa_Intercept),
-          breaks = 1e2,
-          border = NA,
-          plot = FALSE)
-)
+
+
+VertHist(inv_softplus(full_int_slope_fixed_draws$b_kappa_Intercept))
+
 with(nn,
      {
      plot(x = NULL,
