@@ -124,6 +124,7 @@ VertHist = function(data,
                     breaks = 1e2,
                     ylab = 'data',
                     xlab = 'density',
+                    ylim = NULL,
                     main = '',
                     col = 'gray',
                     border = NA,
@@ -136,7 +137,7 @@ VertHist = function(data,
        {
          plot(x = NULL,
               xlim = c(0, max(density)),
-              ylim = range(mids),
+              ylim = if(is.null(ylim)){range(mids)}else{ylim},
               xlab = xlab,
               ylab = ylab,
               main = main)
@@ -930,30 +931,71 @@ par(mar = c(0,3,4,0),
     bty = 'n')
 
 
-VertHist(inv_softplus(full_int_slope_fixed_draws$b_kappa_Intercept))
-
-with(nn,
-     {
-     plot(x = NULL,
-          xlim = range(density),
-          ylim = range(mids),
-          ylab = 'kappa intercept',
-          xlab  = 'density')
-      polygon(x = c(0,density,0),
-          y = c(min(mids), mids, max(mids)),
-          col = 'gray',
-          border = NA
-     )
-     }
-     
-     
-)
+par(mfrow = c(1,2))
 with(full_int_slope_fixed_draws,
-abline(h = median(inv_softplus(b_kappa_Intercept)),
-       col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
-       lwd = 5)
+     {
+      VertHist(data = inv_softplus(b_kappa_Intercept),
+               ylab = 'kappa intercept',
+               ylim = c(1,4))
+      abline(h = median(inv_softplus(b_kappa_Intercept)),
+             col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+             lwd = 5)
+      segments(x0 = 0,x1 = 0,
+               y0 = quantile(x = inv_softplus(b_kappa_Intercept),
+                              probs = 0.05),
+               y1 = quantile(x = inv_softplus(b_kappa_Intercept),
+                              probs = 1-0.05),
+               col = 'cyan4',
+               lwd = 2
+               )
+     }
 )
 abline(h = kappa_pop,
+       col = 2,
+       lwd = 2)
+
+with(full_int_slope_fixed_draws,
+     {
+      VertHist(data = inv_softplus(b_kappa_Intercept+b_kappa_condition),
+               ylab = 'kappa intercept + condition',
+               ylim = c(1,4))
+      abline(h = median(inv_softplus(b_kappa_Intercept+b_kappa_condition)),
+             col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+             lwd = 5)
+      segments(x0 = 0,x1 = 0,
+               y0 = quantile(x = inv_softplus(b_kappa_Intercept+b_kappa_condition),
+                              probs = 0.05),
+               y1 = quantile(x = inv_softplus(b_kappa_Intercept+b_kappa_condition),
+                              probs = 1-0.05),
+               col = 'cyan4',
+               lwd = 2
+               )
+     }
+)
+abline(h = exp(log(kappa_pop)+lk_offset[2]),
+       col = 2,
+       lwd = 2)
+
+par(mfrow = c(1,1))
+with(full_int_slope_fixed_draws,
+     {
+       VertHist(data = (b_kappa_condition),
+                ylab = 'condition effect on kappa',
+                ylim = NULL)
+       abline(h = median(b_kappa_condition),
+              col = adjustcolor(col = 'cyan4',alpha.f = 0.5),
+              lwd = 5)
+       segments(x0 = 0,x1 = 0,
+                y0 = quantile(x = b_kappa_condition,
+                              probs = 0.05),
+                y1 = quantile(x = b_kappa_condition,
+                              probs = 1-0.05),
+                col = 'cyan4',
+                lwd = 2
+       )
+     }
+)
+abline(h = 0,
        col = 2,
        lwd = 2)
 # with(full_int_slope_fixed_draws,
