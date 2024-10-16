@@ -35,7 +35,8 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Histograms in descriptive plots
+#- Histograms in descriptive plots  +
+#- Choose appropriate prior for zkappa
 #- Plot funnel for kappa & mu
 #- Interactions model
 #- Test range of parameter values
@@ -96,6 +97,7 @@ unwrap_circular_deg = function(x)
 
 #invert the softplus link
 #https://en.wikipedia.org/wiki/Softplus
+#TODO confusing name, this is softplussing, inverse would be log(exp(x)-1)
 inv_softplus = function(x)
 {
   log(exp(x)+1) 
@@ -534,7 +536,8 @@ prior_int_slope = get_prior(formula = formula_int_slope,
 #                         coef = 'condition',
 #                         class = 'sd',
 #                         group  = 'ID')
-#assign BRMS default priors
+
+### assign BRMS default priors -------------------------------------------
 prior_int_slope = within(prior_int_slope,
                             {
 #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
@@ -553,14 +556,61 @@ prior_int_slope = within(prior_int_slope,
       prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 5.0)' #wide prior 
                             }
 )
-#add extra priors for the random effects mean angles
+
+
+### add extra priors for the random effects mean angles -----------------
+
+
+
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa | 3, 5, 2.5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa_condition | 3, 5, 2.5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa_condition | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)
 
-
+#is this a good prior for zkappa?
+xx = seq(from  = -50,
+         to  = 50,
+         length.out = 1e3)
+if(all_plots)
+{
+  zk_prior = c(3,25,5)
+  #the t-distributed prior appears to bias towards low values
+  plot(x = xx,
+       y = brms::dstudent_t(xx,
+                            df = zk_prior[1],
+                            mu = zk_prior[2],
+                            sigma = zk_prior[3]),
+       type = 'l',
+       xlab = 'softplus kappa_id',
+       ylab = 'probability density',
+       main = 'zkappa prior, student_t(3,5,2.5)',
+       lwd = 2,
+       col = 6,
+       xlim = c(-50,50),
+       ylim = c(0,0.2)
+  )
+  #plot equidistant mean vectors for reference
+  abline(v = log(exp(A1inv(1:50 / 50)) - 1),
+         col = gray(0.5, alpha = 0.5))
+  #the t-distributed prior appears to bias towards low values
+  plot(x = inv_softplus(xx),
+       y = brms::dstudent_t(xx,
+                            df = zk_prior[1],
+                            mu = zk_prior[2],
+                            sigma = zk_prior[3]),
+       type = 'l',
+       xlab = 'kappa_id',
+       ylab = 'probability density',
+       main = 'zkappa prior, student_t(3,5,2.5)',
+       lwd = 2,
+       col = 5,
+       xlim = c(0,50),
+       ylim = c(0,0.2)
+  )
+  abline(v = A1inv(1:50 / 50),
+         col = gray(0.5, alpha = 0.5))
+}
 
 ## Short dummy run to check the influence of the priors ------------------
 
@@ -575,7 +625,7 @@ system.time( #currently takes about 2 minutes for 2000 iterations
                                prior = prior_int_slope, # our priors 
                                stanvars = stanvars_slopes,
                                sample_prior = 'only', #ignore the data to check the influence of the priors
-                               iter = 2000, # can only estimate with enough iterations for params
+                               iter = 10000, # can only estimate with enough iterations for params
                                chains = 4, # 4 chains in parallel
                                cores = 4, # on 4 CPUs
                                refresh = 0, # don't echo chain progress
