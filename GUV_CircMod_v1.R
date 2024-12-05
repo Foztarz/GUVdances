@@ -1,0 +1,825 @@
+#FOR A 'CLEAN' RUN, PRESS ctrl+shift+F10 to RESTART Rstudio
+graphics.off()
+# Details ---------------------------------------------------------------
+#       AUTHOR:	James Foster              DATE: 2024 12 05
+#     MODIFIED:	James Foster              DATE: 2024 12 05
+#
+#  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
+#               using the circular modulo modelling method devel. by Jake Graving.
+#               
+#       INPUTS: 
+#               
+#      OUTPUTS: Plots and test statistics
+#
+#	   CHANGES: - Investigation of MLE fit to each individual
+#             - CircMLE plots
+#
+#   REFERENCES: Sayin, S., Graving, J., et al. in revision
+#               
+#               Gabry J, Češnovar R, Johnson A (2022). 
+#               cmdstanr: R Interface to 'CmdStan'.
+#               https://mc-stan.org/cmdstanr/
+# 
+#               Bürkner, P.-C. (2018). 
+#               Advanced Bayesian Multilevel Modeling with the R Package brms. 
+#               The R Journal 10, 395–411.
+# 
+#               Carpenter, B., Gelman, A., Hoffman, M. D., Lee, D., Goodrich, B., 
+#               Betancourt, M., Brubaker, M., Guo, J., Li, P. and Riddell, A. (2017). 
+#               Stan: A Probabilistic Programming Language. 
+#               Journal of Statistical Software 76 doi: 10.18637/jss.v076.i01
+# 
+#
+#    EXAMPLES:  
+#
+# 
+#TODO   ---------------------------------------------
+#TODO   
+#- Read in data +
+#- Inspect data +
+#- Set up parameters for simple model
+#- Extract predictions
+#- Set up parameters for random effect model
+#- Random effects interactions model (really!)
+#- Model comparison
+#- Plot predictions
+
+
+# Set up workspace --------------------------------------------------------
+
+
+## Load packages ----------------------------------------------------------
+#needs installing before first use (in Rstudio, see automatic message)
+suppressMessages(#these are disturbing users unnecessarily
+  {
+    # require(CircStats)#package for circular hypothesis tests #Is this being used at all?
+    require(circular)#package for handling circular data
+    require(CircMLE)#package for circular mixture models
+    require(brms)#package for preparing Stan models
+  }
+)
+
+
+## Plot spacing function -------------------------------------------------
+#generates the same spacing as R's default barplot function
+BarSpacer = function(n, 
+                     spa = 0.2,
+                     wdt = 1.0)
+{
+  seq(from = spa+1-wdt/2,
+      to = n*(1+spa)-wdt/2,
+      length.out = n )
+}
+
+## General functions -----------------------------------------------------
+
+
+#convert angles to signed angles in (-180, 180)
+Mod360.180 = function(x)
+{#use atan2 to convert any angle to the range (-180,180)
+  deg(
+    atan2(y = sin(rad(x)),
+          x = cos(rad(x))
+    )
+  )
+}
+
+#the radian equivalent
+mod_circular = function(x)
+{
+  atan2(y = sin(x),
+        x = cos(x))
+}
+
+#the unwrapped (no discontinuities)
+unwrap_circular = function(x)
+{
+  mux = mean.circular(x = circular(x = x, template = 'none'))
+  centx = atan2(y = sin(x - mux),
+                x = cos(x  - mux))
+  unwrx = centx + mux
+}
+
+#degree version
+unwrap_circular_deg = function(x)
+{
+  mux = mean.circular(x = circular(x = x, template = 'none'))
+  centx = atan2(y = sin(x - mux),
+                x = cos(x  - mux))
+  unwrx = centx + mux
+  return(deg(unwrx))
+}
+
+#invert the softplus link
+#https://en.wikipedia.org/wiki/Softplus
+#we are using this as our _inverse_ link function for kappa,
+#maps almost 1:1 but keeps values >0 for low estimates
+softplus = function(x)
+{
+  log(exp(x)+1) 
+}
+#this would return our kappa estimates back to the original scale
+inv_softplus = function(x)
+{
+  log(exp(x)-1) 
+}
+
+#convert inv_softplus scaled kappa to mean vector estimate
+Softpl_to_meanvec = function(x)
+{
+  circular::A1(
+    softplus(x)
+  )
+}
+
+#convert circular to normalised
+NormCirc = function(x,
+                    plusmean = TRUE)
+{
+  mn = mean.circular(x) * as.numeric(plusmean)
+  return(mod_circular(x - mn) + mn)
+}
+## von Mises model inspection functions ----------------------------------
+
+#histograms on a vertical axis
+#any data, but plotted as a histogram on a vertical rather tahn horizontal axis
+VertHist = function(data, # numerical data vector
+                    breaks = 1e2,
+                    ylab = 'data',
+                    xlab = 'density',
+                    ylim = NULL,
+                    main = '',
+                    col = 'gray',
+                    border = NA,
+                    ...)
+{
+  hst = hist(x = data, # calculate the histogram but don't plot it
+             breaks = breaks, # user defined breaks
+             plot = FALSE)
+  with(hst,
+       {
+         plot(x = NULL, #open an empty plot
+              xlim = c(0, max(density)),
+              ylim = if(is.null(ylim)){range(mids)}else{ylim},
+              xlab = xlab,
+              ylab = ylab,
+              main = main)
+         #plot each bar
+         for(i in 1:length(mids))
+         {
+           rect(xleft = 0,
+                xright = density[i],
+                ybottom = breaks[i], 
+                ytop = breaks[i + 1],
+                col = col,
+                border = border,
+                ...
+           )
+         }
+       }
+  )
+}
+
+#function to construct the transformation list
+#transforms variable estimates in the model output
+#by default circular estimates are converted to the 360° interval around the mean
+#and kappa estimates are converted to softplus and then to mean vector estimates
+Make_vmtrans = function(mod,
+                        angfun = NormCirc,
+                        kapfun = Softpl_to_meanvec)
+{
+  fx_nm = names(fixef(mod)[,1])
+  nm_ang = fx_nm[grepl(pattern = 'mu', x = fx_nm)]
+  nm_kap = fx_nm[grepl(pattern = 'kappa', x = fx_nm)]
+  tlst = c(replicate(n = length(nm_ang),
+                     expr = angfun,
+                     simplify = FALSE),
+           replicate(n = length(nm_kap),
+                     expr = kapfun,
+                     simplify = FALSE) )
+  names(tlst) = paste0('b_', c(nm_ang, nm_kap))
+  return(tlst)
+}
+
+#plot the variable estimates from a von Mises model
+PlotVMfix = function(mod,
+                     angfun = NormCirc,
+                     kapfun = Softpl_to_meanvec)
+{
+  plot(mod,
+       nvariables = 10,
+       variable = "^b_", 
+       transformations = Make_vmtrans(mod, angfun, kapfun),
+       regex = TRUE)
+}
+
+## Stan variables ---------------------------------------------------------
+
+
+### Functions ------------------------------------------------------------
+
+
+#set up the modulo function
+mod_circular_fun = stanvar(scode = "
+  real mod_circular(real y) {
+    return atan2(sin(y), cos(y));
+  }
+",
+                           block = 'functions')
+#set up a von Mises PDF that converts to modulo (adapted from BRMS default)
+von_mises3_fun = stanvar(scode = "
+real von_mises3_lpdf(real y, real mu, real kappa) {
+     if (kappa < 100) {
+       return von_mises_lpdf(mod_circular(y) | mu, kappa);
+     } else {
+       return normal_lpdf(mod_circular(y) | mu, sqrt(1 / kappa));
+     }
+   }
+",
+                         block = 'functions')
+#a circular mean that might be useful
+meancirc_fun = stanvar(scode = "
+   // calculate the mean angle of a circular distribution (in radians)
+   real mean_circular(vector y){
+      int N = size(y);
+      real sumsin = 0;
+      real sumcos = 0;
+     for (n in 1:N){
+       sumsin += sin(y[n]);
+       sumcos += cos(y[n]);
+     }
+     sumsin = sumsin/N;
+     sumcos = sumcos/N;
+     return(atan2(  sumsin, sumcos) );
+   }
+",
+                       block = 'functions')
+#could unwrap estimate; not especially useful as only one estimate per iteration
+unwrapcirc_fun = stanvar(scode = "
+   // calculate the unwrapped version (no discontinuities)
+vector unwrap_circular(vector y)
+{
+  int N = size(y);
+  real mux = mean_circular(y);
+  vector[N] centx = y - mux;
+  for(n in 1:N)
+  {
+  centx[n] = mod_circular(centx[n]);
+  }
+  vector[N] unwrx = centx + mux;
+  return(unwrx);
+}
+",
+                         block = 'functions')
+
+stan_mvm_fun = meancirc_fun + 
+  mod_circular_fun + 
+  unwrapcirc_fun +
+  von_mises3_fun
+
+### Parameters -----------------------------------------------------------
+
+
+#generate modulo outputs of fixed effects
+# mu_gen = stanvar(scode = "
+# real mu_circ = mod_circular(b_fmu[1]);
+# real mu_offs = mod_circular(b_fmu[2]);
+# ",
+#                  block = 'genquant')
+# #or maybe?
+mu_gen = stanvar(scode = "
+vector[size(b_fmu)] mu_circ; //modulo circular estimate
+for (i in 1:size(b_fmu)){
+mu_circ[i] = mod_circular(b_fmu[i])
+}
+",
+                 block = 'genquant')
+
+#random effects on mean angle
+zmu_var = stanvar(scode = "
+vector[K_zmu] zmu_id;  // regression coefficients;
+for (i in 1:K_zmu){
+  zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
+}
+", 
+block = 'genquant')
+
+#concentration of random effects on mean angle
+zkappa_var = stanvar(scode = "
+real zkappa;", 
+                     block = "parameters") + #define in the parameters block
+  stanvar(scode = "
+real kappa_id = log1p_exp(zkappa);
+          ", 
+          block = 'genquant') #inverse softplus (estimated on softplus scale)
+
+zmu_var_slope = stanvar(scode = "
+vector[K_zmu] zmu_id;  // regression coefficients;
+vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+for (i in 1:N_1){
+zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
+zmu_id_condition[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
+}
+          ", 
+block = 'genquant')
+
+#concentration of random effects on fixed effect on mean angle
+zkappa_var_slope = stanvar(scode = "
+real zkappa_condition;",
+                           block = "parameters") + 
+  stanvar(scode = "
+real kappa_id_condition = log1p_exp(zkappa+zkappa_condition);
+          ", 
+          block = 'genquant')
+
+
+
+stanvars_intercepts = stan_mvm_fun + mu_gen + zkappa_var + zmu_var
+stanvars_slopes = stan_mvm_fun + mu_gen + zkappa_var + zkappa_var_slope + 
+  zmu_var_slope #includes intercepts
+
+# Input Variables ----------------------------------------------------------
+
+all_plots = FALSE # to speed up
+#  .  User input -----------------------------------------------------------
+
+
+
+# . System parameters -----------------------------------------------------
+
+#Check the operating system and assign a logical flag (T or F)
+sys_win = Sys.info()[['sysname']] == 'Windows'
+#User profile instead of home directory
+if(sys_win){
+  #get rid of all the backslashes
+  ltp = gsub('\\\\', '/', Sys.getenv('USERPROFILE'))#Why does windows have to make this so difficult
+}else{#Root directory should be the "HOME" directory on a Mac (or Linux?)
+  ltp  =  Sys.getenv('HOME')#Life was easier on Mac
+}
+
+# . Select file ---------------------------------------------------------
+
+# set path to file
+if(sys_win){#choose.files is only available on Windows
+  message('\n\nPlease select the ".csv" file\n\n')
+  Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+  path_file  <- choose.files(
+    default = file.path(ltp,'Documents', "*.csv"),#For some reason this is not possible in the "root" user
+    caption = 'Please select the ".csv" file'
+  )
+}else{
+  message('\n\nPlease select the ".csv" file\n\n')
+  Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+  path_file <- file.choose(new=F)
+}
+#show the user the path they have selected
+if(is.null(path_file) | !length(path_file))
+{stop('No file selected.')}else
+{print(path_file)}
+
+
+# Read in the data and format ---------------------------------------------
+
+#select the reorganised data
+cd = read.table(file = path_file, 
+                header = T, 
+                sep  = ',')
+View(cd)
+
+cd = within(cd,
+            {
+              ID = as.factor(ID) # beedance identifier as a factor
+              date = as.factor(date) # date as a factor
+              signed_angle = Mod360.180(bearing)  # bearing between -180 and 180
+              angle = circular(rad(signed_angle),# bearing between -pi and pi
+                               rotation = 'clock') # circular format suppresses later warnings
+            }
+)
+
+u_id = with(cd, unique(ID)) # unique beedances
+length(u_id)#169 beedances
+
+
+# Calculate mean vectors --------------------------------------------------
+
+
+#calculate mean vectors
+mean_vectors = aggregate(angle~ID*brightn*colour,
+                         data = cd,
+                         FUN = rho.circular
+)
+#correct names
+mean_vectors = within(mean_vectors,
+                      {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
+)
+#add kappa
+mle_estimates = aggregate(angle~ID*brightn*colour,
+                         data = cd,
+                         FUN = function(x)
+                         {with(mle.vonmises(circular(x,
+                                                    template = 'none'),
+                                            bias = TRUE), c(mu, kappa))}
+)
+#add to the summary table and 
+#calculate inverse softplus kappa
+mean_vectors = within(mean_vectors,
+                      {
+                        mu = deg(mle_estimates$angle[,1])
+                        kappa = mle_estimates$angle[,2]
+                        iskappa  = inv_softplus(kappa)
+                      }
+                      )
+#plot mean vectors
+boxplot(mean_vector~colour*brightn,
+        data = mean_vectors,
+        ylim = c(0,1),
+        col = adjustcolor(c('green2',
+                            'purple',
+                            'darkgreen',
+                            'purple4'), alpha.f = 0.5),
+        outline = FALSE)
+stripchart(mean_vector~colour*brightn,
+           data = mean_vectors,
+           add = TRUE,
+           vertical = TRUE,
+           method = 'jitter',
+           col = adjustcolor(c('green2',
+                               'purple',
+                               'darkgreen',
+                               'purple4'), alpha.f = 0.5),
+           bg = gray(level = 0,
+                     alpha = 0.1),
+           pch = 21)
+
+stim = apply(X = expand.grid(c = c('g','u'),b = c('h','l')),
+             FUN = paste,
+             collapse = '',
+             MARGIN = 1)
+invisible(
+  {
+  lapply(X = u_id,
+         FUN = function(id)
+         {
+            
+           with(subset(x = mean_vectors,
+                      subset = ID %in% id),
+                {
+           lines(x = 1:length(stim),
+                     y = mean_vector[ match(x = stim,
+                                            table =  paste0(colour,brightn),
+                                            nomatch = NA) ],
+                 col = gray(0,0.2)
+                 )
+                })
+         })
+})
+abline(h = c(0,1))
+
+
+#plot kappa estimates
+boxplot(kappa~colour*brightn,
+        data = mean_vectors,
+        ylim = c(0.01,500),
+        log = 'y',
+        col = adjustcolor(c('green2',
+                            'purple',
+                            'darkgreen',
+                            'purple4'), alpha.f = 0.5),
+        outline = FALSE)
+stripchart(kappa~colour*brightn,
+           data = mean_vectors,
+           add = TRUE,
+           vertical = TRUE,
+           method = 'jitter',
+           col = adjustcolor(c('green2',
+                               'purple',
+                               'darkgreen',
+                               'purple4'), alpha.f = 0.5),
+           bg = gray(level = 0,
+                     alpha = 0.1),
+           pch = 21)
+invisible(
+  {
+    lapply(X = u_id,
+           FUN = function(id)
+           {
+             
+             with(subset(x = mean_vectors,
+                         subset = ID %in% id),
+                  {
+                    lines(x = 1:length(stim),
+                          y = kappa[ match(x = stim,
+                                                 table =  paste0(colour,brightn),
+                                                 nomatch = NA) ],
+                          col = gray(0,0.2)
+                    )
+                  })
+           })
+  })
+
+
+
+#plot mean vectors
+boxplot(iskappa~colour*brightn,
+        data = mean_vectors,
+        ylim = c(-25,100),
+        col = adjustcolor(c('green2',
+                            'purple',
+                            'darkgreen',
+                            'purple4'), alpha.f = 0.5),
+        outline = FALSE)
+stripchart(iskappa~colour*brightn,
+           data = mean_vectors,
+           add = TRUE,
+           vertical = TRUE,
+           method = 'jitter',
+           col = adjustcolor(c('green2',
+                               'purple',
+                               'darkgreen',
+                               'purple4'), alpha.f = 0.5),
+           bg = gray(level = 0,
+                     alpha = 0.1),
+           pch = 21)
+
+invisible(
+  {
+    lapply(X = u_id,
+           FUN = function(id)
+           {
+             
+             with(subset(x = mean_vectors,
+                         subset = ID %in% id),
+                  {
+                    lines(x = 1:length(stim),
+                          y = iskappa[ match(x = stim,
+                                                 table =  paste0(colour,brightn),
+                                                 nomatch = NA) ],
+                          col = gray(0,0.2)
+                    )
+                  })
+           })
+  })
+abline(h = c(0,1))
+
+#plot angles
+#by brightness
+boxplot(mu~colour*brightn,
+        data = mean_vectors,
+        ylim = c(-180,180),
+        col = NA,
+        border = NA,
+        outline = FALSE)
+stripchart(mu~colour*brightn,
+           data = mean_vectors,
+           add = TRUE,
+           vertical = TRUE,
+           method = 'jitter',
+           col = adjustcolor(c('green2',
+                               'purple',
+                               'darkgreen',
+                               'purple4'), alpha.f = 0.5),
+           bg = gray(level = 0,
+                     alpha = 0.1),
+           pch = 21)
+invisible(
+  {
+    lapply(X = u_id,
+           FUN = function(id)
+           {
+             
+             with(subset(x = mean_vectors,
+                         subset = ID %in% id),
+                  {
+                    lines(x = 1:length(stim),
+                          y = mu[ match(x = stim,
+                                             table =  paste0(colour,brightn),
+                                             nomatch = NA) ],
+                          col = gray(0,0.2)
+                    )
+                  })
+           })
+  })
+abline(h = c(-180, -90, 0, 90,  180),
+       lty = c(1,3,1,3,1))
+#plot angles
+#by colour
+boxplot(mu~brightn*colour,
+        data = mean_vectors,
+        ylim = c(-180,180),
+        col = NA,
+        border = NA,
+        outline = FALSE)
+stripchart(mu~brightn*colour,
+           data = mean_vectors,
+           add = TRUE,
+           vertical = TRUE,
+           method = 'jitter',
+           col = adjustcolor(c('green2',
+                               'darkgreen',
+                               'purple',
+                               'purple4'), alpha.f = 0.5),
+           bg = gray(level = 0,
+                     alpha = 0.1),
+           pch = 21)
+invisible(
+  {
+    lapply(X = u_id,
+           FUN = function(id)
+           {
+             
+             with(subset(x = mean_vectors,
+                         subset = ID %in% id),
+                  {
+                    lines(x = 1:length(stim),
+                          y = mu[ match(x = sort(stim),#now alphabetical (g before u, h before l)
+                                             table =  paste0(colour,brightn),
+                                             nomatch = NA) ],
+                          col = gray(0,0.2)
+                    )
+                  })
+           })
+  })
+abline(h = c(-180, -90, 0, 90,  180),
+       lty = c(1,3,1,3,1))
+#plot angles
+#by colour
+boxplot(mu~brightn,
+        data = subset(mean_vectors, colour == 'u'),
+        ylim = c(-180,180)*2,
+        col = NA,
+        border = NA,
+        outline = FALSE)
+invisible(
+  {
+    lapply(X = u_id,
+           FUN = function(id)
+           {
+             
+             with(subset(x = mean_vectors,
+                         subset = ID %in% id),
+                  {
+                    points(x = 1:2 + rnorm(1,sd=0.05),
+                          y = unwrap_circular_deg(
+                                  mu[ match(x = sort(stim)[3:4],#just UV now alphabetical (g before u, h before l)
+                                             table =  paste0(colour,brightn),
+                                             nomatch = NA) ]
+                                  ),
+                          type = 'b',
+                          col = adjustcolor(gray(0,0.5),offset = c(runif(3),0))
+                    )
+                  })
+           })
+  })
+abline(h = -4:4*90,
+       lty = c(1,3))
+
+#average orientation changes
+#uv
+mu_diff_u = sapply(X = u_id,
+                   FUN = function(id)
+                   {
+                     
+                     with(subset(x = mean_vectors,
+                                 subset = ID %in% id & colour %in% 'u'),
+                          {
+                            deg(
+                            mod_circular(
+                           rad(mu[brightn %in% 'l'] -  mu[brightn %in% 'h'])
+                            )
+                            )
+                          })
+                   })
+mu_diff_u = unlist(mu_diff_u)
+
+#green
+mu_diff_g = sapply(X = u_id,
+                   FUN = function(id)
+                   {
+                     
+                     with(subset(x = mean_vectors,
+                                 subset = ID %in% id & colour %in% 'g'),
+                          {
+                            deg(
+                            mod_circular(
+                           rad(mu[brightn %in% 'l'] -  mu[brightn %in% 'h'])
+                            )
+                            )
+                          })
+                   })
+mu_diff_g = unlist(mu_diff_g)
+
+#high green to uv
+mu_diff_hgu = sapply(X = u_id,
+                   FUN = function(id)
+                   {
+                     
+                     with(subset(x = mean_vectors,
+                                 subset = ID %in% id ),
+                          {
+                            deg(
+                            mod_circular(
+                           rad(mu[brightn %in% 'h'& colour %in% 'u'] -  
+                                 mu[brightn %in% 'h' & colour %in% 'g'])
+                            )
+                            )
+                          })
+                   })
+mu_diff_hgu = unlist(mu_diff_hgu)
+
+#high green to uv
+mu_diff_lgu = sapply(X = u_id,
+                     FUN = function(id)
+                     {
+                       
+                       with(subset(x = mean_vectors,
+                                   subset = ID %in% id ),
+                            {
+                              deg(
+                                mod_circular(
+                                  rad(mu[brightn %in% 'l'& colour %in% 'u'] -  
+                                        mu[brightn %in% 'l' & colour %in% 'g'])
+                                )
+                              )
+                            })
+                     })
+mu_diff_lgu = unlist(mu_diff_lgu)
+
+par(mfrow = c(2,2))
+VertHist(unwrap_circular_deg(mu_diff_g),
+         breaks = 24,
+         ylim = c(-360,360),
+         ylab = 'Change in mean angle (unwrapped)',
+         col = 'darkgreen',
+         main = 'High to low green')
+abline(h = -4:4*90,
+       lty = c(1,3))
+
+VertHist(unwrap_circular_deg(mu_diff_u),
+         ylim = c(-360,360),
+         breaks = 24,
+         ylab = 'Change in mean angle (unwrapped)',
+         col = 'purple3',
+         main =  'High to low UV')
+abline(h = -4:4*90,
+       lty = c(1,3))
+
+VertHist(unwrap_circular_deg(mu_diff_hgu),
+         breaks = 24,
+         ylim = c(-360,360),
+         ylab = 'Change in mean angle (unwrapped)',
+         col = 'gray',
+         main = 'High green to UV')
+abline(h = -4:4*90,
+       lty = c(1,3))
+
+VertHist(unwrap_circular_deg(mu_diff_lgu),
+         ylim = c(-360,360),
+         breaks = 24,
+         ylab = 'Change in mean angle (unwrapped)',
+         col = 'black',
+         main =  'Low green to UV')
+abline(h = -4:4*90,
+       lty = c(1,3))
+
+cmle_g = circ_mle(data = circular(mu_diff_g, template = 'geographics'))
+cmle_u = circ_mle(data = circular(mu_diff_u, template = 'geographics'))
+cmle_h = circ_mle(data = circular(mu_diff_hgu, template = 'geographics'))
+cmle_l = circ_mle(data = circular(mu_diff_lgu, template = 'geographics'))
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+plot_circMLE(data = circular(x = unwrap_circular_deg(mu_diff_g),
+                             units = 'degrees',
+                             rotation = 'clock',
+                             modulo = '2pi',
+                             zero = pi/2), 
+             table = cmle_g,
+             col = c('darkgreen',"red", "black", "black"))
+mtext(text = 'High to low green')                  
+
+plot_circMLE(data = circular(x = unwrap_circular_deg(mu_diff_u),
+                             units = 'degrees',
+                             rotation = 'clock',
+                             modulo = '2pi',
+                             zero = pi/2), 
+             table = cmle_u,
+             col = c('purple3',"red", "black", "black"))
+mtext(text = 'High to low UV')                
+plot_circMLE(data = circular(x = unwrap_circular_deg(mu_diff_hgu),
+                             units = 'degrees',
+                             rotation = 'clock',
+                             modulo = '2pi',
+                             zero = pi/2), 
+             table = cmle_h,
+             col = c('lightgray',"red", "black", "black"))
+mtext(text = 'High green to UV')                  
+
+plot_circMLE(data = circular(x = unwrap_circular_deg(mu_diff_lgu),
+                             units = 'degrees',
+                             rotation = 'clock',
+                             modulo = '2pi',
+                             zero = pi/2), 
+             table = cmle_l,
+             col = c('darkgray',"red", "black", "black"))
+mtext(text =  'Low green to UV')              
+
