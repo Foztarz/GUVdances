@@ -493,7 +493,7 @@ formula_int_slope = bf(
   zmu ~  0+ID+ID:condition, #random effects change as a function of individual and condition and their interaction
   kappa ~ condition + (1+condition|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
   family = von_mises(link = "identity", # the mean angle will be returned as-is
-                     link_kappa = 'softplus'),#kappa will be returned via the inverse softplus link https://en.wikipedia.org/wiki/Softplus
+                     link_kappa = 'softplus'),#kappa will be returned via the softplus link https://en.wikipedia.org/wiki/Softplus
   nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 
