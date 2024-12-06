@@ -37,7 +37,9 @@ graphics.off()
 #TODO   
 #- Read in data +
 #- Inspect data +
-#- Set up parameters for simple model
+#- Set up priors for simple model +
+#- Generate Stan code for simple model
+#- Set up Stan parameters for simple model
 #- Extract predictions
 #- Set up parameters for random effect model
 #- Random effects interactions model (really!)
@@ -316,6 +318,9 @@ real kappa_id = log1p_exp(zkappa);
 zmu_var_slope = stanvar(scode = "
 vector[K_zmu] zmu_id;  // regression coefficients;
 vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
 for (i in 1:N_1){
 zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
 zmu_id_condition[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
@@ -364,11 +369,11 @@ if(sys_win){#choose.files is only available on Windows
   message('\n\nPlease select the ".csv" file\n\n')
   Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
   path_file  <- choose.files(
-    default = file.path(ltp,'Documents', "colour_dance_reorg.csv"),#For some reason this is not possible in the "root" user
-    caption = 'Please select the ".csv" file'
+    default = file.path(ltp,'Documents', "*.csv"),#For some reason this is not possible in the "root" user
+    caption = 'Please select the "colour_dance_reorg.csv" file'
   )
 }else{
-  message('\n\nPlease select the ".csv" file\n\n')
+  message('\n\nPlease select the "colour_dance_reorg.csv" file\n\n')
   Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
   path_file <- file.choose(new=F)
 }
@@ -519,10 +524,10 @@ invisible(
 
 
 
-#plot mean vectors
+#plot inverse softplus kappa (model scale)
 boxplot(iskappa~colour*brightn,
         data = mean_vectors,
-        ylim = c(-25,100),
+        ylim = c(-10,100),
         col = adjustcolor(c('green2',
                             'purple',
                             'darkgreen',
@@ -559,7 +564,14 @@ invisible(
                   })
            })
   })
-abline(h = c(0,1))
+abline(h = inv_softplus(A1inv(c(0.2,0.7))), # benchmarks could be -0.7 and 2.0
+       lty = 3)
+mtext(side = 4,
+     at = inv_softplus(A1inv(c(0.2,0.7))),
+     text = paste(' rho = ', c(0.2,0.7)),
+     las = 2,
+     cex = 0.4
+     )
 
 #plot angles
 #by brightness
@@ -823,3 +835,89 @@ plot_circMLE(data = circular(x = unwrap_circular_deg(mu_diff_lgu),
              col = c('darkgray',"red", "black", "black"))
 mtext(text =  'Low green to UV')              
 
+
+# Fit model ---------------------------------------------------------------
+
+## Simpler variable names ------------------------------------------------
+cd = within(cd,
+            {
+            BR = brightn
+            CL = colour
+            DT = date
+            RN = run
+            }
+            )
+
+
+## Formula ---------------------------------------------------------------
+
+#set up model fit
+formula_int_slope = bf(
+  formula = angle ~ #set up a formula for the mean angle, modulus to (-pi,pi)
+    mod_circular(fmu + zmu), # mean angle combines fixed and random effects
+  fmu ~  BR + CL + BR:CL, # fixed effects only change as a function of condition
+  zmu ~  0+ID + ID:BR + ID:CL + ID:BR:CL, #random effects change as a function of individual and condition and their interaction
+  kappa ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+  family = von_mises(link = "identity", # the mean angle will be returned as-is
+                     link_kappa = 'softplus'),#kappa will be returned via the softplus link https://en.wikipedia.org/wiki/Softplus
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+
+
+
+## Priors ----------------------------------------------------------------
+prior_int_slope = get_prior(formula = formula_int_slope,
+                            data = cd,
+                            check = FALSE)
+dim(prior_int_slope)
+#suggests 695  possible priors!
+#they will take this general structure
+print(subset(prior_int_slope, nlpar %in% 'fmu')['coef'])
+## coef
+## ''    
+## BRl 
+## BRl:CLu
+## CLu 
+## Intercept 
+
+
+### assign BRMS default priors -------------------------------------------
+prior_int_slope = within(prior_int_slope,
+                         {
+   #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
+   prior[nlpar %in% 'fmu' & coef %in% 'Intercept'] = 'von_mises3(0, 0.1)'# very weak bias to zero (could be no bias?)
+   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'von_mises3(0, 1.0)'#moderate bias to zero, no effect
+   #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
+   #the intercept condition is high intensity green light
+   prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa_BRh:CLg))'
+   prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa_BRh:CLg))'
+   prior[nlpar %in% 'zmu' & class %in% 'b' 
+         & grepl(pattern = 'BRl', #the random effect of low brightness has a different kappa
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_BRl))'
+   prior[nlpar %in% 'zmu' & class %in% 'b' 
+         & grepl(pattern = 'CLu', #the random effect of UV has a different kappa
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_CLu))'
+   prior[nlpar %in% 'zmu' & class %in% 'b' 
+         & grepl(pattern = 'BRl:CLu', #the random effect of low brightness & UV has a different kappa
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_BRl:CLu))'
+   #fixed effects on kappa are normally distributed on the softplus scale
+   prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(2.0, 5.0)'#weak expectation of kappa around 2 (mean vector around 0.70)
+   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 5.0)'#weak expectation of condition effect around 0
+   #random effects on kappa are t-distributed on the softplus scale
+   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 5.0)' #wide prior 
+                         }
+)
+
+
+### add extra priors for the random effects mean angles -----------------
+
+
+
+prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
+  set_prior("target += student_t_lpdf(zkappa_CLu | 3, 25, 5)", #expect high concentration (low variation) 
+            check = FALSE)+
+  set_prior("target += student_t_lpdf(zkappa_BRl | 3, 25, 5)", #expect high concentration (low variation) 
+            check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
+  set_prior("target += student_t_lpdf(zkappa_BRh:CLg | 3, 25, 5)", #expect high concentration (low variation) 
+            check = FALSE)+
+  set_prior("target += student_t_lpdf(zkappa_BRl:CLu | 3, 25, 5)", #expect high concentration (low variation) 
+            check = FALSE)
