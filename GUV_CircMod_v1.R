@@ -364,7 +364,7 @@ if(sys_win){#choose.files is only available on Windows
   message('\n\nPlease select the ".csv" file\n\n')
   Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
   path_file  <- choose.files(
-    default = file.path(ltp,'Documents', "*.csv"),#For some reason this is not possible in the "root" user
+    default = file.path(ltp,'Documents', "colour_dance_reorg.csv"),#For some reason this is not possible in the "root" user
     caption = 'Please select the ".csv" file'
   )
 }else{
