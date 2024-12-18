@@ -960,10 +960,7 @@ write.table(x = sc,
 system.time( #currently takes about 2 minutes for 2000 iterations
   {
     dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-                           data = cd[sample(x = dim(cd)[2],
-                                            size = 1e2,
-                                            replace = FALSE),
-                                     ], # our data
+                           data = cd, # our data
                            prior = prior_int_slope, # our priors 
                            stanvars = stanvars_slopes,
                            sample_prior = 'only', #ignore the data to check the influence of the priors
@@ -1008,7 +1005,7 @@ if(all_plots)
 system.time(#takes less than 1 minute
   {
     full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-                          data = sim, # our data
+                          data = cd, # our data
                           prior = prior_int_slope, # our priors 
                           stanvars = stanvars_slopes,
                           iter = 1000, #doesn't take a lot of runs
