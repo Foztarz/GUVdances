@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 12 05
-#     MODIFIED:	James Foster              DATE: 2024 12 05
+#     MODIFIED:	James Foster              DATE: 2024 12 18
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -290,9 +290,9 @@ stan_mvm_fun = meancirc_fun +
 #                  block = 'genquant')
 # #or maybe?
 mu_gen = stanvar(scode = "
-vector[size(b_fmu)] mu_circ; //modulo circular estimate
+vector [N] mu_circ; //modulo circular estimate
 for (i in 1:size(b_fmu)){
-mu_circ[i] = mod_circular(b_fmu[i])
+mu_circ[i] = mod_circular(b_fmu[i]);
 }
 ",
                  block = 'genquant')
@@ -317,23 +317,33 @@ real kappa_id = log1p_exp(zkappa);
 
 zmu_var_slope = stanvar(scode = "
 vector[K_zmu] zmu_id;  // regression coefficients;
-vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
-vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
-vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
-vector[N_1] zmu_id_condition;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition1;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition2;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition3;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition4;  // condition on coefficients per indiv;
 for (i in 1:N_1){
 zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
-zmu_id_condition[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
+zmu_id_condition1[i] = mod_circular(b_zmu[i]); //each in modulus format
+zmu_id_condition2[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
+zmu_id_condition3[i] = mod_circular(b_zmu[i+N_1*2]); //each in modulus format
+zmu_id_condition4[i] = mod_circular(b_zmu[i+N_1*3]); //each in modulus format
 }
           ", 
 block = 'genquant')
 
 #concentration of random effects on fixed effect on mean angle
 zkappa_var_slope = stanvar(scode = "
-real zkappa_condition;",
+real zkappa1;
+real zkappa2;
+real zkappa3;
+real zkappa4;
+                           ",
                            block = "parameters") + 
   stanvar(scode = "
-real kappa_id_condition = log1p_exp(zkappa+zkappa_condition);
+real kappa_id_condition1 = log1p_exp(zkappa1);
+real kappa_id_condition2 = log1p_exp(zkappa1+zkappa2);
+real kappa_id_condition3 = log1p_exp(zkappa1+zkappa3);
+real kappa_id_condition4 = log1p_exp(zkappa1+zkappa4);
           ", 
           block = 'genquant')
 
@@ -863,7 +873,12 @@ formula_int_slope = bf(
   nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 
-
+sc = make_stancode(formula = formula_int_slope,
+                   data = cd)
+write.table(x = sc,
+            file = file.path(dirname(path_file),
+                             'sc_CircMod_v1.stan')
+          )
 ## Priors ----------------------------------------------------------------
 prior_int_slope = get_prior(formula = formula_int_slope,
                             data = cd,
@@ -888,17 +903,17 @@ prior_int_slope = within(prior_int_slope,
    prior[nlpar %in% 'fmu' & class %in% 'b'] = 'von_mises3(0, 1.0)'#moderate bias to zero, no effect
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
-   prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa_BRh:CLg))'
-   prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa_BRh:CLg))'
+   prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
+   prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa1))'
    prior[nlpar %in% 'zmu' & class %in% 'b' 
          & grepl(pattern = 'BRl', #the random effect of low brightness has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_BRl))'
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2))'
    prior[nlpar %in% 'zmu' & class %in% 'b' 
          & grepl(pattern = 'CLu', #the random effect of UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_CLu))'
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa3))'
    prior[nlpar %in% 'zmu' & class %in% 'b' 
          & grepl(pattern = 'BRl:CLu', #the random effect of low brightness & UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa_BRl:CLu))'
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa4))'
    #fixed effects on kappa are normally distributed on the softplus scale
    prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(2.0, 5.0)'#weak expectation of kappa around 2 (mean vector around 0.70)
    prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 5.0)'#weak expectation of condition effect around 0
@@ -913,11 +928,118 @@ prior_int_slope = within(prior_int_slope,
 
 
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa_CLu | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa1 | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa_BRl | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa1+zkappa2 | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa_BRh:CLg | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa1+zkappa3 | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa_BRl:CLu | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa1+zkappa4 | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)
+
+
+
+sc = make_stancode(formula = formula_int_slope,
+                   data = cd,
+                   prior = prior_int_slope)
+write.table(x = sc,
+            file = file.path(dirname(path_file),
+                             'sc_CircMod_v1.stan'),
+            quote = FALSE,
+            col.names = FALSE,
+            row.names = FALSE)
+
+
+## Short dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+#Warning takes 15 min just to compile!
+#TODO work out why this samples less efficiently than with data
+system.time( #currently takes about 2 minutes for 2000 iterations
+  {
+    dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
+                           data = cd[sample(x = dim(cd)[2],
+                                            size = 1e2,
+                                            replace = FALSE),
+                                     ], # our data
+                           prior = prior_int_slope, # our priors 
+                           stanvars = stanvars_slopes,
+                           sample_prior = 'only', #ignore the data to check the influence of the priors
+                           iter = 10000, # can only estimate with enough iterations for params
+                           chains = 4, # 4 chains in parallel
+                           cores = 4, # on 4 CPUs
+                           refresh = 0, # don't echo chain progress
+                           backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+
+if(all_plots)
+{
+  plot(dummy_int_slope,
+       variable = 'fmu',
+       regex = TRUE,
+       transform = unwrap_circular_deg)
+  plot(dummy_int_slope,
+       variable = '^kappa_id',
+       regex = TRUE)
+  #samples inefficiently?
+  plot(dummy_int_slope,
+       variable = '^zkappa',
+       regex = TRUE)
+  plot(dummy_int_slope,
+       variable = 'zmu_id',
+       transform = unwrap_circular_deg,
+       nvariables = 5,
+       ask = FALSE)
+  plot(dummy_int_slope,
+       variable = 'zmu_id_condition',
+       transform = unwrap_circular_deg,
+       nvariables = 5,
+       ask = FALSE)
+  plot(dummy_int_slope)
+}
+
+
+## Full run --------------------------------------------------------------
+
+# full run
+system.time(#takes less than 1 minute
+  {
+    full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
+                          data = sim, # our data
+                          prior = prior_int_slope, # our priors 
+                          stanvars = stanvars_slopes,
+                          iter = 1000, #doesn't take a lot of runs
+                          chains = 4, # 4 chains in parallel
+                          cores = 4, # on 4 CPUs
+                          refresh = 0, # don't echo chain progress
+                          backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+if(all_plots)
+{
+  plot(full_int_slope,
+       variable = 'fmu',
+       regex = TRUE,
+       transform = unwrap_circular_deg)
+  plot(full_int_slope,
+       variable = '^kappa_id',
+       regex = TRUE)
+  plot(full_int_slope,
+       variable = '^zkappa',
+       regex = TRUE)
+  plot(full_int_slope,
+       variable = 'zmu_id',
+       transform = unwrap_circular_deg,
+       nvariables = 5,
+       ask = FALSE)
+  plot(full_int_slope,
+       variable = 'zmu_id_condition',
+       transform = unwrap_circular_deg,
+       nvariables = 5,
+       ask = FALSE)
+  plot(full_int_slope)
+}
+
