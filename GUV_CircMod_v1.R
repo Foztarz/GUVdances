@@ -957,7 +957,7 @@ write.table(x = sc,
 # Dummy run
 #Warning takes 15 min just to compile!
 #TODO work out why this samples less efficiently than with data
-system.time( #currently takes about 2 minutes for 2000 iterations
+system.time( #currently takes about 60 minutes for 10000 iterations
   {
     dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
                            data = cd, # our data
