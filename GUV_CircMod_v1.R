@@ -1042,7 +1042,11 @@ if(all_plots)
   plot(full_int_slope,
        variable = 'fmu',
        regex = TRUE,
-       transform = unwrap_circular_deg)
+       transform = unwrap_circular_deg) 
+  #main effects means converge well
+  plot(full_int_slope,
+       variable = '^kappa',
+       regex = TRUE)
   #conditional kappa mostly converge except condition 2 
   #TODO check how this is calculated
   plot(full_int_slope,
