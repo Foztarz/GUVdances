@@ -83,6 +83,50 @@ functions {
        return normal_lpdf(y | mu, sqrt(1 / kappa));
      }
    }
+  
+   // calculate the mean angle of a circular distribution (in radians)
+   real mean_circular(vector y){
+      int N = size(y);
+      real sumsin = 0;
+      real sumcos = 0;
+     for (n in 1:N){
+       sumsin += sin(y[n]);
+       sumcos += cos(y[n]);
+     }
+     sumsin = sumsin/N;
+     sumcos = sumcos/N;
+     return(atan2(  sumsin, sumcos) );
+   }
+
+  
+  real mod_circular(real y) {
+    return atan2(sin(y), cos(y));
+  }
+
+  
+   // calculate the unwrapped version (no discontinuities)
+vector unwrap_circular(vector y)
+{
+  int N = size(y);
+  real mux = mean_circular(y);
+  vector[N] centx = y - mux;
+  for(n in 1:N)
+  {
+  centx[n] = mod_circular(centx[n]);
+  }
+  vector[N] unwrx = centx + mux;
+  return(unwrx);
+}
+
+  
+real von_mises3_lpdf(real y, real mu, real kappa) {
+     if (kappa < 100) {
+       return von_mises_lpdf(mod_circular(y) | mu, kappa);
+     } else {
+       return normal_lpdf(mod_circular(y) | mu, sqrt(1 / kappa));
+     }
+   }
+
 }
 data {
   int<lower=1> N;  // total number of observations
@@ -122,6 +166,12 @@ parameters {
   vector<lower=0>[M_1] sd_1;  // group-level standard deviations
   matrix[M_1, N_1] z_1;  // standardized group-level effects
   cholesky_factor_corr[M_1] L_1;  // cholesky factor of correlation matrix
+  
+real zkappa1;
+real zkappa2;
+real zkappa3;
+real zkappa4;
+                           
 }
 transformed parameters {
   matrix[N_1, M_1] r_1;  // actual group-level effects
@@ -313,33 +363,33 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[170] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[171] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[172] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[173] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[173] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[174] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[175] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[176] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[177] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[177] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[178] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[179] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[180] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[181] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[182] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[183] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[183] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[184] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[185] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[185] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[186] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[187] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[188] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[188] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[189] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[190] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[191] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[191] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[192] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[193] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[193] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[194] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[195] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[196] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[197] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[198] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[199] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[199] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[200] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[201] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[202] | 0, log1p_exp(zkappa1));
@@ -353,22 +403,22 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[210] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[211] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[212] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[213] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[213] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[214] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[215] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[216] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[217] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[216] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[217] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[218] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[219] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[220] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[221] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[222] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[223] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[224] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[224] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[225] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[226] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[227] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[228] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[228] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[229] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[230] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[231] | 0, log1p_exp(zkappa1));
@@ -378,12 +428,12 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[235] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[236] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[237] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[238] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[238] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[239] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[240] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[240] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[241] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[242] | 0, log1p_exp(zkappa1+zkappa2));
-  lprior += von_mises3_lpdf(b_zmu[243] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[242] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[243] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[244] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[245] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[246] | 0, log1p_exp(zkappa1));
@@ -411,14 +461,14 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[268] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[269] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[270] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[271] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[271] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[272] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[273] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[274] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[275] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[276] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[277] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[278] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[278] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[279] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[280] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[281] | 0, log1p_exp(zkappa1));
@@ -438,35 +488,35 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[295] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[296] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[297] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[298] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[298] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[299] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[300] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[301] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[302] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[303] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[304] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[305] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[305] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[306] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[307] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[308] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[309] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[310] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[309] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[310] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[311] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[312] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[313] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[314] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[315] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[315] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[316] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[317] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[317] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[318] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[319] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[319] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[320] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[321] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[321] | 0, log1p_exp(zkappa1+zkappa2));
   lprior += von_mises3_lpdf(b_zmu[322] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[323] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[324] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[325] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[326] | 0, log1p_exp(zkappa1+zkappa2));
+  lprior += von_mises3_lpdf(b_zmu[326] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[327] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[328] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[329] | 0, log1p_exp(zkappa1));
@@ -482,33 +532,33 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[339] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[340] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[341] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[342] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[342] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[343] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[344] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[345] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[346] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[346] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[347] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[348] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[349] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[350] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[351] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[352] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[352] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[353] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[354] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[354] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[355] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[356] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[357] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[357] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[358] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[359] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[360] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[360] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[361] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[362] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[362] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[363] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[364] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[365] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[366] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[367] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[368] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[368] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[369] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[370] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[371] | 0, log1p_exp(zkappa1));
@@ -522,22 +572,22 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[379] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[380] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[381] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[382] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[382] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[383] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[384] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[385] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[386] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[385] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[386] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[387] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[388] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[389] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[390] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[391] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[392] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[393] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[393] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[394] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[395] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[396] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[397] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[397] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[398] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[399] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[400] | 0, log1p_exp(zkappa1));
@@ -547,12 +597,12 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[404] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[405] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[406] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[407] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[407] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[408] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[409] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[409] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[410] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[411] | 0, log1p_exp(zkappa1+zkappa3));
-  lprior += von_mises3_lpdf(b_zmu[412] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[411] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[412] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[413] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[414] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[415] | 0, log1p_exp(zkappa1));
@@ -580,14 +630,14 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[437] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[438] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[439] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[440] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[440] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[441] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[442] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[443] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[444] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[445] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[446] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[447] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[447] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[448] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[449] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[450] | 0, log1p_exp(zkappa1));
@@ -607,35 +657,35 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[464] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[465] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[466] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[467] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[467] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[468] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[469] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[470] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[471] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[472] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[473] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[474] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[474] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[475] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[476] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[477] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[478] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[479] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[478] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[479] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[480] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[481] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[482] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[483] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[484] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[484] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[485] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[486] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[486] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[487] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[488] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[488] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[489] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[490] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[490] | 0, log1p_exp(zkappa1+zkappa3));
   lprior += von_mises3_lpdf(b_zmu[491] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[492] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[493] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[494] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[495] | 0, log1p_exp(zkappa1+zkappa3));
+  lprior += von_mises3_lpdf(b_zmu[495] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[496] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[497] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[498] | 0, log1p_exp(zkappa1));
@@ -651,33 +701,33 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[508] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[509] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[510] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[511] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[511] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[512] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[513] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[514] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[515] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[515] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[516] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[517] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[518] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[519] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[520] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[521] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[521] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[522] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[523] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[523] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[524] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[525] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[526] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[526] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[527] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[528] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[529] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[529] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[530] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[531] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[531] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[532] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[533] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[534] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[535] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[536] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[537] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[537] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[538] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[539] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[540] | 0, log1p_exp(zkappa1));
@@ -691,22 +741,22 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[548] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[549] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[550] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[551] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[551] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[552] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[553] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[554] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[555] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[554] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[555] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[556] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[557] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[558] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[559] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[560] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[561] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[562] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[562] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[563] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[564] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[565] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[566] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[566] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[567] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[568] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[569] | 0, log1p_exp(zkappa1));
@@ -716,12 +766,12 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[573] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[574] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[575] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[576] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[576] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[577] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[578] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[578] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[579] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[580] | 0, log1p_exp(zkappa1+zkappa4));
-  lprior += von_mises3_lpdf(b_zmu[581] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[580] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[581] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[582] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[583] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[584] | 0, log1p_exp(zkappa1));
@@ -749,14 +799,14 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[606] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[607] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[608] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[609] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[609] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[610] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[611] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[612] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[613] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[614] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[615] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[616] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[616] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[617] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[618] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[619] | 0, log1p_exp(zkappa1));
@@ -776,35 +826,35 @@ transformed parameters {
   lprior += von_mises3_lpdf(b_zmu[633] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[634] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[635] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[636] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[636] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[637] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[638] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[639] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[640] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[641] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[642] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[643] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[643] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[644] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[645] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[646] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[647] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[648] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[647] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[648] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[649] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[650] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[651] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[652] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[653] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[653] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[654] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[655] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[655] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[656] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[657] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[657] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[658] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[659] | 0, log1p_exp(zkappa1));
+  lprior += von_mises3_lpdf(b_zmu[659] | 0, log1p_exp(zkappa1+zkappa4));
   lprior += von_mises3_lpdf(b_zmu[660] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[661] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[662] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[663] | 0, log1p_exp(zkappa1));
-  lprior += von_mises3_lpdf(b_zmu[664] | 0, log1p_exp(zkappa1+zkappa4));
+  lprior += von_mises3_lpdf(b_zmu[664] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[665] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[666] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[667] | 0, log1p_exp(zkappa1));
@@ -861,7 +911,7 @@ model {
   // priors including constants
   target += lprior;
   target += std_normal_lpdf(to_vector(z_1));
-  target += student_t_lpdf(zkappa1 | 3, 25, 5);
+  target += student_t_lpdf(zkappa1 | 3, 30, 20);
   target += student_t_lpdf(zkappa2 | 3, 0, 5);
   target += student_t_lpdf(zkappa3 | 3, 0, 5);
   target += student_t_lpdf(zkappa4 | 3, 0, 5);
@@ -872,6 +922,30 @@ generated quantities {
   // compute group-level correlations
   corr_matrix[M_1] Cor_1 = multiply_lower_tri_self_transpose(L_1);
   vector<lower=-1,upper=1>[NC_1] cor_1;
+  
+vector [M_1] mu_circ; //modulo circular estimate
+for (i in 1:size(b_fmu)){
+mu_circ[i] = mod_circular(b_fmu[i]);
+}
+
+  
+real kappa_id_condition1 = log1p_exp(zkappa1);
+real kappa_id_condition2 = log1p_exp(zkappa1+zkappa2);
+real kappa_id_condition3 = log1p_exp(zkappa1+zkappa3);
+real kappa_id_condition4 = log1p_exp(zkappa1+zkappa4);
+          
+  
+vector[N_1] zmu_id_condition1;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition2;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition3;  // condition on coefficients per indiv;
+vector[N_1] zmu_id_condition4;  // condition on coefficients per indiv;
+for (i in 1:N_1){
+zmu_id_condition1[i] = mod_circular(b_zmu[i]); //each in modulus format
+zmu_id_condition2[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
+zmu_id_condition3[i] = mod_circular(b_zmu[i+N_1*2]); //each in modulus format
+zmu_id_condition4[i] = mod_circular(b_zmu[i+N_1*3]); //each in modulus format
+}
+          
   // extract upper diagonal of correlation matrix
   for (k in 1:M_1) {
     for (j in 1:(k - 1)) {
