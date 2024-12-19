@@ -290,7 +290,7 @@ stan_mvm_fun = meancirc_fun +
 #                  block = 'genquant')
 # #or maybe?
 mu_gen = stanvar(scode = "
-vector [N] mu_circ; //modulo circular estimate
+vector [M_1] mu_circ; //modulo circular estimate
 for (i in 1:size(b_fmu)){
 mu_circ[i] = mod_circular(b_fmu[i]);
 }
@@ -298,31 +298,31 @@ mu_circ[i] = mod_circular(b_fmu[i]);
                  block = 'genquant')
 
 #random effects on mean angle
-zmu_var = stanvar(scode = "
-vector[K_zmu] zmu_id;  // regression coefficients;
-for (i in 1:K_zmu){
-  zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
-}
-", 
-block = 'genquant')
+  # zmu_var = stanvar(scode = "
+  # vector[K_zmu] zmu_id;  // regression coefficients;
+  # for (i in 1:K_zmu){
+  #   zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
+  # }
+  # ", 
+  # block = 'genquant')
 
 #concentration of random effects on mean angle
-zkappa_var = stanvar(scode = "
-real zkappa;", 
-                     block = "parameters") + #define in the parameters block
-  stanvar(scode = "
-real kappa_id = log1p_exp(zkappa);
-          ", 
-          block = 'genquant') #inverse softplus (estimated on softplus scale)
+#superceded by  slopes?
+  # zkappa_var = stanvar(scode = "
+  # real zkappa;", 
+  #                      block = "parameters") + #define in the parameters block
+  #   stanvar(scode = "
+  # real kappa_id = log1p_exp(zkappa);
+  #           ", 
+  #           block = 'genquant') #inverse softplus (estimated on softplus scale)
 
+# vector[K_zmu] zmu_id;  // regression coefficients;
 zmu_var_slope = stanvar(scode = "
-vector[K_zmu] zmu_id;  // regression coefficients;
 vector[N_1] zmu_id_condition1;  // condition on coefficients per indiv;
 vector[N_1] zmu_id_condition2;  // condition on coefficients per indiv;
 vector[N_1] zmu_id_condition3;  // condition on coefficients per indiv;
 vector[N_1] zmu_id_condition4;  // condition on coefficients per indiv;
 for (i in 1:N_1){
-zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
 zmu_id_condition1[i] = mod_circular(b_zmu[i]); //each in modulus format
 zmu_id_condition2[i] = mod_circular(b_zmu[i+N_1]); //each in modulus format
 zmu_id_condition3[i] = mod_circular(b_zmu[i+N_1*2]); //each in modulus format
@@ -330,6 +330,7 @@ zmu_id_condition4[i] = mod_circular(b_zmu[i+N_1*3]); //each in modulus format
 }
           ", 
 block = 'genquant')
+# zmu_id[i] = mod_circular(b_zmu[i]); //each in modulus format
 
 #concentration of random effects on fixed effect on mean angle
 zkappa_var_slope = stanvar(scode = "
@@ -349,9 +350,9 @@ real kappa_id_condition4 = log1p_exp(zkappa1+zkappa4);
 
 
 
-stanvars_intercepts = stan_mvm_fun + mu_gen + zkappa_var + zmu_var
-stanvars_slopes = stan_mvm_fun + mu_gen + zkappa_var + zkappa_var_slope + 
-  zmu_var_slope #includes intercepts
+stanvars_intercepts = stan_mvm_fun + mu_gen  #+ zmu_var+ zkappa_var
+stanvars_slopes = stan_mvm_fun + mu_gen  + zkappa_var_slope + 
+  zmu_var_slope #includes intercepts+ zkappa_var
 
 # Input Variables ----------------------------------------------------------
 
@@ -858,6 +859,14 @@ cd = within(cd,
             }
             )
 
+#Make a subset for testing with N individuals
+cd_subs = subset(x = cd, 
+                 subset = ID %in% 
+                             sample(u_id,
+                                    size =  10,
+                                    replace = FALSE)
+                )
+
 
 ## Formula ---------------------------------------------------------------
 
@@ -881,7 +890,7 @@ write.table(x = sc,
           )
 ## Priors ----------------------------------------------------------------
 prior_int_slope = get_prior(formula = formula_int_slope,
-                            data = cd,
+                            data = cd_subs,
                             check = FALSE)
 dim(prior_int_slope)
 #suggests 695  possible priors!
@@ -950,7 +959,7 @@ write.table(x = sc,
             row.names = FALSE)
 
 
-## Short dummy run to check the influence of the priors ------------------
+## Dummy run to check the influence of the priors ------------------
 
 
 #double check that the prior distribution is viable by first setting up a short dummy run
@@ -960,7 +969,7 @@ write.table(x = sc,
 system.time( #currently takes about 60 minutes for 10000 iterations
   {
     dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-                           data = cd, # our data
+                           data = cd_subs, # our data
                            prior = prior_int_slope, # our priors 
                            stanvars = stanvars_slopes,
                            sample_prior = 'only', #ignore the data to check the influence of the priors
@@ -985,27 +994,28 @@ if(all_plots)
   plot(dummy_int_slope,
        variable = '^zkappa',
        regex = TRUE)
+  # plot(dummy_int_slope,
+  #      variable = 'zmu_id',
+  #      transform = unwrap_circular_deg,
+  #      nvariables = 5,
+  #      ask = FALSE)
   plot(dummy_int_slope,
-       variable = 'zmu_id',
+       variable = '^zmu_id_condition',
        transform = unwrap_circular_deg,
        nvariables = 5,
-       ask = FALSE)
-  plot(dummy_int_slope,
-       variable = 'zmu_id_condition',
-       transform = unwrap_circular_deg,
-       nvariables = 5,
+       regex = TRUE,
        ask = FALSE)
   plot(dummy_int_slope)
 }
 
 
-## Full run --------------------------------------------------------------
+## Subset run --------------------------------------------------------------
 
-# full run
-system.time(#takes less than 1 minute
+# subset run
+system.time(#takes less than 6 minutes
   {
     full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-                          data = cd, # our data
+                          data = cd_subs, # our data
                           prior = prior_int_slope, # our priors 
                           stanvars = stanvars_slopes,
                           iter = 1000, #doesn't take a lot of runs
@@ -1017,26 +1027,37 @@ system.time(#takes less than 1 minute
 )
 if(all_plots)
 {
+  #main effects means converge well
   plot(full_int_slope,
        variable = 'fmu',
        regex = TRUE,
        transform = unwrap_circular_deg)
+  #conditional kappa mostly converge except condition 2 
+  #TODO check how this is calculated
   plot(full_int_slope,
        variable = '^kappa_id',
        regex = TRUE)
+  #random effects mu kappas converge well in inv_softplus space
   plot(full_int_slope,
        variable = '^zkappa',
        regex = TRUE)
+  # plot(full_int_slope,
+  #      variable = 'zmu_id',
+  #      transform = unwrap_circular_deg,
+  #      nvariables = 5,
+  #      ask = FALSE)
+  #individual means converge well, some bimodality in posterior
   plot(full_int_slope,
-       variable = 'zmu_id',
+       variable = '^zmu_id_condition',
        transform = unwrap_circular_deg,
-       nvariables = 5,
-       ask = FALSE)
-  plot(full_int_slope,
-       variable = 'zmu_id_condition',
-       transform = unwrap_circular_deg,
-       nvariables = 5,
+       nvariables = 4,
+       regex = TRUE,
        ask = FALSE)
   plot(full_int_slope)
 }
 
+sm_vm = summary(full_int_slope, robust = TRUE)
+rn_sm_vm = rownames(sm_vm$fixed)
+#fairly good convergence for main effects means
+sm_vm$spec_pars
+sm_vm$fixed[grepl(pattern = '^kappa', x = rn_sm_vm ),]
