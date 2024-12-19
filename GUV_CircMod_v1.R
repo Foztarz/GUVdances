@@ -863,7 +863,7 @@ cd = within(cd,
 cd_subs = subset(x = cd, 
                  subset = ID %in% 
                              sample(u_id,
-                                    size =  10,
+                                    size =  20,
                                     replace = FALSE)
                 )
 
@@ -947,8 +947,9 @@ prior_int_slope = within(prior_int_slope,
 #             check = FALSE)
 
 #different strategy, anchor estimates around zkappa 1 but with wide dist
+#now attempting very wide dist on zkappa intercept, to include probability mass around zero
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa1 | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa1 | 3, 30, 20)", #expect high concentration (low variation) 
             check = FALSE)+
   set_prior("target += student_t_lpdf(zkappa2 | 3, 0, 5)", #expect high concentration (low variation) 
             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
@@ -961,7 +962,8 @@ prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on 
 
 sc = make_stancode(formula = formula_int_slope,
                    data = cd,
-                   prior = prior_int_slope)
+                   prior = prior_int_slope,
+                   stanvars = stanvars_slopes)
 write.table(x = sc,
             file = file.path(dirname(path_file),
                              'sc_CircMod_v1.stan'),
@@ -1045,7 +1047,7 @@ if(all_plots)
        transform = unwrap_circular_deg) 
   #main effects means converge well
   plot(full_int_slope,
-       variable = '^kappa',
+       variable = '^b_kappa',
        regex = TRUE)
   #conditional kappa mostly converge except condition 2 
   #TODO check how this is calculated
