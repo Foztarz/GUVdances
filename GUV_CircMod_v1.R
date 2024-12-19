@@ -38,8 +38,9 @@ graphics.off()
 #- Read in data +
 #- Inspect data +
 #- Set up priors for simple model +
-#- Generate Stan code for simple model
-#- Set up Stan parameters for simple model
+#- Generate Stan code for simple model  +
+#- Set up Stan parameters for simple model  +
+#- Try longer run for full model
 #- Extract predictions
 #- Set up parameters for random effect model
 #- Random effects interactions model (really!)
