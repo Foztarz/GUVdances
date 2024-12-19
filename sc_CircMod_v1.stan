@@ -862,9 +862,9 @@ model {
   target += lprior;
   target += std_normal_lpdf(to_vector(z_1));
   target += student_t_lpdf(zkappa1 | 3, 25, 5);
-  target += student_t_lpdf(zkappa1+zkappa2 | 3, 25, 5);
-  target += student_t_lpdf(zkappa1+zkappa3 | 3, 25, 5);
-  target += student_t_lpdf(zkappa1+zkappa4 | 3, 25, 5);
+  target += student_t_lpdf(zkappa2 | 3, 0, 5);
+  target += student_t_lpdf(zkappa3 | 3, 0, 5);
+  target += student_t_lpdf(zkappa4 | 3, 0, 5);
 }
 generated quantities {
   // actual population-level intercept

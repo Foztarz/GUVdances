@@ -936,14 +936,25 @@ prior_int_slope = within(prior_int_slope,
 
 
 
+# prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
+#   set_prior("target += student_t_lpdf(zkappa1 | 3, 25, 5)", #expect high concentration (low variation) 
+#             check = FALSE)+
+#   set_prior("target += student_t_lpdf(zkappa1+zkappa2 | 3, 25, 5)", #expect high concentration (low variation) 
+#             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
+#   set_prior("target += student_t_lpdf(zkappa1+zkappa3 | 3, 25, 5)", #expect high concentration (low variation) 
+#             check = FALSE)+
+#   set_prior("target += student_t_lpdf(zkappa1+zkappa4 | 3, 25, 5)", #expect high concentration (low variation) 
+#             check = FALSE)
+
+#different strategy, anchor estimates around zkappa 1 but with wide dist
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
   set_prior("target += student_t_lpdf(zkappa1 | 3, 25, 5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa1+zkappa2 | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa2 | 3, 0, 5)", #expect high concentration (low variation) 
             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa1+zkappa3 | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa3 | 3, 0, 5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa1+zkappa4 | 3, 25, 5)", #expect high concentration (low variation) 
+  set_prior("target += student_t_lpdf(zkappa4 | 3, 0, 5)", #expect high concentration (low variation) 
             check = FALSE)
 
 
