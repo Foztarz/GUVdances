@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 12 05
-#     MODIFIED:	James Foster              DATE: 2024 12 18
+#     MODIFIED:	James Foster              DATE: 2024 12 20
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -40,12 +40,15 @@ graphics.off()
 #- Set up priors for simple model +
 #- Generate Stan code for simple model  +
 #- Set up Stan parameters for simple model  +
+#- Set up parameters for random effect model +
+#- Random effects interactions model (really!) +
+#- Try larger subset
 #- Try longer run for full model
 #- Extract predictions
-#- Set up parameters for random effect model
-#- Random effects interactions model (really!)
-#- Model comparison
 #- Plot predictions
+#- Simplify model
+# - Model comparison
+# - Vectorise zkappa
 
 
 # Set up workspace --------------------------------------------------------
@@ -860,7 +863,7 @@ cd = within(cd,
             }
             )
 
-#Make a subset for testing with N individuals
+## Make a subset for testing with N individuals ----
 cd_subs = subset(x = cd, 
                  subset = ID %in% 
                              sample(u_id,
@@ -906,6 +909,13 @@ print(subset(prior_int_slope, nlpar %in% 'fmu')['coef'])
 
 
 ### assign BRMS default priors -------------------------------------------
+
+#ideally the ones for zkappa should be vectorised like the ones for kappa
+# for (n in 1:N) {
+#   // add more terms to the linear predictor
+#   kappa[n] += r_1_kappa_1[J_1[n]] * Z_1_kappa_1[n] + r_1_kappa_2[J_1[n]] * Z_1_kappa_2[n] + r_1_kappa_3[J_1[n]] * Z_1_kappa_3[n] + r_1_kappa_4[J_1[n]] * Z_1_kappa_4[n];
+# }
+
 prior_int_slope = within(prior_int_slope,
                          {
    #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
@@ -1019,19 +1029,20 @@ if(all_plots)
        nvariables = 5,
        regex = TRUE,
        ask = FALSE)
-  plot(dummy_int_slope)
+  # plot(dummy_int_slope)
 }
 
 
 ## Subset run --------------------------------------------------------------
 
 # subset run
-system.time(#takes less than 6 minutes
+system.time(#takes less than 35 minutes for 50 individuals
   {
     full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
                           data = cd_subs, # our data
                           prior = prior_int_slope, # our priors 
                           stanvars = stanvars_slopes,
+                          warmup = 1000,#may be necessary
                           iter = 1000, #doesn't take a lot of runs
                           chains = 4, # 4 chains in parallel
                           cores = 4, # on 4 CPUs
@@ -1071,7 +1082,7 @@ if(all_plots)
        nvariables = 4,
        regex = TRUE,
        ask = FALSE)
-  plot(full_int_slope)
+  # plot(full_int_slope)
 }
 
 sm_vm = summary(full_int_slope, robust = TRUE)
