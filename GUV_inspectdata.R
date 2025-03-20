@@ -635,6 +635,6 @@ circ_mu_diff_ul = circular(x = unlist(mu_diff_ul),
 cml_ul = circ_mle(circ_mu_diff_ul)
 plot_circMLE(data = circ_mu_diff_ul, 
              table = cml_ul)
-mtext(text = 'Bimodal Model of UV Dim - Green Bright',
-      side = -2,
-      line = 1)
+text(labels = 'Bimodal Model of UV Dim - Green Bright',
+     x = 0,
+     y = -1.5)
