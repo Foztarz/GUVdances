@@ -26,10 +26,10 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Visualise individual dances
-#- Summarise individual dances
-#- Visualise condition differences
-#- Summarise condition differences
+#- Visualise individual dances  +
+#- Summarise individual dances  +
+#- Visualise condition differences  +
+#- Summarise condition differences  
 
 
 # Set up workspace --------------------------------------------------------
@@ -319,7 +319,7 @@ shell.exec.OS(pdf_fl)
 
 
 #calculate mean vectors
-mean_vectors = aggregate(angle~ID*brightn*colour,
+mean_vectors = aggregate(angle~ID*brightn*colour+sun_az, # N.B. Including sun azimuth drops some cases without a time stamp
                          data = cd,
                          FUN = rho.circular
 )
@@ -328,14 +328,19 @@ mean_vectors = within(mean_vectors,
                       {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
 )
 #add kappa
-mle_estimates = aggregate(angle~ID*brightn*colour,
+MLE_est = function(x)
+{
+          with(mle.vonmises(circular(x,
+                                      template = 'none'),
+                             bias = TRUE),
+                c(mu = as.numeric(mu), 
+                  kappa = kappa))
+  
+}
+
+mle_estimates = aggregate(angle~ID*brightn*colour+sun_az,
                           data = cd,
-                          FUN = function(x)
-                          {with(mle.vonmises(circular(x,
-                                                      template = 'none'),
-                                             bias = TRUE),
-                                c(mu = as.numeric(mu), 
-                                  kappa = kappa))}
+                          FUN = MLE_est
 )
 #add to the summary table and 
 #calculate inverse softplus kappa
@@ -372,23 +377,26 @@ stim = apply(X = expand.grid(c = c('g','u'),b = c('h','l')),
              FUN = paste,
              collapse = '',
              MARGIN = 1)
+Plt_mvec = function(id)
+{
+  
+  with(subset(x = mean_vectors,
+              subset = ID %in% id),
+       {
+         lines(x = 1:length(stim),
+               y = mean_vector[ match(x = stim,
+                                      table =  paste0(colour,brightn),
+                                      nomatch = NA) ],
+               col = gray(0,0.2)
+         )
+       })
+}
+  
 invisible(
   {
     lapply(X = u_id,
-           FUN = function(id)
-           {
-             
-             with(subset(x = mean_vectors,
-                         subset = ID %in% id),
-                  {
-                    lines(x = 1:length(stim),
-                          y = mean_vector[ match(x = stim,
-                                                 table =  paste0(colour,brightn),
-                                                 nomatch = NA) ],
-                          col = gray(0,0.2)
-                    )
-                  })
-           })
+           FUN = Plt_mvec
+           )
   })
 abline(h = c(0,1))
 
@@ -415,23 +423,25 @@ stripchart(kappa~colour*brightn,
            bg = gray(level = 0,
                      alpha = 0.1),
            pch = 21)
+Plt_kappa = function(id)
+{
+  with(subset(x = mean_vectors,
+              subset = ID %in% id),
+       {
+         lines(x = 1:length(stim),
+               y = kappa[ match(x = stim,
+                                table =  paste0(colour,brightn),
+                                nomatch = NA) ],
+               col = gray(0,0.2)
+         )
+       })
+}
+
 invisible(
   {
     lapply(X = u_id,
-           FUN = function(id)
-           {
-             
-             with(subset(x = mean_vectors,
-                         subset = ID %in% id),
-                  {
-                    lines(x = 1:length(stim),
-                          y = kappa[ match(x = stim,
-                                           table =  paste0(colour,brightn),
-                                           nomatch = NA) ],
-                          col = gray(0,0.2)
-                    )
-                  })
-           })
+           FUN = Plt_kappa
+           )
   })
 
 
@@ -458,24 +468,28 @@ stripchart(iskappa~colour*brightn,
                      alpha = 0.1),
            pch = 21)
 
+Plt_iskappa = function(id)
+{
+  
+  with(subset(x = mean_vectors,
+              subset = ID %in% id),
+       {
+         lines(x = 1:length(stim),
+               y = iskappa[ match(x = stim,
+                                  table =  paste0(colour,brightn),
+                                  nomatch = NA) ],
+               col = gray(0,0.2)
+         )
+       })
+}
+
 invisible(
   {
     lapply(X = u_id,
-           FUN = function(id)
-           {
-             
-             with(subset(x = mean_vectors,
-                         subset = ID %in% id),
-                  {
-                    lines(x = 1:length(stim),
-                          y = iskappa[ match(x = stim,
-                                             table =  paste0(colour,brightn),
-                                             nomatch = NA) ],
-                          col = gray(0,0.2)
-                    )
-                  })
-           })
+           FUN = Plt_iskappa
+           )
   })
+
 abline(h = inv_softplus(A1inv(c(0.2,0.7))), # benchmarks could be -0.7 and 2.0
        lty = 3)
 mtext(side = 4,
@@ -505,24 +519,30 @@ stripchart(mu~colour*brightn,
            bg = gray(level = 0,
                      alpha = 0.1),
            pch = 21)
+
+Plt_mu = function(id)
+{
+  
+  with(subset(x = mean_vectors,
+              subset = ID %in% id),
+       {
+         lines(x = 1:length(stim),
+               y = mu[ match(x = stim,
+                             table =  paste0(colour,brightn),
+                             nomatch = NA) ],
+               col = gray(0,0.2)
+         )
+       })
+}  
+  
+
 invisible(
   {
     lapply(X = u_id,
-           FUN = function(id)
-           {
-             
-             with(subset(x = mean_vectors,
-                         subset = ID %in% id),
-                  {
-                    lines(x = 1:length(stim),
-                          y = mu[ match(x = stim,
-                                        table =  paste0(colour,brightn),
-                                        nomatch = NA) ],
-                          col = gray(0,0.2)
-                    )
-                  })
-           })
+           FUN = Plt_mu
+           )
   })
+
 abline(h = c(-180, -90, 0, 90,  180),
        lty = c(1,3,1,3,1))
 #plot angles
@@ -572,7 +592,7 @@ PCfun(angles = subset(mean_vectors, colour %in% 'u' & brightn %in% 'l')$mu,
 
 #average orientation changes
 #relative to green bright
-MuDiff = function(id, dt, cl, br)
+MuDiff = function(id, dt, cl, br, ref_cl = 'g', ref_br = 'h')
 {
   with(
   subset(dt,
@@ -580,7 +600,8 @@ MuDiff = function(id, dt, cl, br)
   deg(
     mod_circular(
       rad(mu[colour %in% cl & brightn %in% br] -  
-            mu[colour %in% 'g' & brightn %in% 'h'])
+            mu[colour %in% ref_cl &
+                 brightn %in% ref_br])
       )
     )
   )
@@ -638,3 +659,133 @@ plot_circMLE(data = circ_mu_diff_ul,
 text(labels = 'Bimodal Model of UV Dim - Green Bright',
      x = 0,
      y = -1.5)
+
+#Other contrasts
+mu_diff_uhl = sapply(X = u_id,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l',
+                    ref_cl = 'u',
+                    ref_br = 'h')
+mu_diff_gul = sapply(X = u_id,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l',
+                    ref_cl = 'u',
+                    ref_br = 'h')
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 2,
+      title = 'Green Dim - Green Bright')
+PCfun(angles = unlist(mu_diff_uhl),
+      col = 'purple',
+      shrink = 2,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 2,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul),
+      col = 'gray25',
+      shrink = 2,
+      title = 'UV Dim - Green Dim')
+
+
+Plt_cmle = function(dt, col = 'black', title = '')
+{
+  cdt = circular(x = dt,
+                 units = 'degrees',
+                 rotation = 'clock',
+                 zero = pi/2)
+  plot_circMLE(data = cdt,
+               table = circ_mle(data = cdt),
+               col = c(col, col, 'gray20', 'gray20') )
+  text(x = 0, y = -1.5,
+       labels = title)
+}
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+Plt_cmle(dt = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      title = 'Green Dim - Green Bright')
+Plt_cmle(dt = unlist(mu_diff_uhl),
+      col = 'purple',
+      title = 'UV Dim - UV Bright')
+Plt_cmle(dt = unlist(mu_diff_uh),
+      col = 'gray40',
+      title = 'UV Bright - Green Bright')
+Plt_cmle(dt = unlist(mu_diff_gul),
+      col = 'gray25',
+      title = 'UV Dim - Green Dim')
+
+
+
+
+# Dances relative to sun azimuth ------------------------------------------
+#relative to green bright
+SunDiff = function(id, dt, cl, br)
+{
+  with(
+    subset(dt,
+           ID %in% id),
+    deg(
+      mod_circular(
+        rad(mu[colour %in% cl & brightn %in% br] -  
+              unique(sun_az) ) # sun azimuth in degrees
+      )
+    )
+  )
+}
+
+sun_diff_gh = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'h')
+sun_diff_gl = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'l')
+sun_diff_uh = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'h')
+sun_diff_ul = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l')
+
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+PCfun(angles = unlist(sun_diff_gh),
+      col = 'green',
+      shrink = 2.5,
+      title = 'Green Bright Geographic Bearing')
+PCfun(angles = unlist(sun_diff_gl),
+      col = 'darkgreen',
+      shrink = 2.5,
+      title = 'Green Dim Geographic Bearing')
+PCfun(angles = unlist(sun_diff_uh),
+      col = 'magenta',
+      shrink = 2.5,
+      title = 'UV Bright Geographic Bearing')
+PCfun(angles = unlist(sun_diff_ul),
+      col = 'purple',
+      shrink = 2.5,
+      title = 'UV Dim Geographic Bearing')
+
+
+
+
+# Estimate Coefficients for Model -----------------------------------------
+
