@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 03 20
-#     MODIFIED:	James Foster              DATE: 2025 03 20
+#     MODIFIED:	James Foster              DATE: 2025 04 30
 #
 #  DESCRIPTION: Inspect and summarise individual dances.
 #               
@@ -29,6 +29,8 @@ graphics.off()
 #- Visualise individual dances  +
 #- Summarise individual dances  +
 #- Visualise condition differences  +
+#- Indentify full condition individuals
+#- Investigate only full conditions
 #- Summarise condition differences  
 
 
@@ -785,6 +787,25 @@ PCfun(angles = unlist(sun_diff_ul),
       title = 'UV Dim Geographic Bearing')
 
 
+# Isolate full condition indviduals ---------------------------------------
+length(mu_diff_gl) - length(unlist(mu_diff_gl))
+#around 144 individuals did not complete gl and gh, resulting in nulls
+
+#Most individuals that made it to bright green 
+full_ids = unique(subset(mean_vectors,
+                         brightn %in% 'h' &
+                           colour %in% 'g')$ID)
+length(full_ids)#52 individuals
+#extract just those individuals
+# full_mean_vectors = subset(mean_vectors, ID %in% full_ids)
+full_mu_diff_gl = mu_diff_gl[u_id %in% full_ids]
+full_mu_diff_uh = mu_diff_uh[u_id %in% full_ids]
+full_mu_diff_ul = mu_diff_ul[u_id %in% full_ids]
+
+#still some missing, actually more haphazard than that
+length(full_mu_diff_gl) - length(unlist(full_mu_diff_gl))
+length(full_mu_diff_uh) - length(unlist(full_mu_diff_uh))
+length(full_mu_diff_ul) - length(unlist(full_mu_diff_ul))
 
 
 # Estimate Coefficients for Model -----------------------------------------
