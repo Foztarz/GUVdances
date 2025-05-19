@@ -791,11 +791,27 @@ PCfun(angles = unlist(sun_diff_ul),
 length(mu_diff_gl) - length(unlist(mu_diff_gl))
 #around 144 individuals did not complete gl and gh, resulting in nulls
 
+#collect the number of conditions experienced by each individual
+IndCond = function(id, dt)
+{
+ with(
+    subset(dt,
+           ID %in% id),
+    {
+      length(
+        unique( paste(colour, brightn) ) #find unique combinations of colour and brightness
+      )
+    }
+    )
+}
+
+luc = sapply(u_id,
+              FUN = IndCond,
+              dt = mean_vectors)
+
 #Most individuals that made it to bright green 
-full_ids = unique(subset(mean_vectors,
-                         brightn %in% 'h' &
-                           colour %in% 'g')$ID)
-length(full_ids)#52 individuals
+full_ids = u_id[luc == 4]
+length(full_ids)#17 individuals
 #extract just those individuals
 # full_mean_vectors = subset(mean_vectors, ID %in% full_ids)
 full_mu_diff_gl = mu_diff_gl[u_id %in% full_ids]
