@@ -811,18 +811,55 @@ luc = sapply(u_id,
 
 #Most individuals that made it to bright green 
 full_ids = u_id[luc == 4]
-length(full_ids)#17 individuals
+length(full_ids)#17 individuals #I count 19...
 #extract just those individuals
 # full_mean_vectors = subset(mean_vectors, ID %in% full_ids)
 full_mu_diff_gl = mu_diff_gl[u_id %in% full_ids]
 full_mu_diff_uh = mu_diff_uh[u_id %in% full_ids]
 full_mu_diff_ul = mu_diff_ul[u_id %in% full_ids]
+full_mu_diff_gul = mu_diff_gul[u_id %in% full_ids]
 
-#still some missing, actually more haphazard than that
+#none missing, seems to work
 length(full_mu_diff_gl) - length(unlist(full_mu_diff_gl))
 length(full_mu_diff_uh) - length(unlist(full_mu_diff_uh))
 length(full_mu_diff_ul) - length(unlist(full_mu_diff_ul))
 
+full_mean_vectors = subset(mean_vectors, subset = ID %in% full_ids)
+#plot mean directions
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+PCfun(angles = subset(full_mean_vectors, colour %in% 'g' & brightn %in% 'h')$mu,
+      col = 'green',
+      title = 'Green Bright')
+PCfun(angles = subset(full_mean_vectors, colour %in% 'g' & brightn %in% 'l')$mu,
+      col = 'darkgreen',
+      title = 'Green Dim')
+PCfun(angles = subset(full_mean_vectors, colour %in% 'u' & brightn %in% 'h')$mu,
+      col = 'magenta',
+      title = 'UV Bright')
+PCfun(angles = subset(full_mean_vectors, colour %in% 'u' & brightn %in% 'l')$mu,
+      col = 'purple',
+      title = 'UV Dim')
+
+#plot differences
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+PCfun(angles = unlist(full_mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 2,
+      title = 'Green Dim - Green Bright')
+PCfun(angles = unlist(full_mu_diff_ul),
+      col = 'purple',
+      shrink = 2,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(full_mu_diff_uh),
+      col = 'gray40',
+      shrink = 2,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(full_mu_diff_gul),
+      col = 'gray25',
+      shrink = 2,
+      title = 'UV Dim - Green Dim')
 
 # Estimate Coefficients for Model -----------------------------------------
 
