@@ -813,6 +813,25 @@ luc = sapply(u_id,
 full_ids = u_id[luc == 4]
 length(full_ids)#17 individuals #I count 19...
 #extract just those individuals
+
+
+# . Save full conditions --------------------------------------------------
+
+#find data for full condition individuals
+full_cd = subset(cd, ID %in% full_ids)
+#set new file path in same directory as old one
+new_file = file.path(dirname(path_file), #same directory
+                     #remove file type and add new label
+                       sub(pattern = '.csv$',#file type at the end
+                           replacement = '_fullcond.csv', #replacement label
+                            x = basename(path_file) )
+                            )
+#write out to new csv table
+write.table(file = new_file,
+            x = full_cd,
+            sep  = ',',
+            row.names = FALSE)
+
 # full_mean_vectors = subset(mean_vectors, ID %in% full_ids)
 full_mu_diff_gl = mu_diff_gl[u_id %in% full_ids]
 full_mu_diff_uh = mu_diff_uh[u_id %in% full_ids]
@@ -825,6 +844,10 @@ length(full_mu_diff_uh) - length(unlist(full_mu_diff_uh))
 length(full_mu_diff_ul) - length(unlist(full_mu_diff_ul))
 
 full_mean_vectors = subset(mean_vectors, subset = ID %in% full_ids)
+
+
+# . Plot full conditions --------------------------------------------------
+
 #plot mean directions
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 par(pty = 's')
