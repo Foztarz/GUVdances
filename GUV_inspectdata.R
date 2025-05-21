@@ -864,6 +864,42 @@ PCfun(angles = subset(full_mean_vectors, colour %in% 'u' & brightn %in% 'l')$mu,
       col = 'purple',
       title = 'UV Dim')
 
+#plot mean directions relative to the sun
+full_sun_diff_gh = sapply(X = full_ids,
+                     FUN = SunDiff,
+                     dt = mean_vectors,
+                     cl = 'g',
+                     br = 'h')
+full_sun_diff_gl = sapply(X = full_ids,
+                     FUN = SunDiff,
+                     dt = mean_vectors,
+                     cl = 'g',
+                     br = 'l')
+full_sun_diff_uh = sapply(X = full_ids,
+                     FUN = SunDiff,
+                     dt = mean_vectors,
+                     cl = 'u',
+                     br = 'h')
+full_sun_diff_ul = sapply(X = full_ids,
+                     FUN = SunDiff,
+                     dt = mean_vectors,
+                     cl = 'u',
+                     br = 'l')
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+par(pty = 's')
+PCfun(angles = full_sun_diff_gh,
+      col = 'green',
+      title = 'Green Bright')
+PCfun(angles = full_sun_diff_gl,
+      col = 'darkgreen',
+      title = 'Green Dim')
+PCfun(angles = full_sun_diff_uh,
+      col = 'magenta',
+      title = 'UV Bright')
+PCfun(angles = full_sun_diff_ul,
+      col = 'purple',
+      title = 'UV Dim')
+
 #plot differences
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 par(pty = 's')
