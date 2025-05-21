@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 03 20
-#     MODIFIED:	James Foster              DATE: 2025 04 30
+#     MODIFIED:	James Foster              DATE: 2025 05 21
 #
 #  DESCRIPTION: Inspect and summarise individual dances.
 #               
@@ -10,7 +10,7 @@ graphics.off()
 #               
 #      OUTPUTS: Plots and test statistics
 #
-#	   CHANGES: - 
+#	   CHANGES: - sun azimuth should be added, not subtracted!
 #
 #   REFERENCES: 
 #              Edrich, W., Neumeyer, C. and Von Heiversen, O. (1979).
@@ -29,7 +29,9 @@ graphics.off()
 #- Visualise individual dances  +
 #- Summarise individual dances  +
 #- Visualise condition differences  +
-#- Indentify full condition individuals
+#- Identify full condition individuals  +
+#- Plot mean vectors for full conditions
+#- Plot mean vectors of changes for full conditions
 #- Investigate only full conditions
 #- Summarise condition differences  
 
@@ -738,7 +740,7 @@ SunDiff = function(id, dt, cl, br)
            ID %in% id),
     deg(
       mod_circular(
-        rad(mu[colour %in% cl & brightn %in% br] -  
+        rad(mu[colour %in% cl & brightn %in% br] +  
               unique(sun_az) ) # sun azimuth in degrees
       )
     )
@@ -785,6 +787,7 @@ PCfun(angles = unlist(sun_diff_ul),
       col = 'purple',
       shrink = 2.5,
       title = 'UV Dim Geographic Bearing')
+
 
 
 # Isolate full condition indviduals ---------------------------------------
@@ -848,6 +851,108 @@ full_mean_vectors = subset(mean_vectors, subset = ID %in% full_ids)
 
 # . Plot full conditions --------------------------------------------------
 
+# Plot individual dances
+
+#set up plot
+new_pdf_fl = file.path(dirname(path_file), 'fullcond_dances.pdf')
+pdf(file = new_pdf_fl)
+par(mfrow = c(2, 2), mar = c(0,0,0,0))
+par(pty = 's')
+
+#add legend to 1st page
+plot(x = NULL,
+     xlim = c(-1,1),
+     ylim = c(-1,1),
+     pch = 19,
+     axes = FALSE,
+     xlab = '',
+     ylab = '',
+     main = ''
+)
+legend(x = 'center',
+       legend = c('Green Bright',
+                  'Green Dim',
+                  'UV Bright',
+                  'UV Dim',
+                  'Sun azimuth (North = Up)'),
+       col = c('green',
+               'darkgreen',
+               'magenta',
+               'purple',
+               'orange'),
+       pch = c(21,21,21,21,NA),
+       lty = c(NA, NA, NA, NA, 1),
+       lwd = c(2,2,2,2,3)
+)
+#loop through individuals
+for(ii in full_ids)
+{
+  mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
+  mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
+  mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
+  mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
+  plot(x = NULL,
+       xlim = 100*c(-1,1),
+       ylim = 100*c(-1,1),
+       pch = 19,
+       axes = FALSE,
+       xlab = '',
+       ylab = '',
+       main = ''
+  )
+  abline(a = 0, b = 1, col = 'gray90')
+  abline(a = 0, b = -1, col = 'gray90')
+  abline(h = 0, v = 0, col = 'gray75')
+  lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
+  lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
+  lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
+  lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3)
+  text(x = 1:4*20,
+       y = c(0,0,0,0),
+       labels = paste(' run', 1:4*20), 
+       cex = 0.3,
+       adj = c(0,1))
+  with(subset(cd, ID %in% ii),
+       {
+         lines(x = c(0, 100*sin(sun_az_rad)),
+               y = c(0, 100*cos(sun_az_rad)),
+               col = adjustcolor('orange',alpha.f = 0.5),
+               lwd = 2)
+         points(x = run*sin(as.numeric(angle)),
+                y = run*cos(as.numeric(angle)),
+                bg = gray(level = 1.0,
+                          alpha =  0.4),
+                col = c('green', 'darkgreen', 'magenta', 'purple')
+                [ifelse(colour %in% 'g',
+                        yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
+                        no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
+                pch = 21,
+                lwd = 2
+         )
+       }
+  )
+  lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
+        y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
+        col = 'green', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
+        y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
+        col = 'darkgreen', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
+        y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
+        col = 'magenta', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
+        y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
+        col = 'purple', 
+        lwd = 1)
+  mtext(ii,side = 3,line = -2)
+}
+#save and open
+dev.off()
+shell.exec.OS(new_pdf_fl)
+
 #plot mean directions
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 par(pty = 's')
@@ -889,16 +994,16 @@ par(mfrow = c(2,2), mar = c(0,0,0,0))
 par(pty = 's')
 PCfun(angles = full_sun_diff_gh,
       col = 'green',
-      title = 'Green Bright')
+      title = 'Green Bright - Geographic Bearing')
 PCfun(angles = full_sun_diff_gl,
       col = 'darkgreen',
-      title = 'Green Dim')
+      title = 'Green Dim - Geographic Bearing')
 PCfun(angles = full_sun_diff_uh,
       col = 'magenta',
-      title = 'UV Bright')
+      title = 'UV Bright - Geographic Bearing')
 PCfun(angles = full_sun_diff_ul,
       col = 'purple',
-      title = 'UV Dim')
+      title = 'UV Dim - Geographic Bearing')
 
 #plot differences
 par(mfrow = c(2,2), mar = c(0,0,0,0))
@@ -919,6 +1024,76 @@ PCfun(angles = unlist(full_mu_diff_gul),
       col = 'gray25',
       shrink = 2,
       title = 'UV Dim - Green Dim')
+
+
+# Plot turn arc by trial & group ------------------------------------------
+OpenCplot = function(x,
+                     angle_unit = 'degrees',
+                     angle_rot = 'clock'
+                     )
+{
+  plot.circular(x = circular(x = NULL, 
+                             type = 'angles',
+                             unit = angle_unit,
+                             template = 'geographics',
+                             modulo = '2pi',
+                             zero = pi/2,
+                             rotation = angle_rot
+  ),
+  col = NA
+  )
+  lines.circular(x = circular(x = 
+                                seq(from = -180,
+                                    to = 180,
+                                    length.out = 1e3),
+                              units = angle_unit, 
+                              rotation = angle_rot),  
+                 y = rep(x = 0.8-1,times = 1e3),
+                 col = 'black', 
+                 lty = 2,
+                 lwd = 0.25,
+                 lend = 'butt')
+}
+
+DiffArc = function(a1, a2, r1, r2, 
+                   col1 = 'cyan4',
+                   col2 = 'darkblue',
+                   angle_rot = 'clock',
+                   ...)
+{
+  lines.circular(x = circular(x = seq(from = Mod360.180(a1), 
+                                      to = Mod360.180(a2),
+                                      length.out =1e2), 
+                              type = 'angles',
+                              unit = 'degrees',
+                              modulo = '2pi',
+                              zero = pi/2,
+                              rotation = angle_rot),
+                 y =  seq(from = r1, 
+                          to = r2,
+                          length.out = 1e2
+                 )-1,
+                 ...
+  )
+  points(x = c(sin(rad(a1)) * r1,
+               sin(rad(a2)) * r2
+  ), 
+  y = c(cos(rad(a1)) * r1,
+        cos(rad(a2)) * r2
+  ), 
+  col = adjustcolor(col = c(col1,col2),
+                    alpha.f = 0.5),
+  pch= c(21, 19),
+  lwd = 2
+  )
+}
+#WIP
+# OpenCplot()
+# with(full_mean_vectors,
+#       DiffArc(a1 = subset(mu, colour %in% 'g' & brightn %in% 'h'),
+#               )
+
+
 
 # Estimate Coefficients for Model -----------------------------------------
 
