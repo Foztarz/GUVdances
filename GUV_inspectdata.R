@@ -1207,7 +1207,7 @@ with(subset(full_mean_vectors,
      }
     )
 }
-mtext(text = 'UV Bright to UV Dim',
+mtext(text = 'Green Dim to UV Dim',
       side = 1,
       line = -1,
       cex = 0.5)
