@@ -1029,13 +1029,14 @@ PCfun(angles = unlist(full_mu_diff_gul),
 # Plot turn arc by trial & group ------------------------------------------
 OpenCplot = function(x,
                      angle_unit = 'degrees',
-                     angle_rot = 'clock'
+                     angle_rot = 'clock',
+                     n_sample = 10
                      )
 {
   plot.circular(x = circular(x = NULL, 
                              type = 'angles',
                              unit = angle_unit,
-                             template = 'geographics',
+                             # template = 'geographics',
                              modulo = '2pi',
                              zero = pi/2,
                              rotation = angle_rot
@@ -1048,7 +1049,7 @@ OpenCplot = function(x,
                                     length.out = 1e3),
                               units = angle_unit, 
                               rotation = angle_rot),  
-                 y = rep(x = 0.8-1,times = 1e3),
+                 y = rep(x = sqrt(-log(0.05)/n_sample)-1,times = 1e3),
                  col = 'black', 
                  lty = 2,
                  lwd = 0.25,
@@ -1061,8 +1062,13 @@ DiffArc = function(a1, a2, r1, r2,
                    angle_rot = 'clock',
                    ...)
 {
-  lines.circular(x = circular(x = seq(from = Mod360.180(a1), 
-                                      to = Mod360.180(a2),
+  ma1 = Mod360.180(a1)
+  ma2 = Mod360.180(a2)
+  
+  if(ma2 - ma1 < 180) #fix for excess arc lengths
+  {
+  lines.circular(x = circular(x = seq(from = ma1, 
+                                      to = ma2,
                                       length.out =1e2), 
                               type = 'angles',
                               unit = 'degrees',
@@ -1075,6 +1081,23 @@ DiffArc = function(a1, a2, r1, r2,
                  )-1,
                  ...
   )
+  }else
+  {
+  lines.circular(x = circular(x = seq(from = ma1+360, 
+                                      to = ma2,
+                                      length.out =1e2), 
+                              type = 'angles',
+                              unit = 'degrees',
+                              modulo = '2pi',
+                              zero = pi/2,
+                              rotation = angle_rot),
+                 y =  seq(from = r1, 
+                          to = r2,
+                          length.out = 1e2
+                 )-1,
+                 ...
+  )
+  }
   points(x = c(sin(rad(a1)) * r1,
                sin(rad(a2)) * r2
   ), 
@@ -1087,12 +1110,107 @@ DiffArc = function(a1, a2, r1, r2,
   lwd = 2
   )
 }
-#WIP
-# OpenCplot()
-# with(full_mean_vectors,
-#       DiffArc(a1 = subset(mu, colour %in% 'g' & brightn %in% 'h'),
-#               )
 
+#Make plot
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'Green Bright to Green Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+#open the loop
+for(ii in full_ids)
+{
+with(subset(full_mean_vectors,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'g' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'g' & 
+                                brightn %in% 'l'],
+              col1 = 'green',
+              col2 = 'darkgreen'
+              )
+     }
+    )
+}
+
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'UV Bright to UV Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+for(ii in full_ids)
+{
+with(subset(full_mean_vectors,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'u' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'u' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'l'],
+              col1 = 'magenta',
+              col2 = 'purple'
+              )
+     }
+    )
+}
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'Green Bright to UV Bright',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+for(ii in full_ids)
+{
+with(subset(full_mean_vectors,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'h'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'h'],
+              col1 = 'green',
+              col2 = 'magenta'
+              )
+     }
+    )
+}
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+for(ii in full_ids)
+{
+with(subset(full_mean_vectors,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'l'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'l'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'l'],
+              col1 = 'darkgreen',
+              col2 = 'purple'
+              )
+     }
+    )
+}
+mtext(text = 'UV Bright to UV Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
 
 
 # Estimate Coefficients for Model -----------------------------------------
