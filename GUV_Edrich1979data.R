@@ -467,6 +467,7 @@ system.time(
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
+                     control = list(adapt_delta = 0.9), #finer sampling
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
@@ -493,6 +494,7 @@ system.time(
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
+                     control = list(adapt_delta = 0.9), #finer sampling
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
@@ -643,7 +645,7 @@ with(subset(pred_data, colour == 'UV'),
 )
 
 legend(x = 'bottomright',
-       legend = sort(unique(ed$wavelength),
-                     decreasing = TRUE),
+       legend = paste(sort(unique(ed$wavelength),
+                     decreasing = TRUE), 'nm'),
        col = c('darkgreen','blue', 'purple'),
        pch = c(20, 20, 20))
