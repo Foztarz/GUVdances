@@ -953,6 +953,19 @@ for(ii in full_ids)
 dev.off()
 shell.exec.OS(new_pdf_fl)
 
+
+## Calculate accuracy summary --------------------------------------------
+agg_full_mean_vectors = aggregate(mean_vector ~ colour*brightn, 
+          data = full_mean_vectors,
+          summary,
+          digits = 3)
+print(agg_full_mean_vectors, digits = 3)
+## colour brightn mean_vector.Min. mean_vector.1st Qu. mean_vector.Median mean_vector.Mean mean_vector.3rd Qu. mean_vector.Max.
+## 1      g       h           0.2527              0.8145             0.9058           0.8487              0.9691           1.0000
+## 2      u       h           0.9107              0.9286             0.9571           0.9520              0.9648           0.9873
+## 3      g       l           0.1324              0.5281             0.7348           0.6531              0.8581           0.9847
+## 4      u       l           0.0767              0.4977             0.6664           0.6461              0.8146           0.9154
+
 #plot mean directions
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 par(pty = 's')
