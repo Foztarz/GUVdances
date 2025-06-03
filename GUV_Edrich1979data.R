@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 05 30
-#     MODIFIED:	James Foster              DATE: 2025 05 30
+#     MODIFIED:	James Foster              DATE: 2025 06 03
 #
 #  DESCRIPTION: Load data and plot
 #               
@@ -10,7 +10,7 @@ graphics.off()
 #               
 #      OUTPUTS: csv
 #
-#	   CHANGES: - 
+#	   CHANGES: - Using Beta(mu, phi) distribution to fit
 #
 #   REFERENCES: Edrich, W., Neumeyer, C. and von Helversen, O. (1979).
 #               “Anti-sun orientation” of bees with regard to a field of ultraviolet light. 
@@ -22,9 +22,10 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Load data  
-#- Plot
-#- Fit curves
+#- Load data  +
+#- Plot       +
+#- Fit curves +
+#- Switch to beta distribution +
 
 
 
@@ -648,4 +649,704 @@ legend(x = 'bottomright',
        legend = paste(sort(unique(ed$wavelength),
                      decreasing = TRUE), 'nm'),
        col = c('darkgreen','blue', 'purple'),
-       pch = c(20, 20, 20))
+       pch = c(20, 20, 20),
+       lwd = 3)
+# Beta Psychometric version ----------------------------------------------------
+
+
+#set up model fit
+formula_beta = bf(
+  #set up a formula for the curve as a whole,
+  #including parameters found in the data (correct_incorrect, stimulus)
+  #and parameters that we wish to estimate (baseline, lapse rate, inflection point, width).
+  #Most of these are subject to further fixed (type) and random (animal) effects,
+  #these need to be defined for each parameter.
+  
+  #Two parameters need special transformations
+  #To keep the output between 0 and 1, additional effects of lapse rate
+  #will be added on the "logit" scale (Lapse = inv_logit(LogitLapse)).
+  #To avoid curve widths of 0, we can assume a positive slope (≥0)
+  #and add additional effects to width on a log scale (Width = exp(LogWidth))
+  formula = accuracy ~ 
+    inv_logit(LogitBase) + (1 - inv_logit(LogitLapse) - inv_logit(LogitBase) ) *#curve region
+    inv_logit( 4.39*(log10_intensity - Inflex) / exp(LogWidth) ) , #inflection-width curve
+  # for each of these parameters, we can set up a separate formula 
+  # that describes how to predict them from the data 
+  #Base rate of correct choices: "
+  LogitBase ~ 1, #Base rate of correct choices: "~ 1" gives the instruction "estimate the mean across all data"
+  #Lapse rate on a log(odds) scale:
+  LogitLapse ~ colour, #this is similar to the formula in our LMM example
+  #inflection point of the initial curve:
+  Inflex ~ colour, #N.B. this is similar to the intercept, so it does not include effects of stimulus level
+  #log 80% width of the curve:
+  LogWidth ~ colour, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  family = Beta(link = "identity", link_phi = 'log'),
+  nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
+
+
+#set up priors
+prior_beta = get_prior(formula = formula_beta,
+                     data = ed)
+
+print(
+  with(prior_beta,
+       paste0(class, '_', nlpar, '_', coef))
+  )
+
+# . . Base rate prior -----------------------------------------------------
+#for the baseline, we will use a logit-normal distribution with a bias towards 0.5
+
+#N.B. this seems to require slightly tighter priors
+
+#set the prior distribution
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitBase' &
+                      coef %in% 'Intercept' 
+                  ] = 'normal(-1,1)' #a normal distribution centred on plogis(-1) = 0.27
+                  })
+#this prior is automatically bounded between 0 and 1, 
+# . . Lapse rate priors ---------------------------------------------------
+
+# set the prior distribution
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'Intercept' 
+                  ] = 'normal(-3,2)' #a normal distribution centred on -3
+                  })
+
+#for all other fixed effects on lapse rate, we'll suggest values around 0 (no effect)
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'colourblue' 
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
+                  })
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'colourUV' 
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
+                  })
+
+# . . Inflection point priors ---------------------------------------------
+
+#set the priors
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Inflex' &
+                      coef %in% 'Intercept'
+                  ] = 'normal(11,2)' #a normal distribution:mean 11, sd 2
+                  })
+#for all coefficients, we'll suggest values around 0 (no effect)
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Inflex' &
+                      coef %in% 'colourblue' 
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 2
+                  })
+
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Inflex' &
+                      coef %in% 'colourUV' 
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 2
+                  })
+
+# . . Rise region width priors --------------------------------------------
+
+#set prior distribution
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogWidth' &
+                      coef %in% 'Intercept' 
+                  ] = 'normal(1,2)' #a normal distribution:mean 1, sd 3
+                  })
+#for all coefficients, we'll suggest values around 0 (no effect)
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogWidth' &
+                      coef %in% 'colourblue'
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
+                  })
+prior_beta = within(prior_beta, 
+                  { prior[
+                    class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogWidth' &
+                      coef %in% 'colourUV'
+                  ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
+                  })
+#inspect assigned priors
+print(prior_beta)
+##                 prior class       coef group resp dpar      nlpar lb ub  source
+##  student_t(3, 0, 2.5) sigma                                        0    default
+##                (flat)     b                                Inflex       default
+##           normal(0,3)     b colourblue                     Inflex       default
+##           normal(0,3)     b   colourUV                     Inflex       default
+##           normal(3,3)     b  Intercept                     Inflex       default
+##                (flat)     b                             LogitBase       default
+##           normal(0,1)     b  Intercept                  LogitBase       default
+##           (flat)     b                            LogitLapse       default
+##           normal(0,3)     b colourblue                 LogitLapse       default
+##           normal(0,3)     b   colourUV                 LogitLapse       default
+##           normal(-3,3)     b  Intercept                 LogitLapse       default
+##                (flat)     b                              LogWidth       default
+##           normal(0,3)     b colourblue                   LogWidth       default
+##           normal(0,3)     b   colourUV                   LogWidth       default
+##           normal(1,3)     b  Intercept                   LogWidth       default
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    dummy_beta = brm( formula = formula_beta, # using our nonlinear formula
+                     data = ed, # our data
+                     prior = prior_beta, # our priors 
+                     sample_prior = 'only', #ignore the data to check the influence of the priors
+                     iter = 300, # short run for 300 iterations
+                     chains = 4, # 4 chains in parallel
+                     cores = 4, # on 4 CPUs
+                     refresh = 0, # don't echo chain progress
+                     control = list(adapt_delta = 0.9), #finer sampling
+                     backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+
+
+#the default plot shows the values estimated for each parameter
+# in each chain for each iteration
+#fixed effects
+plot(dummy_beta, 
+     nvariables = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    beta_fit = brm( formula = formula_beta, # using our nonlinear formula
+                     data = ed, # our data
+                     prior = prior_beta, # our priors 
+                     iter = 4000, # long run for 2000 iterations
+                     chains = 4, # 4 chains in parallel
+                     cores = 4, # on 4 CPUs
+                     refresh = 0, # don't echo chain progress
+                     control = list(adapt_delta = 0.95), #finer sampling
+                     backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+
+
+#the default plot shows the values estimated for each parameter
+# in each chain for each iteration
+#fixed effects
+plot(beta_fit, 
+     nvariables = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+plot(
+  conditional_effects(x = beta_fit, 
+                      spaghetti = TRUE, 
+                      ndraws = 2e2,
+                      effects = 'log10_intensity')
+)
+
+#and effects of colour (mean correct accuracy just slightly above baseline)
+plot(
+  conditional_effects(x = beta_fit, 
+                      effects = 'colour')
+)
+
+#summary of parameter estimates
+full_sm_beta = summary(beta_fit,
+                  robust = TRUE)#use the median estimate
+
+# . . Check parameter estimates -----------------------------------------------
+
+#We can also check if these estimates match with our expectations.
+#Extract fixed effects estimates
+full_fix_beta = full_sm_beta$fixed
+#extract rownames
+full_fix_rn_beta = rownames(full_fix_beta)
+
+# stimulus levels to add to the dataset to be able to measure this effect.
+full_estimates_beta = full_fix_beta$Estimate
+names(full_estimates_beta) = full_fix_rn_beta
+
+# to predict all effects, we can use the 'posterior_epred' method
+#by default 100 predictions per continuous variable (but fewer for their interactions)
+system.time(
+  {
+    full_cond_beta =brms::conditional_effects(beta_fit, 
+                                         method = 'posterior_epred', # posterior epred not working
+                                         cores =  parallel::detectCores()-1,
+                                         effects = c('log10_intensity:colour')
+    )
+  }
+)#takes <2 seconds
+#extract predictions
+pred_data_beta = full_cond_beta$`log10_intensity:colour`
+#plot each stimulus type
+with(ed,
+     {
+       plot(x = log10_intensity,
+            y = accuracy,
+            main = 
+    'Edrich et al. 1979 Fig. 2. Dance precision
+    as a function of light intensity & wavelength',
+            xlab = 'log10(intensity) (photons/cm2/s)',
+            ylab = 'accuracy (r)',
+            ylim = c(0,1),
+            xlim = c(9,14),
+            pch = 21,
+            cex = 1.5,
+            col = 'black',
+            bg = sapply(paste(wavelength),
+                        FUN = switch,
+                        `354` = 'purple',
+                        `429` = 'blue',
+                        `535` = 'darkgreen',
+                        'red')
+       )
+       abline(h = c(0,1))
+     }
+)
+with(data.frame(t(full_estimates_beta)),
+     {
+  abline(h = c(0,1,
+               plogis(LogitBase_Intercept),
+               1- plogis(LogitLapse_Intercept) ), 
+         lty = c(1,1,3,3)
+         )
+     }
+)
+
+#plot total prediction intervals
+with(subset(pred_data_beta, colour == '0green'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data_beta, colour == 'blue'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('cyan', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data_beta, colour == 'UV'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+
+#plot the median prediction lines
+with(subset(pred_data_beta, colour == '0green'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'darkgreen',
+           lwd = 3)
+)
+with(subset(pred_data_beta, colour == 'blue'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'darkblue',
+           lwd = 3)
+)
+with(subset(pred_data_beta, colour == 'UV'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'purple4',
+           lwd = 3)
+)
+
+legend(x = 'bottomright',
+       legend = paste(sort(unique(ed$wavelength),
+                     decreasing = TRUE), 'nm'),
+       col = c('darkgreen','blue', 'purple'),
+       pch = c(20, 20, 20),
+       lwd = 3)
+
+
+# Compare with model without different maxima -----------------------------
+
+
+#set up model fit
+formula_beta_equal = bf(
+  #set up a formula for the curve as a whole,
+  #including parameters found in the data (correct_incorrect, stimulus)
+  #and parameters that we wish to estimate (baseline, lapse rate, inflection point, width).
+  #Most of these are subject to further fixed (type) and random (animal) effects,
+  #these need to be defined for each parameter.
+  
+  #Two parameters need special transformations
+  #To keep the output between 0 and 1, additional effects of lapse rate
+  #will be added on the "logit" scale (Lapse = inv_logit(LogitLapse)).
+  #To avoid curve widths of 0, we can assume a positive slope (≥0)
+  #and add additional effects to width on a log scale (Width = exp(LogWidth))
+  formula = accuracy ~ 
+    inv_logit(LogitBase) + (1 - inv_logit(LogitLapse) - inv_logit(LogitBase) ) *#curve region
+    inv_logit( 4.39*(log10_intensity - Inflex) / exp(LogWidth) ) , #inflection-width curve
+  # for each of these parameters, we can set up a separate formula 
+  # that describes how to predict them from the data 
+  #Base rate of correct choices: "
+  LogitBase ~ 1, #Base rate of correct choices: "~ 1" gives the instruction "estimate the mean across all data"
+  #Lapse rate on a log(odds) scale:
+  LogitLapse ~ 1, #this is similar to the formula in our LMM example
+  #inflection point of the initial curve:
+  Inflex ~ colour, #N.B. this is similar to the intercept, so it does not include effects of stimulus level
+  #log 80% width of the curve:
+  LogWidth ~ colour, #N.B. this is similar to the slope, so all of its effects depend on stimulus level
+  family = Beta(link = "identity", link_phi = 'log'),
+  nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
+
+
+#set up priors
+prior_beta_equal = get_prior(formula = formula_beta_equal,
+                       data = ed)
+
+print(
+  with(prior_beta_equal,
+       paste0(class, '_', nlpar, '_', coef))
+)
+
+# . . Base rate prior -----------------------------------------------------
+#for the baseline, we will use a logit-normal distribution with a bias towards 0.5
+
+#N.B. this seems to require even tighter priors
+
+#set the prior distribution
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'LogitBase' &
+                        coef %in% 'Intercept' 
+                    ] = 'normal(-1,1)' #a normal distribution centred on plogis(-1) = 0.27
+                    })
+#this prior is automatically bounded between 0 and 1, 
+# . . Lapse rate priors ---------------------------------------------------
+
+# set the prior distribution
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'LogitLapse' &
+                        coef %in% 'Intercept' 
+                    ] = 'normal(-3.5,1.5)' #a normal distribution centred on -3
+                    })
+
+# . . Inflection point priors ---------------------------------------------
+
+#set the priors
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'Inflex' &
+                        coef %in% 'Intercept'
+                    ] = 'normal(11,2)' #a normal distribution:mean 11, sd 2
+                    })
+#for all coefficients, we'll suggest values around 0 (no effect)
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'Inflex' &
+                        coef %in% 'colourblue' 
+                    ] = 'normal(0,2)' #a normal distribution:mean 0, sd 2
+                    })
+
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'Inflex' &
+                        coef %in% 'colourUV' 
+                    ] = 'normal(0,2)' #a normal distribution:mean 0, sd 2
+                    })
+
+# . . Rise region width priors --------------------------------------------
+
+#set prior distribution
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'LogWidth' &
+                        coef %in% 'Intercept' 
+                    ] = 'normal(1,1.5)' #a normal distribution:mean 1, sd 3
+                    })
+#for all coefficients, we'll suggest values around 0 (no effect)
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'LogWidth' &
+                        coef %in% 'colourblue'
+                    ] = 'normal(0,1.5)' #a normal distribution:mean 0, sd 3
+                    })
+prior_beta_equal = within(prior_beta_equal, 
+                    { prior[
+                      class %in% 'b' & #just the fixed effects
+                        nlpar %in% 'LogWidth' &
+                        coef %in% 'colourUV'
+                    ] = 'normal(0,1.5)' #a normal distribution:mean 0, sd 3
+                    })
+#inspect assigned priors
+print(prior_beta_equal)
+##                 prior class       coef group resp dpar      nlpar lb ub  source
+##  student_t(3, 0, 2.5) sigma                                        0    default
+##                (flat)     b                                Inflex       default
+##           normal(0,3)     b colourblue                     Inflex       default
+##           normal(0,3)     b   colourUV                     Inflex       default
+##           normal(3,3)     b  Intercept                     Inflex       default
+##                (flat)     b                             LogitBase       default
+##           normal(0,1)     b  Intercept                  LogitBase       default
+##           (flat)     b                            LogitLapse       default
+##           normal(0,3)     b colourblue                 LogitLapse       default
+##           normal(0,3)     b   colourUV                 LogitLapse       default
+##           normal(-3,3)     b  Intercept                 LogitLapse       default
+##                (flat)     b                              LogWidth       default
+##           normal(0,3)     b colourblue                   LogWidth       default
+##           normal(0,3)     b   colourUV                   LogWidth       default
+##           normal(1,3)     b  Intercept                   LogWidth       default
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    dummy_beta_equal = brm( formula = formula_beta_equal, # using our nonlinear formula
+                      data = ed, # our data
+                      prior = prior_beta_equal, # our priors 
+                      sample_prior = 'only', #ignore the data to check the influence of the priors
+                      iter = 300, # short run for 300 iterations
+                      chains = 4, # 4 chains in parallel
+                      cores = 4, # on 4 CPUs
+                      refresh = 0, # don't echo chain progress
+                      control = list(adapt_delta = 0.95), #finer sampling
+                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+
+
+#the default plot shows the values estimated for each parameter
+# in each chain for each iteration
+#fixed effects
+plot(dummy_beta_equal, 
+     nvariables = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+system.time(
+  {
+    beta_equal_fit = brm( formula = formula_beta_equal, # using our nonlinear formula
+                    data = ed, # our data
+                    prior = prior_beta_equal, # our priors 
+                    iter = 4000, # long run for 2000 iterations
+                    chains = 4, # 4 chains in parallel
+                    cores = 4, # on 4 CPUs
+                    refresh = 0, # don't echo chain progress
+                    control = list(adapt_delta = 0.95), #finer sampling
+                    backend = 'cmdstanr') # use cmdstanr (other compilers broken)
+  }
+)
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
+
+
+#the default plot shows the values estimated for each parameter
+# in each chain for each iteration
+#fixed effects
+plot(beta_equal_fit, 
+     nvariables = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+plot(
+  conditional_effects(x = beta_equal_fit, 
+                      spaghetti = TRUE, 
+                      ndraws = 2e2,
+                      effects = 'log10_intensity')
+)
+
+#and effects of colour (mean correct accuracy just slightly above baseline)
+plot(
+  conditional_effects(x = beta_equal_fit, 
+                      effects = 'colour')
+)
+
+#summary of parameter estimates
+full_sm_beta_equal = summary(beta_equal_fit,
+                       robust = TRUE)#use the median estimate
+
+# . . Check parameter estimates -----------------------------------------------
+
+#We can also check if these estimates match with our expectations.
+#Extract fixed effects estimates
+full_fix_beta_equal = full_sm_beta_equal$fixed
+#extract rownames
+full_fix_rn_beta_equal = rownames(full_fix_beta_equal)
+
+# stimulus levels to add to the dataset to be able to measure this effect.
+full_estimates_beta_equal = full_fix_beta_equal$Estimate
+names(full_estimates_beta_equal) = full_fix_rn_beta_equal
+
+# to predict all effects, we can use the 'posterior_epred' method
+#by default 100 predictions per continuous variable (but fewer for their interactions)
+system.time(
+  {
+    full_cond_beta_equal =brms::conditional_effects(beta_equal_fit, 
+                                              method = 'posterior_epred', # posterior epred not working
+                                              cores =  parallel::detectCores()-1,
+                                              effects = c('log10_intensity:colour')
+    )
+  }
+)#takes <2 seconds
+#extract predictions
+pred_data_beta_equal = full_cond_beta_equal$`log10_intensity:colour`
+#plot each stimulus type
+with(ed,
+     {
+       plot(x = log10_intensity,
+            y = accuracy,
+            main = 
+'Edrich et al. 1979 Fig. 2. Dance precision
+as a function of light intensity & wavelength
+—equal maxima',
+            xlab = 'log10(intensity) (photons/cm2/s)',
+            ylab = 'accuracy (r)',
+            ylim = c(0,1),
+            xlim = c(9,14),
+            pch = 21,
+            cex = 1.5,
+            col = 'black',
+            bg = sapply(paste(wavelength),
+                        FUN = switch,
+                        `354` = 'purple',
+                        `429` = 'blue',
+                        `535` = 'darkgreen',
+                        'red')
+       )
+       abline(h = c(0,1))
+     }
+)
+with(data.frame(t(full_estimates_beta_equal)),
+     {
+       abline(h = c(0,1,
+                    plogis(LogitBase_Intercept),
+                    1- plogis(LogitLapse_Intercept) ), 
+              lty = c(1,1,3,3)
+       )
+     }
+)
+
+#plot total prediction intervals
+with(subset(pred_data_beta_equal, colour == '0green'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data_beta_equal, colour == 'blue'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('cyan', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data_beta_equal, colour == 'UV'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+
+#plot the median prediction lines
+with(subset(pred_data_beta_equal, colour == '0green'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'darkgreen',
+           lwd = 3)
+)
+with(subset(pred_data_beta_equal, colour == 'blue'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'darkblue',
+           lwd = 3)
+)
+with(subset(pred_data_beta_equal, colour == 'UV'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'purple4',
+           lwd = 3)
+)
+
+legend(x = 'bottomright',
+       legend = paste(sort(unique(ed$wavelength),
+                           decreasing = TRUE), 'nm'),
+       col = c('darkgreen','blue', 'purple'),
+       pch = c(20, 20, 20),
+       lwd = 3)
+
+
+# Model comparison --------------------------------------------------------
+#How robust is the model to changes in the data structure?
+#Would the model make good predictions refitted the model but dropped one datapoint, would it still give good predictions?
+# calculate the Leave-One-Out (LOO) cross validation metric for the model
+loo_normal = loo(nl_fit)#calculate for full model 
+loo_beta = loo(beta_fit)#calculate for beta distributed model
+loo_equal = loo(beta_equal_fit)#calculate for equal-lapse model
+
+loo_compare(loo_normal,
+            loo_beta,
+            loo_equal)
+
