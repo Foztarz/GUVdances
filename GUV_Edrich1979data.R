@@ -11,11 +11,20 @@ graphics.off()
 #      OUTPUTS: csv
 #
 #	   CHANGES: - Using Beta(mu, phi) distribution to fit
+#             - Comparisons of light sources
 #
 #   REFERENCES: Edrich, W., Neumeyer, C. and von Helversen, O. (1979).
 #               “Anti-sun orientation” of bees with regard to a field of ultraviolet light. 
 #               J. Comp. Physiol. 134, 151–157.
 #
+#               Stavenga, D. G. (2010).
+#               On visual pigment templates and the spectral shape of invertebrate rhodopsins and metarhodopsins.
+#               J. Comp. Physiol. A 196, 869–878.
+#
+#               Kühn, N. (2017).
+#               Lichtintensität wird der Wellenlänge als Orientierungspunkt
+#               während des Schwänzeltanzes der Bienen vorgezogen
+#               Masters Thesis, Philipps Universität Marburg
 #
 #    EXAMPLES:  
 #
@@ -26,6 +35,7 @@ graphics.off()
 #- Plot       +
 #- Fit curves +
 #- Switch to beta distribution +
+#- Comment
 
 
 
@@ -1350,3 +1360,404 @@ loo_compare(loo_normal,
             loo_beta,
             loo_equal)
 
+
+# Inspect curve equations for use elsewhere -------------------------------
+
+#Green light curve
+g_curve = 
+with(data.frame(t(full_estimates_beta)),
+     {
+       list(Base = plogis(LogitBase_Intercept),
+            Maxima = 1- plogis(LogitLapse_Intercept), 
+            Inflection = Inflex_Intercept,  
+            Width = exp(LogWidth_Intercept)  
+       )
+     }
+)
+
+#UV light curve
+u_curve = 
+with(data.frame(t(full_estimates_beta)),
+     {
+       list(Base = plogis(LogitBase_Intercept),
+            Maxima = 1- plogis(LogitLapse_Intercept + LogitLapse_colourUV), 
+            Inflection = Inflex_Intercept + Inflex_colourUV,  
+            Width = exp(LogWidth_Intercept + LogWidth_colourUV)  
+       )
+     }
+)
+
+print(cbind(g_curve, u_curve),digits = 3)
+##           g_curve u_curve
+## Base       0.142   0.142  
+## Maxima     0.951   0.816  
+## Inflection 11.2    10.4   
+## Width      1.23    0.643  
+
+# Comparing UV to green
+#accuracy reaches 50% at nearly 1 log unit lower intensity for UV
+print(full_fix_beta['Inflex_colourUV',c(1,3:4)], digits = 3)
+##                 Estimate   l-95% CI   u-95% CI
+## Inflex_colourUV   -0.783   -0.965   -0.567
+
+#But maximum accuracy is lower by 1.5 log units for UV
+print(full_fix_beta['LogitLapse_colourUV',c(1,3:4)], digits = 3)
+##                         Estimate l-95% CI u-95% CI
+## LogitLapse_colourUV     1.49    0.508     2.37
+
+#while there is a noticeable difference in width,
+#this overlaps with 0 on a log scale
+print(full_fix_beta['LogWidth_colourUV',c(1,3:4)], digits = 3)
+##                   Estimate l-95% CI u-95% CI
+## LogWidth_colourUV   -0.645    -2.34    0.321
+
+log10(4e12)
+log10(4e14)
+
+## colour brightn Min.    1st Qu. Median  Mean    3rd Qu. Max.
+## g       h      0.2527  0.8145  0.9058  0.8487  0.9691  1.0000
+## u       h      0.9107  0.9286  0.9571  0.9520  0.9648  0.9873
+## g       l      0.1324  0.5281  0.7348  0.6531  0.8581  0.9847
+## u       l      0.0767  0.4977  0.6664  0.6461  0.8146  0.9154
+
+gh_meanQ = list(mn = 0.2527,
+                  q1 = 0.8145,
+             q2 = 0.9058,
+             q3 = 0.9691,
+             mx = 1.0000)
+
+gl_meanQ = list(mn = 0.1324,
+                q1 = 0.5281,
+             q2 = 0.7348,
+             q3 = 0.8581,
+             mx = 0.9847)
+
+uh_meanQ = list(mn = 0.9107,
+                  q1 = 0.9286,
+             q2 = 0.9571,
+             q3 = 0.9648,
+             mx = 0.9873)
+
+ul_meanQ = list(mn = 0.0767,
+                q1 = 0.4977,
+             q2 = 0.6664,
+             q3 = 0.8146,
+             mx = 0.9154)
+
+xxl = seq(from = 9, to = 16,
+          length.out = 1e3)
+
+#plot each stimulus type
+ed_ug = subset(ed, wavelength != 429)
+
+with(ed_ug,
+     {
+       plot(x = log10_intensity,
+            y = accuracy,
+            main = 
+'Comparison of data from Edrich et al. 1979
+with Kühn, 2017',
+            xlab = 'log10(intensity) (photons/cm2/s)',
+            ylab = 'accuracy (r)',
+            ylim = c(0,1),
+            xlim = c(9,16),
+            pch = 21,
+            cex = 1.5,
+            col = 'black',
+            bg = sapply(paste(wavelength),
+                        FUN = switch,
+                        `354` = 'purple',
+                        `429` = 'blue',
+                        `535` = 'darkgreen',
+                        'red')
+       )
+       abline(h = c(0,1))
+       abline(v = log10(4*c(1e12,1e14)) )
+     }
+)
+
+#plot the median prediction lines
+with(g_curve, 
+     lines(x = xxl,
+           y = Base + (Maxima  - Base) * 
+             plogis(4.39*(xxl - Inflection)/Width), 
+           col = 'darkgreen',
+           lwd = 3,
+           lty = 3)
+)
+with(u_curve, 
+     lines(x = xxl,
+           y = Base + (Maxima  - Base) * 
+             plogis(4.39*(xxl - Inflection)/Width), 
+           col = 'purple4',
+           lwd = 3,
+           lty = 3)
+)
+
+#plot observed data from Kühn
+with(gh_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)-0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = 'green'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e14)-0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'darkgreen')
+     }
+     )
+
+with(gl_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)-0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = 'green'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e12)-0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'darkgreen')
+     }
+     )
+with(uh_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)+0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = 'magenta'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e14)+0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'purple')
+     }
+     )
+
+with(ul_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)+0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = 'magenta'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e12)+0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'purple')
+     }
+     )
+
+
+legend(x = 'bottomright',
+       legend = c(
+                   paste('Edrich', 
+                        sort(unique(ed_ug$wavelength),
+                           decreasing = TRUE), 'nm'),
+                   paste('  Kühn', c(528, 365), 'nm' ) 
+       ),
+       col = c('darkgreen', 'purple', 'green', 'magenta'),
+       pch = c(20, 20, 15, 15),
+       lty = c(3,3,NA, NA),
+       lwd = 3)
+
+
+# Compare with visual pigment template ------------------------------------
+
+# Make a spline template for a visual pigment
+StavengaSpline = function(spec_range = c(300, 700), #bounds of spectrum in nanometers
+                           lambda_max,#peak sensitivity
+                           a_type = 'a1'){#pigment type, only a1 available currently
+  wlns =  seq(from = min(spec_range),
+              to = max(spec_range), 
+              length.out = 1e3) #
+  #Stavenga, D. G. (2010). On visual pigment templates and the spectral shape of invertebrate rhodopsins and metarhodopsins. Journal of Comparative Physiology A: Neuroethology, Sensory, Neural, and Behavioral Physiology, 196(11), 869–878. doi:10.1007/s00359-010-0568-7
+  # modified lognormal
+  Mlognorm  = function(wl,l_max, a0, a1)
+  {
+    x = log10(wl/l_max)
+    return(
+      exp(-a0*x^2 *
+            (1+a1*x+3*a1^2*x^2)
+          )
+      )
+  }
+  if(a_type == 'a1')
+  {
+    #alpha band
+    a_band = Mlognorm(wl = wlns,
+                      l_max = lambda_max, 
+                      a0 = 380, 
+                      a1 = 6.09)
+    #beta band
+    b_band = 0.29*Mlognorm(wl = wlns, 
+                           l_max = 340, 
+                           a0 = 247, 
+                           a1 = 3.59)
+    #gamma band
+    g_band = 1.99*Mlognorm(wl = wlns, 
+                           l_max = 276, 
+                           a0 = 647, 
+                           a1 = 23.4)
+  }else
+  {stop('a2 and a3 pigments not yet implemented')}
+  # N.B. Stavenga normalises to max(a.band), I normalise to function max
+  r_stav  = (a_band + b_band + g_band)/
+              max(a_band + b_band + g_band)
+  return(    smooth.spline(x = wlns,
+                           y =  r_stav)    )
+}#StavengaSpline <- function(spec.range, lambda.max)
+
+
+g_photopig = predict(StavengaSpline(lambda_max = 526))
+u_photopig = predict(StavengaSpline(lambda_max = 344))
+
+g_Kühn_g = predict(StavengaSpline(lambda_max = 526), x = 528)
+g_Kühn_u = predict(StavengaSpline(lambda_max = 526), x = 365)
+u_Kühn_g = predict(StavengaSpline(lambda_max = 344), x = 528)
+u_Kühn_u = predict(StavengaSpline(lambda_max = 344), x = 365)
+g_Edrich_g = predict(StavengaSpline(lambda_max = 526), x = 535)
+g_Edrich_u = predict(StavengaSpline(lambda_max = 526), x = 354)
+u_Edrich_g = predict(StavengaSpline(lambda_max = 344), x = 535)
+u_Edrich_u = predict(StavengaSpline(lambda_max = 344), x = 354)
+
+ww = seq(from = 300,
+         to = 700,
+         length.out = 1e3)
+fwhm_sigma = 2 * sqrt(2 * log(2))
+
+#The UV LED has a full-width at half max of ~20nm
+rough_UV_LED = dnorm(x = ww,
+                     mean = 365,
+                     sd = 20/fwhm_sigma
+                     )/dnorm(0, sd = 20/fwhm_sigma)
+#The green LED has a full-width at half max of ~40nm
+rough_G_LED = dnorm(x = ww,
+                     mean = 528,
+                     sd = 40/fwhm_sigma
+                    )/dnorm(0, sd = 40/fwhm_sigma)
+#The UV filter has a full-width at half max of ~80nm
+rough_UV_filter = dnorm(x = ww,
+                     mean = 354,
+                     sd = 80/fwhm_sigma
+                     )/dnorm(0, sd = 80/fwhm_sigma)
+#The green filter has a full-width at half max of ~90nm
+rough_G_filter = dnorm(x = ww,
+                     mean = 528,
+                     sd = 90/fwhm_sigma
+                    )/dnorm(0, sd = 90/fwhm_sigma)
+
+ug_ratio = g_photopig$y/
+            u_photopig$y
+#somehow this produces negative values?
+ug_ratio[ug_ratio <0] = 0
+#and absurd outliers
+ug_ratio[ug_ratio > mean(ug_ratio) + 6*sd(ug_ratio)] =
+  max(ug_ratio[ug_ratio < mean(ug_ratio) + 6*sd(ug_ratio)])
+ug_ratio[ww > 550] = predict(smooth.spline(x = ww,
+                                           y = ug_ratio,
+                                           spar = 0.5)
+                             )$y[ww>550]
+
+plot(NULL,
+     xlim = c(300, 700),
+     ylim = c(0,1),
+     xlab = 'wavelength (nm)',
+     ylab = 'relative absoption | emission | transmission',
+     main = 'comparison of light sources\nused by Edrich & Kühn')
+abline(h = c(0,1))
+lines(u_photopig,
+      lwd = 3,
+      col = 'purple')
+lines(g_photopig,
+      lwd = 3,
+      col = 'darkgreen')
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_UV_LED, 0, 0),
+        col = adjustcolor('magenta', alpha.f = 25/255),
+        border = 'magenta')
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_G_LED, 0, 0),
+        col = adjustcolor('green', alpha.f = 25/255),
+        border = 'green')
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_UV_filter, 0, 0),
+        col = adjustcolor('magenta4', alpha.f = 25/255),
+        border = 'magenta4',
+        lty = 3)
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_G_filter, 0, 0),
+        col = adjustcolor('green3', alpha.f = 25/255),
+        border = 'green3',
+        lty = 3)
+points(x = c(354, 365, 528, 535),
+       y = c(0,0,0,0),
+       pch = c(4,3,3,4),
+       lwd = 3,
+       col = c('magenta4', 'magenta', 'green2', 'green4'))
+legend(x = 'topright',
+       legend = c('UV opsin',
+                  'green opsin',
+                  'Schott UG1 filter',
+                  'Schott VG9 filter',
+                  'UV LED',
+                  'green LED'),
+       col = c('purple',
+               'darkgreen',
+               'magenta4',
+               'green4',
+               'magenta',
+               'green2'),
+       pch = c(NA, NA, 4, 4, 3, 3),
+       lty = c(1, 1, 3, 3, 1, 1),
+       lwd = 2,
+       cex = 0.5
+       )
+
+plot(NULL,
+     xlim = c(300, 700),
+     ylim = c(0.1,1e23),
+     xlab = 'wavelength (nm)',
+     ylab = 'G/UV relative sensitivity',
+     main = 'Comparison of light sources\nwith predicted relative sensitivity',
+     log = 'y')
+abline(h = 1,
+       lwd = 3,
+       lty = 2)
+lines(x = ww,
+      y = ug_ratio,
+      lwd = 5,
+      col = 'black')
+abline(v = c(354, 365, 528, 535))
+par(new = TRUE)
+plot(NULL,
+     xlim = c(300, 700),
+     ylim = c(0,1),
+     xlab = '',
+     ylab = '',
+      axes = F)
+axis(side = 4, at = 0:4/4)
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_UV_LED, 0, 0),
+        col = adjustcolor('magenta', alpha.f = 25/255),
+        border = 'magenta')
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_G_LED, 0, 0),
+        col = adjustcolor('green', alpha.f = 25/255),
+        border = 'green')
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_UV_filter, 0, 0),
+        col = adjustcolor('magenta4', alpha.f = 25/255),
+        border = 'magenta4',
+        lty = 3)
+polygon(x = c(ww, rev(range(ww))),
+        y = c(rough_G_filter, 0, 0),
+        col = adjustcolor('green3', alpha.f = 25/255),
+        border = 'green3',
+        lty = 3)
