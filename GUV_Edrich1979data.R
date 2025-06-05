@@ -145,6 +145,8 @@ xl = seq(from = 9,
 nd = data.frame(log10_intensity = xl)
 nd = merge(x = ed, y = nd, all.y = TRUE)
 
+par(mfrow = c(1,1),
+    mar = c(4.5, 4.5, 4.5, 4.5))
 with(ed,
      {
        plot(x = log10_intensity,
