@@ -815,7 +815,7 @@ luc = sapply(u_id,
 
 #Most individuals that made it to bright green 
 full_ids = u_id[luc == 4]
-length(full_ids)#17 individuals #I count 19...
+length(full_ids)#I count 19...
 #extract just those individuals
 
 
