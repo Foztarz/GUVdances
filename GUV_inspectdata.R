@@ -810,7 +810,8 @@ IndCond = function(id, dt)
 
 luc = sapply(u_id,
               FUN = IndCond,
-              dt = mean_vectors)
+              # dt = mean_vectors)
+              dt = cd)#using cd, we get 19
 
 #Most individuals that made it to bright green 
 full_ids = u_id[luc == 4]
