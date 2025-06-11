@@ -16,11 +16,11 @@ editor_options:
 
 > **AUTHOR**
 >
-> James Foster 2025 06 05
+> James Foster $2025~06~05$
 
 > **MODIFIED**
 >
-> James Foster 2025 06 11
+> James Foster $2025~06~11$
 
 > **DESCRIPTION**
 >
@@ -28,7 +28,7 @@ editor_options:
 
 > **INPUTS**
 >
-> *`colour_dance_reorg.csv`* `Edrich1979_brightness-accuracy.csv`
+> `colour_dance_reorg.csv`, `Edrich1979_brightness-accuracy.csv`
 
 > **OUTPUTS**
 >
@@ -111,7 +111,7 @@ full_cd = subset(cd, ID %in% full_ids)
 Plot all 169 dances
 
 ```{r Raw dances, echo=FALSE, warning=FALSE}
-
+#TODO make function
 #set up a sequence for the axes
 xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
 par(mfrow = c(2, 2),
@@ -292,14 +292,6 @@ abline(h = c(0,1))
 This effect is even clearer if we look at just the full condition dances.
 
 ```{r Plot full condition mean vectors}
-# boxplot(mean_vector~colour*brightn,
-#         data = mean_vectors_full,
-#         ylim = c(0,1),
-#         col = adjustcolor(c('green2',
-#                             'purple',
-#                             'darkgreen',
-#                             'purple4'), alpha.f = 0.5),
-#         outline = FALSE)
 stripchart(mean_vector~colour*brightn,
            data = mean_vectors_full,
            # add = TRUE,
@@ -600,7 +592,7 @@ with(data.frame(t(full_estimates_beta)),
 
 ```
 
-Plot the raw data alongside the predictions a
+Plot the raw data alongside the predictions for the data from Edrich *et al*., (1979) and a boxplot summary of the data data from Kühn (2017).
 
 ```{r Plot model predictions}
 
@@ -734,3 +726,110 @@ legend(x = 'bottomright',
        lwd = 3,
        cex = 0.7)
 ```
+
+It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light. In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun. In Kühn's data the stimuli were smaller (assuming a viewing distance of ≈200mm, an SMD with diameter 3.5mm would appear `deg(2*atan2(y = 3.5/2,x = 200)) =` 1.0° across) than Edrich's (2.3°), which may have resulted in them being perceived as dimmer (left shift in this graph).
+
+# Sun compass orientation
+
+If most dances are for the same location, we should observe dances as the same fixed angle to the stimulus, interpreted either as the sun or the anti-sun.
+
+```{r Calculate and plot angles relative expected sun azimuth}
+
+sun_diff_gh = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'h')
+sun_diff_gl = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'l')
+sun_diff_uh = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'h')
+sun_diff_ul = sapply(X = u_id,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l')
+
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = unlist(sun_diff_gh),
+      col = 'green',
+      shrink = 2.0,
+      side = 3,
+      title = 'Green Bright')
+PCfun(angles = unlist(sun_diff_gl),
+      col = 'darkgreen',
+      shrink = 2.0,
+      side = 3,
+      title = 'Green Dim')
+PCfun(angles = unlist(sun_diff_uh),
+      col = 'magenta',
+      shrink = 2.0,
+      side = 3,
+      title = 'UV Bright')
+PCfun(angles = unlist(sun_diff_ul),
+      col = 'purple',
+      shrink = 2.0,
+      side = 3,
+      title = '           UV Dim')
+```
+
+For the bright stimuli the dances generally indicate South, but with a very wide range. (or possibly clusters to the South-West and South-East). For the dim stimuli there is less of a clear pattern, particularly for UV dim.
+
+We can also restrict this analysis to just the dances with all conditions.
+
+```{r Angles relative expected sun azimuth for full conditions}
+
+full_sun_diff_gh = sapply(X = full_ids,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'h')
+full_sun_diff_gl = sapply(X = full_ids,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'l')
+full_sun_diff_uh = sapply(X = full_ids,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'h')
+full_sun_diff_ul = sapply(X = full_ids,
+                    FUN = SunDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l')
+
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = unlist(full_sun_diff_gh),
+      col = 'green',
+      shrink = 1.5,
+      side = 3,
+      title = 'Green Bright')
+PCfun(angles = unlist(full_sun_diff_gl),
+      col = 'darkgreen',
+      shrink = 1.5,
+      side = 3,
+      title = 'Green Dim')
+PCfun(angles = unlist(full_sun_diff_uh),
+      col = 'magenta',
+      shrink = 1.5,
+      side = 3,
+      title = 'UV Bright')
+PCfun(angles = unlist(full_sun_diff_ul),
+      col = 'purple',
+      shrink = 1.5,
+      side = 3,
+      title = 'UV Dim')
+      
+```
+
+When restricting to only the balanced cases, the pattern becomes clearer. For the most oriented dances to the bright UV stimulus there are two clusters to the South-West and South-East. These are likely also present for the bright green stimulus. The dim green stimulus appears to align somewhat with the bright stimuli. The dim UV stimulus shows no apparent patten, though a slight southwards bias.
