@@ -368,7 +368,8 @@ Plt_mu = function(id)
 PCfun = function(angles,
                  col,
                  shrink = 1.5,
-                 title = '')
+                 title = '',
+                 side = 1)
 {
   ca = circular(x = angles,
                 units = 'degrees',
@@ -383,7 +384,7 @@ PCfun = function(angles,
                 zero = pi/2,
                 shrink = shrink)
   mtext(text = title,
-        side = 1,
+        side = side,
         line = -2)
   lines(x = c(0,0),
         y = c(-1,1),
