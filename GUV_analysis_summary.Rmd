@@ -20,7 +20,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster 2025 06 05
+> James Foster 2025 06 11
 
 > **DESCRIPTION**
 >
@@ -245,6 +245,10 @@ mean_vectors_full = subset(mean_vectors,
                            subset = ID %in% full_ids)
 ```
 
+### Effect of brightness on mean vector length
+
+#### Entire dataset
+
 The first thing we notice is that in the low intensity conditions the accuracy is generally lower than for the high intensity conditions.
 
 ```{r Plot mean vectors, echo=FALSE}
@@ -282,6 +286,8 @@ invisible(
   })
 abline(h = c(0,1))
 ```
+
+#### Within individuals (balanced cases only)
 
 This effect is even clearer if we look at just the full condition dances.
 
@@ -321,6 +327,8 @@ abline(h = c(0,1))
 
 How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities? In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length).
 
+#### Plot raw data from Edrich *et al.* (1979) Fig. 2
+
 ```{r Edrich raw data, echo=FALSE}
 with(ed,
      {
@@ -354,6 +362,8 @@ legend(x = 'bottomright',
 
 This is best modelled with a nonlinear (psychometric model) following the beta distribution (for variables bounded between zero and one).
 
+#### Reorganise data
+
 ```{r Prepare data for model fitting}
 ed = within(ed,
             {
@@ -369,7 +379,11 @@ ed = within(ed,
             )
 ```
 
-```{r Fit sigmoid to Edrich data}
+#### Fit psychometric curves
+
+For each light stimulus, fit a sigmoid curve bounded between baseline accuracy (shared across stimuli) and maximum accuracy (`1 - lapses`). Inflection point and 80%-rise-region width vary between stimuli, maximising posterior probability for a beta distribution in `(0,1)`. To do this, we first define a nonlinear formula in `brms`.
+
+```{r Set up formula}
 
 #set up model fit
 formula_beta = bf(
@@ -389,6 +403,11 @@ formula_beta = bf(
   family = Beta(link = "identity", link_phi = 'log'),
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
+```
+
+Since this is a nonlinear model (there are terms both inside and outside the logistic transform) it is important to establish prior distributions for all parameters. These ensure that parameter estimates explore credible ranges during fitting. The baseline is expected to be around `r = 0.27`, while the maximum accuracy should be around `r = 0.95`, and their estimates should not converge (that would flatten the curve, or reverse its direction). The inflection points are expected around $10^{11}$ photons cm$^{-2}$ s$^{-1}$, with a rise-region width of $10^{3}$ photons cm$^{-2}$ s$^{-1}$. All colour effects may vary by a few orders of magnitude.
+
+```{r}
 
 #set up priors
 prior_beta = get_prior(formula = formula_beta,
@@ -475,14 +494,18 @@ prior_beta = within(prior_beta,
                       coef %in% 'colourUV'
                   ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
                   })
+```
 
+Fit a psychometric model to the data using the nonlinear formula and specified prior distributions. `4000` iterations on `4` chains takes less than one minute.
+
+```{r Fit model}
 #takes less than 1 minute
 system.time(
   {
     beta_fit = brm( formula = formula_beta, # using our nonlinear formula
                      data = ed, # our data
                      prior = prior_beta, # our priors 
-                     iter = 4000, # long run for 2000 iterations
+                     iter = 4000, # long run for 4000 iterations
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
@@ -492,57 +515,38 @@ system.time(
 )
 ```
 
-```{r Plot model predictions}
+#### Plot and compare data from Edrich and Kühn.
 
-#plot each stimulus type
-ed_ug = subset(ed, wavelength != 429)
+Summarise the data from full cases in the Kühn data using quantiles (minimum, 25%, median, 75% and maximum).
 
-#TODO extract this from the raw data
-#set up the quantiles from full condition data
-gh_meanQ = list(mn = 0.2527,
-                  q1 = 0.8145,
-             q2 = 0.9058,
-             q3 = 0.9691,
-             mx = 1.0000)
+```{r Collect relevant data from Kühn data}
+#Examine quantiles
+meanQ = aggregate(mean_vector ~ colour*brightn, 
+                  data = mean_vectors_full,
+                  FUN = quantile)
+#Extract different quantiles as separate columns in a data frame
+meanQ = data.frame(cbind(meanQ[1:2], meanQ$mean_vector) )
+#Rename
+names(meanQ) = c('colour', 'brightn', paste0('q',0:4))
+#Subset by condition
+gh_meanQ = subset(meanQ, colour %in% 'g' & brightn %in% 'h')
+gl_meanQ = subset(meanQ, colour %in% 'g' & brightn %in% 'l')
+uh_meanQ = subset(meanQ, colour %in% 'u' & brightn %in% 'h')
+ul_meanQ = subset(meanQ, colour %in% 'u' & brightn %in% 'l')
 
-gl_meanQ = list(mn = 0.1324,
-                q1 = 0.5281,
-             q2 = 0.7348,
-             q3 = 0.8581,
-             mx = 0.9847)
+```
 
-uh_meanQ = list(mn = 0.9107,
-                  q1 = 0.9286,
-             q2 = 0.9571,
-             q3 = 0.9648,
-             mx = 0.9873)
+Extract the model predictions by summarising parameter estimates from the sampling phases of all chains. To identify specific combinations of parameter values, use the `conditional_effects` function, which organises all simultaneous estimates into a data frame.
 
-ul_meanQ = list(mn = 0.0767,
-                q1 = 0.4977,
-             q2 = 0.6664,
-             q3 = 0.8146,
-             mx = 0.9154)
+```{r Extract model predictions}
 
-#TODO check if this is redundant
-xxl = seq(from = 9, to = 16,
-          length.out = 1e3)
-
-
-# #N.B. for plotting we will need to also definte "inv_logit" in our the R environment
+# #N.B. for plotting we will need to also define "inv_logit" in our the R environment
 inv_logit = inv_logit_scaled # this can be found in brms, but with an additional specifier
-
-plot(
-  conditional_effects(x = beta_fit, 
-                      effects = 'colour')
-)
 
 #summary of parameter estimates
 full_sm_beta = summary(beta_fit,
                   robust = TRUE)#use the median estimate
 
-# . . Check parameter estimates -----------------------------------------------
-
-#We can also check if these estimates match with our expectations.
 #Extract fixed effects estimates
 full_fix_beta = full_sm_beta$fixed
 #extract rownames
@@ -554,6 +558,7 @@ names(full_estimates_beta) = full_fix_rn_beta
 
 # to predict all effects, we can use the 'posterior_epred' method
 #by default 100 predictions per continuous variable (but fewer for their interactions)
+#This takes <2 seconds
 system.time(
   {
     full_cond_beta =brms::conditional_effects(beta_fit, 
@@ -563,9 +568,49 @@ system.time(
                                          plot = FALSE
     )
   }
-)#takes <2 seconds
+)
 #extract predictions
 pred_data_beta = full_cond_beta$`log10_intensity:colour`
+
+#Green light curve
+g_curve = 
+with(data.frame(t(full_estimates_beta)),
+     {
+       list(Base = plogis(LogitBase_Intercept),
+            Maxima = 1- plogis(LogitLapse_Intercept), 
+            Inflection = Inflex_Intercept,  
+            Width = exp(LogWidth_Intercept)  
+       )
+     }
+)
+
+#UV light curve
+u_curve = 
+with(data.frame(t(full_estimates_beta)),
+     {
+       list(Base = plogis(LogitBase_Intercept),
+            Maxima = 1- plogis(LogitLapse_Intercept + LogitLapse_colourUV), 
+            Inflection = Inflex_Intercept + Inflex_colourUV,  
+            Width = exp(LogWidth_Intercept + LogWidth_colourUV)  
+       )
+     }
+)
+
+
+
+```
+
+Plot the raw data alongside the predictions a
+
+```{r Plot model predictions}
+
+#Prepare a sequence for plotting
+xxl = seq(from = 9, to = 16,
+          length.out = 1e3)
+
+#plot only the stimulus types also used by Kühn.
+ed_ug = subset(ed, wavelength != 429)
+
 #plot each stimulus type
 with(ed_ug,
      {
@@ -592,70 +637,7 @@ with Kühn, 2017',
        abline(v = log10(4*c(1e12,1e14)) )
      }
 )
-
-#plot observed data from Kühn
-with(gh_meanQ,
-     {
-       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)-0.1,
-               y = c(q1, q1, q3, q3),
-               col = adjustcolor('green', alpha.f = 25/256),
-               border = 'green'
-               )
-       lines(x =  0.1*c(-1,1)+log10(4e14)-0.1,
-             y = c(q2, q2),
-             lwd = 5,
-             lend = 'butt',
-             col = 'darkgreen')
-     }
-     )
-
-with(gl_meanQ,
-     {
-       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)-0.1,
-               y = c(q1, q1, q3, q3),
-               col = adjustcolor('green', alpha.f = 25/256),
-               border = 'green'
-               )
-       lines(x =  0.1*c(-1,1)+log10(4e12)-0.1,
-             y = c(q2, q2),
-             lwd = 5,
-             lend = 'butt',
-             col = 'darkgreen')
-     }
-     )
-with(uh_meanQ,
-     {
-       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)+0.1,
-               y = c(q1, q1, q3, q3),
-               col = adjustcolor('magenta', alpha.f = 25/256),
-               border = 'magenta'
-               )
-       lines(x =  0.1*c(-1,1)+log10(4e14)+0.1,
-             y = c(q2, q2),
-             lwd = 5,
-             lend = 'butt',
-             col = 'purple')
-     }
-     )
-
-with(ul_meanQ,
-     {
-       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)+0.1,
-               y = c(q1, q1, q3, q3),
-               col = adjustcolor('magenta', alpha.f = 25/256),
-               border = 'magenta'
-               )
-       lines(x =  0.1*c(-1,1)+log10(4e12)+0.1,
-             y = c(q2, q2),
-             lwd = 5,
-             lend = 'butt',
-             col = 'purple')
-     }
-     )
-
-
-
-
+#Add the estimated range of the curve for the green stimulus
 with(data.frame(t(full_estimates_beta)),
      {
   abline(h = c(0,1,
@@ -666,7 +648,7 @@ with(data.frame(t(full_estimates_beta)),
      }
 )
 
-#plot total prediction intervals
+#plot total 95% prediction intervals
 with(subset(pred_data_beta, colour == '0green'), 
      {
        polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
@@ -679,18 +661,6 @@ with(subset(pred_data_beta, colour == '0green'),
        )
      }
 )
-# with(subset(pred_data_beta, colour == 'blue'), 
-#      {
-#        polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
-#                y = c(lower__[order(log10_intensity)],
-#                      rev(upper__[order(log10_intensity)])
-#                ), 
-#                col = adjustcolor('cyan', alpha.f = 25/256),
-#                border = NA,
-#                lwd = 0.1
-#        )
-#      }
-# )
 with(subset(pred_data_beta, colour == 'UV'), 
      {
        polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
@@ -705,31 +675,51 @@ with(subset(pred_data_beta, colour == 'UV'),
 )
 
 #plot the median prediction lines
-with(subset(pred_data_beta, colour == '0green'), 
-     lines(x = sort(log10_intensity),
-           y = estimate__[order(log10_intensity)], 
+with(g_curve, 
+     lines(x = xxl,
+           y = Base + (Maxima  - Base) * 
+             plogis(4.39*(xxl - Inflection)/Width), 
            col = 'darkgreen',
-           lwd = 3)
+           lwd = 3,
+           lty = 3)
 )
-# with(subset(pred_data_beta, colour == 'blue'), 
-#      lines(x = sort(log10_intensity),
-#            y = estimate__[order(log10_intensity)], 
-#            col = 'darkblue',
-#            lwd = 3)
-# )
-with(subset(pred_data_beta, colour == 'UV'), 
-     lines(x = sort(log10_intensity),
-           y = estimate__[order(log10_intensity)], 
+with(u_curve, 
+     lines(x = xxl,
+           y = Base + (Maxima  - Base) * 
+             plogis(4.39*(xxl - Inflection)/Width), 
            col = 'purple4',
-           lwd = 3)
+           lwd = 3,
+           lty = 3)
 )
 
-# legend(x = 'bottomright',
-#        legend = paste(sort(unique(ed$wavelength),
-#                      decreasing = TRUE), 'nm'),
-#        col = c('darkgreen','blue', 'purple'),
-#        pch = c(20, 20, 20),
-#        lwd = 3)
+#plot observed data from Kühn as boxplots showing the quartiles, median and total range.
+#Green High intensity
+QBox(quant = subset(meanQ, colour %in% 'g' & brightn %in% 'h'),
+     x = log10(4e14),
+     offset = -0.1,
+     cols = c('green', 'darkgreen')
+    )
+
+#Green Low intensity
+QBox(quant = subset(meanQ, colour %in% 'g' & brightn %in% 'l'),
+     x = log10(4e12),
+     offset = -0.1,
+     cols = c('green', 'darkgreen')
+    )
+
+#UV High intensity
+QBox(quant = subset(meanQ, colour %in% 'u' & brightn %in% 'h'),
+     x = log10(4e14),
+     offset = 0.1,
+     cols = c('magenta', 'purple')
+    )
+
+#UV Low intensity
+QBox(quant = subset(meanQ, colour %in% 'u' & brightn %in% 'l'),
+     x = log10(4e12),
+     offset = 0.1,
+     cols = c('magenta', 'purple')
+    )
 
 legend(x = 'bottomright',
        legend = c(
@@ -741,5 +731,6 @@ legend(x = 'bottomright',
        col = c('darkgreen', 'purple', 'green', 'magenta'),
        pch = c(20, 20, 15, 15),
        lty = c(3,3,NA, NA),
-       lwd = 3)
+       lwd = 3,
+       cex = 0.7)
 ```
