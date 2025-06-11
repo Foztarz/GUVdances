@@ -354,6 +354,21 @@ legend(x = 'bottomright',
 
 This is best modelled with a nonlinear (psychometric model) following the beta distribution (for variables bounded between zero and one).
 
+```{r Prepare data for model fitting}
+ed = within(ed,
+            {
+              logit_accuracy = qlogis(accuracy)
+              log10_intensity = log10(intensity)
+              colour = sapply(paste(wavelength),
+                              FUN = switch,
+                              `354` = 'UV',
+                              `429` = 'blue',
+                              `535` = '0green',
+                              NA)
+            }
+            )
+```
+
 ```{r Fit sigmoid to Edrich data}
 
 #set up model fit
@@ -461,7 +476,7 @@ prior_beta = within(prior_beta,
                   ] = 'normal(0,2)' #a normal distribution:mean 0, sd 3
                   })
 
-
+#takes less than 1 minute
 system.time(
   {
     beta_fit = brm( formula = formula_beta, # using our nonlinear formula
@@ -475,4 +490,256 @@ system.time(
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
+```
+
+```{r Plot model predictions}
+
+#plot each stimulus type
+ed_ug = subset(ed, wavelength != 429)
+
+#TODO extract this from the raw data
+#set up the quantiles from full condition data
+gh_meanQ = list(mn = 0.2527,
+                  q1 = 0.8145,
+             q2 = 0.9058,
+             q3 = 0.9691,
+             mx = 1.0000)
+
+gl_meanQ = list(mn = 0.1324,
+                q1 = 0.5281,
+             q2 = 0.7348,
+             q3 = 0.8581,
+             mx = 0.9847)
+
+uh_meanQ = list(mn = 0.9107,
+                  q1 = 0.9286,
+             q2 = 0.9571,
+             q3 = 0.9648,
+             mx = 0.9873)
+
+ul_meanQ = list(mn = 0.0767,
+                q1 = 0.4977,
+             q2 = 0.6664,
+             q3 = 0.8146,
+             mx = 0.9154)
+
+#TODO check if this is redundant
+xxl = seq(from = 9, to = 16,
+          length.out = 1e3)
+
+
+# #N.B. for plotting we will need to also definte "inv_logit" in our the R environment
+inv_logit = inv_logit_scaled # this can be found in brms, but with an additional specifier
+
+plot(
+  conditional_effects(x = beta_fit, 
+                      effects = 'colour')
+)
+
+#summary of parameter estimates
+full_sm_beta = summary(beta_fit,
+                  robust = TRUE)#use the median estimate
+
+# . . Check parameter estimates -----------------------------------------------
+
+#We can also check if these estimates match with our expectations.
+#Extract fixed effects estimates
+full_fix_beta = full_sm_beta$fixed
+#extract rownames
+full_fix_rn_beta = rownames(full_fix_beta)
+
+# stimulus levels to add to the dataset to be able to measure this effect.
+full_estimates_beta = full_fix_beta$Estimate
+names(full_estimates_beta) = full_fix_rn_beta
+
+# to predict all effects, we can use the 'posterior_epred' method
+#by default 100 predictions per continuous variable (but fewer for their interactions)
+system.time(
+  {
+    full_cond_beta =brms::conditional_effects(beta_fit, 
+                                         method = 'posterior_epred', # posterior epred not working
+                                         cores =  parallel::detectCores()-1,
+                                         effects = c('log10_intensity:colour'),
+                                         plot = FALSE
+    )
+  }
+)#takes <2 seconds
+#extract predictions
+pred_data_beta = full_cond_beta$`log10_intensity:colour`
+#plot each stimulus type
+with(ed_ug,
+     {
+       plot(x = log10_intensity,
+            y = accuracy,
+            main = 
+'Comparison of data from Edrich et al. 1979
+with Kühn, 2017',
+            xlab = 'log10(intensity) (photons/cm2/s)',
+            ylab = 'accuracy (r)',
+            ylim = c(0,1),
+            xlim = c(9,16),
+            pch = 21,
+            cex = 1.5,
+            col = 'black',
+            bg = sapply(paste(wavelength),
+                        FUN = switch,
+                        `354` = 'purple',
+                        `429` = 'blue',
+                        `535` = 'darkgreen',
+                        'red')
+       )
+       abline(h = c(0,1))
+       abline(v = log10(4*c(1e12,1e14)) )
+     }
+)
+
+#plot observed data from Kühn
+with(gh_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)-0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = 'green'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e14)-0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'darkgreen')
+     }
+     )
+
+with(gl_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)-0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = 'green'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e12)-0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'darkgreen')
+     }
+     )
+with(uh_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e14)+0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = 'magenta'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e14)+0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'purple')
+     }
+     )
+
+with(ul_meanQ,
+     {
+       polygon(x = 0.1*c(-1,1,1,-1)+log10(4e12)+0.1,
+               y = c(q1, q1, q3, q3),
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = 'magenta'
+               )
+       lines(x =  0.1*c(-1,1)+log10(4e12)+0.1,
+             y = c(q2, q2),
+             lwd = 5,
+             lend = 'butt',
+             col = 'purple')
+     }
+     )
+
+
+
+
+with(data.frame(t(full_estimates_beta)),
+     {
+  abline(h = c(0,1,
+               plogis(LogitBase_Intercept),
+               1- plogis(LogitLapse_Intercept) ), 
+         lty = c(1,1,3,3)
+         )
+     }
+)
+
+#plot total prediction intervals
+with(subset(pred_data_beta, colour == '0green'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+# with(subset(pred_data_beta, colour == 'blue'), 
+#      {
+#        polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+#                y = c(lower__[order(log10_intensity)],
+#                      rev(upper__[order(log10_intensity)])
+#                ), 
+#                col = adjustcolor('cyan', alpha.f = 25/256),
+#                border = NA,
+#                lwd = 0.1
+#        )
+#      }
+# )
+with(subset(pred_data_beta, colour == 'UV'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+
+#plot the median prediction lines
+with(subset(pred_data_beta, colour == '0green'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'darkgreen',
+           lwd = 3)
+)
+# with(subset(pred_data_beta, colour == 'blue'), 
+#      lines(x = sort(log10_intensity),
+#            y = estimate__[order(log10_intensity)], 
+#            col = 'darkblue',
+#            lwd = 3)
+# )
+with(subset(pred_data_beta, colour == 'UV'), 
+     lines(x = sort(log10_intensity),
+           y = estimate__[order(log10_intensity)], 
+           col = 'purple4',
+           lwd = 3)
+)
+
+# legend(x = 'bottomright',
+#        legend = paste(sort(unique(ed$wavelength),
+#                      decreasing = TRUE), 'nm'),
+#        col = c('darkgreen','blue', 'purple'),
+#        pch = c(20, 20, 20),
+#        lwd = 3)
+
+legend(x = 'bottomright',
+       legend = c(
+                   paste('Edrich', 
+                        sort(unique(ed_ug$wavelength),
+                           decreasing = TRUE), 'nm'),
+                   paste('  Kühn', c(528, 365), 'nm' ) 
+       ),
+       col = c('darkgreen', 'purple', 'green', 'magenta'),
+       pch = c(20, 20, 15, 15),
+       lty = c(3,3,NA, NA),
+       lwd = 3)
 ```
