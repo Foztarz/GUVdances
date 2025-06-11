@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 06 05
-#     MODIFIED:	James Foster              DATE: 2025 06 05
+#     MODIFIED:	James Foster              DATE: 2025 06 11
 #
 #  DESCRIPTION: Functions for Foster JJ, Kühn N. & Pfeiffer K (in prep).
 #               
@@ -267,7 +267,42 @@ MuDiff = function(id, dt, cl, br, ref_cl = 'g', ref_br = 'h')
   )
 }
 
-
+QBox = function(quant,
+                x = log10(4e14), 
+                offset = -0.1,
+                cols = c('green', 'darkgreen')
+                )
+{
+  with(quant,
+       {
+         polygon(x = abs(offset)*c(-1,1,1,-1)+x+offset,
+                 y = c(q1, q1, q3, q3),
+                 col = 'white',
+                 border = 'white'
+         )
+         polygon(x = abs(offset)*c(-1,1,1,-1)+x+offset,
+                 y = c(q1, q1, q3, q3),
+                 col = adjustcolor(cols[1], alpha.f = 25/256),
+                 border = cols[1]
+         )
+         lines(x =  abs(offset)*c(-1,1)+x+offset,
+               y = c(q2, q2),
+               lwd = 5,
+               lend = 'butt',
+               col = cols[2])
+         lines(x =  offset*c(1,1)+x,
+               y = c(q0, q1),
+               lwd = 2,
+               lend = 'butt',
+               col = 'black')
+         lines(x =  offset*c(1,1)+x,
+               y = c(q3, q4),
+               lwd = 2,
+               lend = 'butt',
+               col = 'black')
+       }
+  )
+}
 # Circular plotting functions ---------------------------------------------
 
 
