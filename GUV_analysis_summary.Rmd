@@ -731,7 +731,7 @@ It would be difficult to explain the orientation accuracy for the high intensity
 
 # Sun compass orientation
 
-If most dances are for the same location, we should observe dances as the same fixed angle to the stimulus, interpreted either as the sun or the anti-sun.
+Since most dances were at least somewhat oriented (`r>0.5`) we can assume that the mean angles of these dances typically align with an intended dance direction. If most dances are for the same geographic location, we should observe dances as the same fixed angle to the stimulus, interpreted either as the sun or the anti-sun.
 
 ```{r Calculate and plot angles relative expected sun azimuth}
 
@@ -833,3 +833,200 @@ PCfun(angles = unlist(full_sun_diff_ul),
 ```
 
 When restricting to only the balanced cases, the pattern becomes clearer. For the most oriented dances to the bright UV stimulus there are two clusters to the South-West and South-East. These are likely also present for the bright green stimulus. The dim green stimulus appears to align somewhat with the bright stimuli. The dim UV stimulus shows no apparent patten, though a slight southwards bias.
+
+# Inspect dance angles relative to the stimulus
+
+## Mean dance angles relative to the stimulus
+
+Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented. We can identify phototactic orientation from the angle relative to the stimulus.
+
+```{r Plot dance angle relative to stimulus}
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'h')$mu,
+      col = 'green',
+      shrink = 1.5,
+      title = 'Green Bright')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'l')$mu,
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'h')$mu,
+      col = 'magenta',
+      shrink = 1.5,
+      title = 'UV Bright')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'l')$mu,
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim')
+```
+
+While there are some dances towards or near to the stimulus for most conditions, there is a wide spread, suggesting a factor other than phototaxis sets dance directions. N.B. for the dim stimuli where the widest spread is observed, the dances are also less accurate, which may increase variation in mean dance angle.
+
+## Change in mean dance angle between stimuli
+
+### Change arcs
+
+To determine whether these dances interpret the stimuli as the sun, anti-sun or something else, we would need to check the differences in dance angle between the conditions. It is also worth considering any differences in accuracy between dances to each condition, since this would influence the variation in angular change. These can be visualised as arcs.
+
+```{r Plot change arcs}
+#TODO make a function for this
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'Green Bright to Green Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+#open the loop
+for(ii in mean_vectors_full$ID)
+{
+with(subset(mean_vectors_full,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'g' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'g' & 
+                                brightn %in% 'l'],
+              col1 = 'green',
+              col2 = 'darkgreen'
+              )
+     }
+    )
+}
+
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'UV Bright to UV Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+for(ii in mean_vectors_full$ID)
+{
+with(subset(mean_vectors_full,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'u' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'u' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'l'],
+              col1 = 'magenta',
+              col2 = 'purple'
+              )
+     }
+    )
+}
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+mtext(text = 'Green Bright to UV Bright',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+for(ii in mean_vectors_full$ID)
+{
+with(subset(mean_vectors_full,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'h'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'h'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'h'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'h'],
+              col1 = 'green',
+              col2 = 'magenta'
+              )
+     }
+    )
+}
+OpenCplot(n_sample = with(full_cd, median(run)/4) )
+for(ii in mean_vectors_full$ID)
+{
+with(subset(mean_vectors_full,
+            subset = ID %in% ii),
+     {
+      DiffArc(a1 = mu[colour %in% 'g' & 
+                      brightn %in% 'l'],
+              a2 = mu[colour %in% 'u' & 
+                        brightn %in% 'l'],
+              r1 = mean_vector[colour %in% 'g' & 
+                              brightn %in% 'l'],
+              r2 = mean_vector[colour %in% 'u' & 
+                                brightn %in% 'l'],
+              col1 = 'darkgreen',
+              col2 = 'purple'
+              )
+     }
+    )
+}
+mtext(text = 'Green Dim to UV Dim',
+      side = 1,
+      line = -1,
+      cex = 0.5)
+```
+
+### Differences in mean angle
+
+```{r Plot changes in mean dance angle}
+mu_diff_gl = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full,
+                    cl = 'u',
+                    br = 'l',
+                    ref_cl = 'u',
+                    ref_br = 'h')
+mu_diff_gul = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full,
+                    cl = 'u',
+                    br = 'l',
+                    ref_cl = 'u',
+                    ref_br = 'h')
+
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright')
+PCfun(angles = unlist(mu_diff_uhl),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+
+```
