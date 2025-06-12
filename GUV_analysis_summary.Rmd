@@ -1,6 +1,6 @@
 ---
 title: "GUV_Analysis_summary"
-output: html_document
+# output: html_document
 date: "`r Sys.Date()`"
 author: "James Foster"
 output:
@@ -20,7 +20,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~06~11$
+> James Foster $2025~06~12$
 
 > **DESCRIPTION**
 >
@@ -40,9 +40,17 @@ editor_options:
 
 > **REFERENCES**
 >
-> Edrich, W., Neumeyer, C. and von Helversen, O. (1979). “Anti-sun orientation” of bees with regard to a field of ultraviolet light. *J. Comp. Physiol.* 134, 151–157.
+> Edrich, W., Neumeyer, C.
+> and von Helversen, O.
+> (1979).
+> “Anti-sun orientation” of bees with regard to a field of ultraviolet light.
+> *J. Comp. Physiol.* 134, 151–157.
 >
-> Rossel, S. and Wehner, R. (1984). Celestial orientation in bees: the use of spectral cues. *J. Comp. Physiol. A* 155, 605–613.
+> Rossel, S.
+> and Wehner, R.
+> (1984).
+> Celestial orientation in bees: the use of spectral cues.
+> *J. Comp. Physiol. A* 155, 605–613.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -50,13 +58,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Setting up
 
-First load the functions and packages required for this project. These can all be found in `GUV_functions.R`, within the same Github repository.
+First load the functions and packages required for this project.
+These can all be found in `GUV_functions.R`, within the same Github repository.
 
 ```{r Load functions and packages}
 source('GUV_functions.R')
 ```
 
-Then load the data that will be used. This includes our own dance data, reorganised by `GUV_organisedata.R` as `colour_dance_reorg.csv`, as well as data from Edrich *et al.* (1979) on the relationship between accuracy (mean vector length), wavelength and intensity. This was manually extracted from Fig. 2 and saved in `"Edrich1979_brightness-accuracy.csv`.
+Then load the data that will be used.
+This includes our own dance data, reorganised by `GUV_organisedata.R` as `colour_dance_reorg.csv`, as well as data from Edrich *et al.* (1979) on the relationship between accuracy (mean vector length), wavelength and intensity.
+This was manually extracted from Fig.
+2 and saved in `"Edrich1979_brightness-accuracy.csv`.
 
 ```{r Load data}
 #Dance angle data
@@ -317,7 +329,8 @@ abline(h = c(0,1))
 
 ### Comparison with Edrich *et al.* (1979)
 
-How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities? In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length).
+How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities?
+In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length).
 
 #### Plot raw data from Edrich *et al.* (1979) Fig. 2
 
@@ -373,7 +386,9 @@ ed = within(ed,
 
 #### Fit psychometric curves
 
-For each light stimulus, fit a sigmoid curve bounded between baseline accuracy (shared across stimuli) and maximum accuracy (`1 - lapses`). Inflection point and 80%-rise-region width vary between stimuli, maximising posterior probability for a beta distribution in `(0,1)`. To do this, we first define a nonlinear formula in `brms`.
+For each light stimulus, fit a sigmoid curve bounded between baseline accuracy (shared across stimuli) and maximum accuracy (`1 - lapses`).
+Inflection point and 80%-rise-region width vary between stimuli, maximising posterior probability for a beta distribution in `(0,1)`.
+To do this, we first define a nonlinear formula in `brms`.
 
 ```{r Set up formula}
 
@@ -397,7 +412,11 @@ formula_beta = bf(
 
 ```
 
-Since this is a nonlinear model (there are terms both inside and outside the logistic transform) it is important to establish prior distributions for all parameters. These ensure that parameter estimates explore credible ranges during fitting. The baseline is expected to be around `r = 0.27`, while the maximum accuracy should be around `r = 0.95`, and their estimates should not converge (that would flatten the curve, or reverse its direction). The inflection points are expected around $10^{11}$ photons cm$^{-2}$ s$^{-1}$, with a rise-region width of $10^{3}$ photons cm$^{-2}$ s$^{-1}$. All colour effects may vary by a few orders of magnitude.
+Since this is a nonlinear model (there are terms both inside and outside the logistic transform) it is important to establish prior distributions for all parameters.
+These ensure that parameter estimates explore credible ranges during fitting.
+The baseline is expected to be around $r = 0.27$, while the maximum accuracy should be around $r = 0.95$, and their estimates should not converge (that would flatten the curve, or reverse its direction).
+The inflection points are expected around $10^{11}$ photons cm$^{-2}$ s$^{-1}$, with a rise-region width of $10^{3}$ photons cm$^{-2}$ s$^{-1}$.
+All colour effects may vary by a few orders of magnitude.
 
 ```{r}
 
@@ -488,7 +507,8 @@ prior_beta = within(prior_beta,
                   })
 ```
 
-Fit a psychometric model to the data using the nonlinear formula and specified prior distributions. `4000` iterations on `4` chains takes less than one minute.
+Fit a psychometric model to the data using the nonlinear formula and specified prior distributions.
+`4000` iterations on `4` chains takes less than one minute.
 
 ```{r Fit model}
 #takes less than 1 minute
@@ -528,7 +548,8 @@ ul_meanQ = subset(meanQ, colour %in% 'u' & brightn %in% 'l')
 
 ```
 
-Extract the model predictions by summarising parameter estimates from the sampling phases of all chains. To identify specific combinations of parameter values, use the `conditional_effects` function, which organises all simultaneous estimates into a data frame.
+Extract the model predictions by summarising parameter estimates from the sampling phases of all chains.
+To identify specific combinations of parameter values, use the `conditional_effects` function, which organises all simultaneous estimates into a data frame.
 
 ```{r Extract model predictions}
 
@@ -727,11 +748,14 @@ legend(x = 'bottomright',
        cex = 0.7)
 ```
 
-It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light. In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun. In Kühn's data the stimuli were smaller (assuming a viewing distance of ≈200mm, an SMD with diameter 3.5mm would appear `deg(2*atan2(y = 3.5/2,x = 200)) =` 1.0° across) than Edrich's (2.3°), which may have resulted in them being perceived as dimmer (left shift in this graph).
+It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light.
+In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun.
+In Kühn's data the stimuli were smaller (assuming a viewing distance of ≈200mm, an SMD with diameter 3.5mm would appear $deg(2*atan2(y = 3.5/2,x = 200)) =$ 1.0° across) than Edrich's (2.3°), which may have resulted in them being perceived as dimmer (left shift in this graph).
 
 # Sun compass orientation
 
-Since most dances were at least somewhat oriented (`r>0.5`) we can assume that the mean angles of these dances typically align with an intended dance direction. If most dances are for the same geographic location, we should observe dances as the same fixed angle to the stimulus, interpreted either as the sun or the anti-sun.
+Since most dances were at least somewhat oriented ($r>0.5$) we can assume that the mean angles of these dances typically align with an intended dance direction.
+If most dances are for the same geographic location, we should observe dances as the same fixed angle to the stimulus, interpreted either as the sun or the anti-sun.
 
 ```{r Calculate and plot angles relative expected sun azimuth}
 
@@ -780,7 +804,9 @@ PCfun(angles = unlist(sun_diff_ul),
       title = '           UV Dim')
 ```
 
-For the bright stimuli the dances generally indicate South, but with a very wide range. (or possibly clusters to the South-West and South-East). For the dim stimuli there is less of a clear pattern, particularly for UV dim.
+For the bright stimuli the dances generally indicate South, but with a very wide range.
+(or possibly clusters to the South-West and South-East).
+For the dim stimuli there is less of a clear pattern, particularly for UV dim.
 
 We can also restrict this analysis to just the dances with all conditions.
 
@@ -832,13 +858,18 @@ PCfun(angles = unlist(full_sun_diff_ul),
       
 ```
 
-When restricting to only the balanced cases, the pattern becomes clearer. For the most oriented dances to the bright UV stimulus there are two clusters to the South-West and South-East. These are likely also present for the bright green stimulus. The dim green stimulus appears to align somewhat with the bright stimuli. The dim UV stimulus shows no apparent patten, though a slight southwards bias.
+When restricting to only the balanced cases, the pattern becomes clearer.
+For the most oriented dances to the bright UV stimulus there are two clusters to the South-West and South-East.
+These are likely also present for the bright green stimulus.
+The dim green stimulus appears to align somewhat with the bright stimuli.
+The dim UV stimulus shows no apparent patten, though a slight southwards bias.
 
 # Inspect dance angles relative to the stimulus
 
 ## Mean dance angles relative to the stimulus
 
-Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented. We can identify phototactic orientation from the angle relative to the stimulus.
+Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
+We can identify phototactic orientation from the angle relative to the stimulus.
 
 ```{r Plot dance angle relative to stimulus}
 par(mfrow = c(2,2), mar = c(0,0,0,0))
@@ -864,13 +895,17 @@ PCfun(angles = subset(mean_vectors_full,
       title = 'UV Dim')
 ```
 
-While there are some dances towards or near to the stimulus for most conditions, there is a wide spread, suggesting a factor other than phototaxis sets dance directions. N.B. for the dim stimuli where the widest spread is observed, the dances are also less accurate, which may increase variation in mean dance angle.
+While there are some dances towards or near to the stimulus for most conditions, there is a wide spread, suggesting a factor other than phototaxis sets dance directions.
+N.B.
+for the dim stimuli where the widest spread is observed, the dances are also less accurate, which may increase variation in mean dance angle.
 
 ## Change in mean dance angle between stimuli
 
 ### Change arcs
 
-To determine whether these dances interpret the stimuli as the sun, anti-sun or something else, we would need to check the differences in dance angle between the conditions. It is also worth considering any differences in accuracy between dances to each condition, since this would influence the variation in angular change. These can be visualised as arcs.
+To determine whether these dances interpret the stimuli as the sun, anti-sun or something else, we would need to check the differences in dance angle between the conditions.
+It is also worth considering any differences in accuracy between dances to each condition, since this would influence the variation in angular change.
+These can be visualised as arcs.
 
 ```{r Plot change arcs}
 #TODO make a function for this
@@ -1008,7 +1043,7 @@ mu_diff_gul = sapply(X = full_ids,
                     dt = mean_vectors_full,
                     cl = 'u',
                     br = 'l',
-                    ref_cl = 'u',
+                    ref_cl = 'g',
                     ref_br = 'h')
 
 par(mfrow = c(2,2), mar = c(0,0,0,0))
