@@ -1,6 +1,5 @@
 ---
 title: "GUV_Analysis_summary"
-# output: html_document
 date: "`r Sys.Date()`"
 author: "James Foster"
 output:
