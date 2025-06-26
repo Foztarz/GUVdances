@@ -1064,3 +1064,122 @@ PCfun(angles = unlist(mu_diff_gul),
       title = 'UV Dim - Green Dim')
 
 ```
+
+# Estimate turn effects
+
+## Find confidence intervals for turn distributions
+
+For each change distribution, find the maximum likelihood von Mises distribution.
+For the UV high to UV low change, this will be a bimodal distribution.
+
+```{r Organise heading changes} 
+#collect all heading differences
+
+# Test for differences between conditions ---------------------------------
+
+#collect all heading differences 
+pair_diffs_lst = lapply(X = list(mu_diff_gl,
+                                 mu_diff_uh,
+                                 mu_diff_ul,
+                                 mu_diff_gul), 
+                        FUN = unlist) 
+names(pair_diffs_lst) = c('green_hl',
+                          'uvg_h',
+                          'uvg_hl',
+                          'uvg_l')
+#Calculate maximum likelihood distribution
+
+angle_unit = 'degrees' 
+angle_rot = 'clock'
+#make sure they are in circular format
+pair_diffs_lst = lapply(X = pair_diffs_lst,
+                        FUN = circular,
+                        units = angle_unit,
+                        rotation = angle_rot)
+```
+
+Fit the maximum likelihood distribution for no difference between pairs, differences between pairs, and differences between pairs with two means. If angles shift in one direction between trials, the "difference" distribution should have significantly higher likelihood. If angles shift in two directions between pairs, then the "two means" distribution should be the best fit.
+```{r Fit maximum likelihood von Mises distributions}
+#Distribution for same means
+ml_same_lst = lapply(X = pair_diffs_lst,
+                     mle.vonmises,
+                     bias = TRUE,
+                     mu = circular(x = 0,
+                                   units = angle_unit,
+                                   rotation = angle_rot)
+)
+#Distribution for different means
+ml_diff_lst = lapply(X = pair_diffs_lst,
+                     mle.vonmises,
+                     bias = TRUE)
+#Distribution for multiple different means
+mod_diff_lst = lapply(X = pair_diffs_lst,
+                      circ_mle)
+
+MD_extract = function(md)
+{
+  md_order = with(md, {rownames(results)})
+  md_best = with(md, {results[md_order %in% bestmodel,]})
+  with(md_best,
+       {
+         return(
+           list(q1 = deg(q1),
+                k1 = k1,
+                q2 = deg(q2),
+                k2 = k2,
+                w1 = lamda,
+                ll = -Likelihood
+                )
+         )
+       }
+       )
+}
+
+mod_diff_par = t( sapply(X = mod_diff_lst,
+                      FUN = MD_extract) )
+
+## Calculate likelihood ------------------------------------------------------------
+
+#function to calculate the likelihood of a sample, given the input ML parameters
+LLcalc = function(ml,
+                  angles,
+                  au = 'degrees',
+                  ar = 'clock',
+                  ...)
+{
+  with(ml,
+       {
+         sum( # add together
+           dvonmises(x = circular(x = angles,
+                                  units = au,
+                                  rotation = ar), # probability density for each observed angle
+                     mu = mu, # ML estimated mean
+                     kappa = kappa, # ML estimated concentration
+                     log = TRUE) # on a log scale (i.e. add instead of multiplying)
+         )
+       }
+  )
+}
+#calculate all in list
+all_ll = mapply(FUN = LLcalc,
+                ml = c(ml_same_lst, ml_diff_lst), #apply to both sets of ML estimates
+                angles = pair_diffs_lst, #repeat datasets
+                au = angle_unit, #important, use the same frame of reference as the original
+                ar = angle_rot)
+
+#inspect resulting parameters
+rspar = do.call(rbind, c(ml_same_lst, ml_diff_lst))
+rownames(rspar) = paste( sort(
+                          rep(x = c( 'same', 'diff'),
+                              times =  length(pair_diffs_lst) ),
+                          decreasing = TRUE
+                          ),
+                       rep(x = names(pair_diffs_lst),
+                           times = 2) 
+                       )
+rspar = rspar[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
+rspar = cbind(rspar, all_ll)
+print(rspar)
+print(mod_diff_par)
+
+```
