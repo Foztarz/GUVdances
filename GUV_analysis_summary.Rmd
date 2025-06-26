@@ -51,6 +51,11 @@ editor_options:
 > Celestial orientation in bees: the use of spectral cues.
 > *J. Comp. Physiol. A* 155, 605–613.
 
+> **TODO**
+>
+> - move necessary functions to GUV_functions
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -1067,7 +1072,7 @@ PCfun(angles = unlist(mu_diff_gul),
 
 # Estimate turn effects
 
-## Find confidence intervals for turn distributions
+## Find fit maximum likelihood turn distributions
 
 For each change distribution, find the maximum likelihood von Mises distribution.
 For the UV high to UV low change, this will be a bimodal distribution.
@@ -1123,12 +1128,12 @@ MD_extract = function(md)
   with(md_best,
        {
          return(
-           list(q1 = deg(q1),
-                k1 = k1,
-                q2 = deg(q2),
-                k2 = k2,
-                w1 = lamda,
-                ll = -Likelihood
+           list(mu1 = deg(q1),
+                kappa1 = k1,
+                mu2 = deg(q2),
+                kappa2 = k2,
+                weight1 = lamda,
+                loglikelihood = -Likelihood
                 )
          )
        }
@@ -1181,5 +1186,174 @@ rspar = rspar[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
 rspar = cbind(rspar, all_ll)
 print(rspar)
 print(mod_diff_par)
+
+```
+
+## Estimate confidence intervals
+For each mean, simulate a distribution of mean estimates
+```{r Set up functions for mean simulations}
+#generic mean angle calculator
+MeanRvm = function(n, mu = circular(0), kappa, au = 'degrees', ar = 'clock')
+{
+  mean.circular(rvonmises(n = n, 
+                          mu = circular(mu, units = au, rotation = ar), 
+                          kappa = kappa,
+                          control.circular = list(units = au, rotation = ar)))
+}
+
+CI_vM = function(angles, 
+                 m1,
+                 k1,
+                 m2 = NULL,
+                 k2 = NULL,
+                 w1 = 1,
+                 n = 1e4,
+                 au = 'degrees', 
+                 ar = 'clock',
+                 calc_q = TRUE,
+                 interval = 0.95,
+                 speedup_parallel = TRUE
+)
+{
+  if(speedup_parallel) #3x faster
+  {
+    cl = parallel::makePSOCKcluster(parallel::detectCores()-1)
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('mean.circular',
+                                        'circular',
+                                        'rvonmises'),
+                            envir = .GlobalEnv
+    )
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('MeanRvm',
+                                        'angles',
+                                         'm1',
+                                         'k1',
+                                         'm2',
+                                         'k2',
+                                         'w1',
+                                        'n',
+                                        'au',
+                                        'ar'),
+                            envir = environment()
+    )
+    m1_est = 
+         parallel::parSapply(cl = cl,
+                             X = 1:n,
+                             FUN = function(i)
+                             {
+                               eval.parent(
+                                 {
+                                 MeanRvm(n = round(length(angles)*w1), 
+                                        mu = m1, 
+                                        kappa = k1,
+                                        au = au,
+                                        ar = ar)
+                                 }
+                               )
+                             },
+                             simplify = 'array'
+         )
+    if(!is.null(m2))
+    {
+    m2_est = 
+         parallel::parSapply(cl = cl,
+                             X = 1:n,
+                             FUN = function(i)
+                             {
+                               eval.parent(
+                                 {
+                                 MeanRvm(n = round(length(angles)*(1-w1)), 
+                                        mu = m2, 
+                                        kappa = k2,
+                                        au = au,
+                                        ar = ar)
+                                 }
+                               )
+                             },
+                             simplify = 'array'
+         )
+    }
+    parallel::stopCluster(cl)
+  }else
+  {
+    m1_est = replicate(n = n, 
+                      MeanRvm(n = round(length(angles)*w1), 
+                              mu = m1, 
+                              kappa = k1,
+                              au = au,
+                              ar = ar)
+            )
+    if(!is.null(m2) & !is.na(m2))
+    {
+    m2_est = replicate(n = n, 
+                      MeanRvm(n = round(length(angles)*(1-w1)), 
+                              mu = m2, 
+                              kappa = k2,
+                              au = au,
+                              ar = ar)
+            )
+    }
+  }
+  return(
+    if(calc_q)
+    {
+      if(is.null(m2) | is.na(m2))
+      {
+        Mod360.180(
+    quantile.circular(x = circular(x = m1_est,
+                                   units = au,
+                                   rotation = ar),
+                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+      )
+      }else
+      {
+      list(m1 = Mod360.180(
+    quantile.circular(x = circular(x = m1_est,
+                                   units = au,
+                                   rotation = ar),
+                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+      ),
+    m2 = Mod360.180(
+    quantile.circular(x = circular(x = m2_est,
+                                   units = au,
+                                   rotation = ar),
+                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+      )
+      )
+      }
+    }else
+    {
+      if(is.null(m2) | is.na(m2))
+      {
+          m1_est = 
+          sapply(X = m1_est, FUN = Mod360.180)
+      }else
+      {
+      list(
+            m1_est = 
+          sapply(X = m1_est, FUN = Mod360.180),     
+            m2_est = 
+          sapply(X = m2_est, FUN = Mod360.180),
+          )
+      }
+    }
+  )
+}
+
+
+mod_CI = with(data.frame(mod_diff_par), 
+              {
+              mapply(FUN = CI_vM, 
+                     angles = pair_diffs_lst, 
+                     m1 = mu1, 
+                     k1 = kappa1, 
+                     m2 = mu2, 
+                     k2 = kappa2, 
+                     w1 = weight1)
+                }
+              )
+
+print(do.call(rbind, mod_CI))
 
 ```
