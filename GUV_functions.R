@@ -790,3 +790,36 @@ CI_vM = function(angles, #vector of angles fitted (used for sample size)
   )
 }
 
+Table_vCI = function(ci)
+{
+  rowCI = function(i)
+  {
+    if(length(i) == 3) #only m1 simulated, CI extremes and median returned
+    {
+      nm1 = as.numeric(i)
+      m2 = c(NA, NA, NA) #set m2 to NA
+      names(nm1) = names(i) #give same labels as m1 for consistency
+      names(m2) = names(i) #give same labels as m1 for consistency
+      return(c(m1 = nm1, #remove circular formatting to collapse vector
+               m2 = m2))
+    }else
+    { #both m1 and m2 simulated
+      return(
+        with(i,
+             {
+              nm1 = as.numeric(m1)
+              nm2 = as.numeric(m2)
+              names(nm1) = names(m1)
+              names(nm2) = names(m2)
+              c(m1 = nm1,#remove circular formatting to collapse vector
+                m2 = nm2) #remove circular formatting to collapse vector
+             }
+             )
+      )
+    }
+  }
+  lst = lapply(X = ci,
+         FUN = rowCI)
+  do.call(what = rbind,
+          lst)
+}
