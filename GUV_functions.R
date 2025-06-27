@@ -659,6 +659,7 @@ CI_vM = function(angles, #vector of angles fitted (used for sample size)
                  au = 'degrees', 
                  ar = 'clock',
                  calc_q = TRUE,
+                 alternative = 'one.sided', #two.sided less conservative
                  interval = 0.95, #confidence interval to calculate
                  speedup_parallel = TRUE
 )
@@ -747,27 +748,55 @@ CI_vM = function(angles, #vector of angles fitted (used for sample size)
   return(
     if(calc_q) #calculate quantiles only if requested
     {
+      #either two-sided, symmetrical around mean change
+      #or one-sided, from zero change towards mean change
+      probs1 = switch(alternative,
+                     two.sided = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)),
+                     one.sided = sort(c(c(0,1)+
+                                          (if(Mod360.180(m1)>0) #N.B. quantile.circular counts anticlockwise
+                                            {c(1,0)}else
+                                            {c(0,-1)}
+                                                 )*(1-interval), 0.5)),
+                     sort(c(c(0,1)+ #default to one-sided
+                              (if(Mod360.180(m1)>0)
+                              {c(1,0)}else
+                              {c(0,-1)}
+                              )*(1-interval), 0.5))
+                     )
       if(is.na(m2))
       {
         Mod360.180(
           quantile.circular(x = circular(x = m1_est,
                                          units = au,
                                          rotation = ar),
-                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+                            probs = probs1)
         )
       }else
       {
+        probs2 = switch(alternative,
+                        two.sided = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)),
+                        one.sided = sort(c(c(0,1)+
+                                             (if(Mod360.180(m2)>0)
+                                             {c(1,0)}else
+                                             {c(0,-1)}
+                                             )*(1-interval), 0.5)),
+                        sort(c(c(0,1)+ #default to one-sided
+                                 (if(Mod360.180(m2)<0)
+                                 {c(1,0)}else
+                                 {c(0,-1)}
+                                 )*(1-interval), 0.5))
+        )
         list(m1 = Mod360.180(
           quantile.circular(x = circular(x = m1_est,
                                          units = au,
                                          rotation = ar),
-                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+                            probs = probs1)
         ),
         m2 = Mod360.180(
           quantile.circular(x = circular(x = m2_est,
                                          units = au,
                                          rotation = ar),
-                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+                            probs = probs2)
         )
         )
       }
@@ -794,12 +823,15 @@ Table_vCI = function(ci)
 {
   rowCI = function(i)
   {
+    ci_lab = c('lower', 'median', 'upper')
     if(length(i) == 3) #only m1 simulated, CI extremes and median returned
     {
       nm1 = as.numeric(i)
       m2 = c(NA, NA, NA) #set m2 to NA
-      names(nm1) = names(i) #give same labels as m1 for consistency
-      names(m2) = names(i) #give same labels as m1 for consistency
+      # names(nm1) = names(i) #give same labels as m1 for consistency
+      # names(m2) = names(i) #give same labels as m1 for consistency      
+      names(nm1) = ci_lab #give same labels as m1 for consistency
+      names(m2) = ci_lab #give same labels as m1 for consistency
       return(c(m1 = nm1, #remove circular formatting to collapse vector
                m2 = m2))
     }else
@@ -809,8 +841,10 @@ Table_vCI = function(ci)
              {
               nm1 = as.numeric(m1)
               nm2 = as.numeric(m2)
-              names(nm1) = names(m1)
-              names(nm2) = names(m2)
+              # names(nm1) = names(m1)
+              # names(nm2) = names(m2)
+              names(nm1) = ci_lab
+              names(nm2) = ci_lab
               c(m1 = nm1,#remove circular formatting to collapse vector
                 m2 = nm2) #remove circular formatting to collapse vector
              }
@@ -822,4 +856,106 @@ Table_vCI = function(ci)
          FUN = rowCI)
   do.call(what = rbind,
           lst)
+}
+
+PlotCI_vM = function(ci_vec,
+                     col = 'salmon',
+                     lwd = 2,
+                     radius = 0.95,
+                     ...)#passed to lines()
+{
+ angle_seq1 = 
+   c(
+     seq(from = ci_vec[1], #lower
+         to = ci_vec[1] +
+           Mod360.180(ci_vec[2]-ci_vec[1]), #median
+         length.out =1e2/2),
+     seq(from = ci_vec[2], #median
+         to = ci_vec[2] +
+           Mod360.180(ci_vec[3]-ci_vec[2]) , #upper
+         length.out =1e2/2)
+   )
+ lines(x = radius*sin( rad(angle_seq1) ),
+       y = radius*cos( rad(angle_seq1) ),
+       col = col,
+       lwd = 2,
+       lend = 'butt',
+       ...
+ )
+ if(!is.na(ci_vec[4]))
+ {
+   angle_seq2 = 
+     c(
+       seq(from = ci_vec[1+3],
+           to = ci_vec[1+3] +
+             Mod360.180(ci_vec[2+3]-ci_vec[1+3]),
+           length.out =1e2/2),
+       seq(from = ci_vec[2+3],
+           to = ci_vec[2+3] +
+             Mod360.180(ci_vec[3+3]-ci_vec[2+3]) ,
+           length.out =1e2/2)
+     )
+ lines(x = radius*sin( rad(angle_seq2) ),
+       y = radius*cos( rad(angle_seq2) ),
+       col = col,
+       lwd = 2,
+       lend = 'butt',
+       ...
+ )
+ }
+}
+
+PlotMV_circMLE = function(mod_par,
+                          au = 'degrees',
+                          ar = 'clock',
+                          col1 = 'salmon',
+                          col2 = col1,
+                          ...) #passed to arrows.circular()
+{
+  m1 = with(mod_par, 
+            {
+              circular(mu1,
+                              unit = au,
+                              rotation = ar,
+                              modulo = '2pi',
+                              zero = pi/2
+                              )
+            }
+            )
+  with(mod_par,
+       {
+         arrows.circular(x = m1,
+                         y = A1(kappa1),
+                         col = col1,
+                         lwd = 5*weight1,
+                         length = 0.1,
+                         ...
+                         )
+       }
+  )
+  if(!is.na(mod_par$mu2))
+  {
+  m2 = with(mod_par, 
+            {
+              circular(mu2,
+                              unit = au,
+                              rotation = ar,
+                              modulo = '2pi',
+                              zero = pi/2
+                              )
+            }
+            )
+  with(mod_par,
+       {
+         arrows.circular(x = m2,
+                         y = A1(kappa2),
+                         col = col2,
+                         lwd = 5*(1-weight1),
+                         length = 0.1,
+                         ...
+         )
+       }
+  )
+  }
+  
 }
