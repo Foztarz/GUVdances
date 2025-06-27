@@ -1166,12 +1166,14 @@ mle_CI = with(data.frame(mod_diff_results),
                      m1 = mu, 
                      k1 = kappa, 
                      w1 = 1,
+                     alternative = 'two.sided',#not a hypothesis test (symmetrical)
                      n = 1e4)#takes ≈30s for 10 000 simulations
                 }
               )
 #reorder for comparison like the original models
 mle_CI =  t(mle_CI)[c(rbind(1:4, 1:4+4)),]
 rownames(mle_CI) = rownames(rspar)
+colnames(mle_CI) = c('lower','median','upper')
 
 #estimate CI for unimodal and bimodal von Mises models
 mod_CI = with(data.frame(mod_diff_par), 
@@ -1183,6 +1185,7 @@ mod_CI = with(data.frame(mod_diff_par),
                      m2 = mu2, 
                      k2 = kappa2, 
                      w1 = weight1,
+                     alternative = 'two.sided',#not a hypothesis test (symmetrical)
                      n = 1e4)#takes ≈15 for 10 000 simulations
                 }
               )
@@ -1192,61 +1195,77 @@ print(mle_CI, digits = 3)
 print(mod_CI_tb, digits = 3)
 
 ```
-We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that to not overlap with 0°.
+We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions nearly overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that to not overlap with 0°.
+N.B. For *one-sided* calculations, the CI do overlap with 0° for green conditions, bright conditions and the leftmost mean for dim conditions.
 ### Plot difference CI
 ```{r Plot CI}
+#TODO make bimodal version of PCfun
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 PCfun(angles = unlist(mu_diff_gl),
       col = 'darkgreen',
       shrink = 1.5,
       title = 'Green Dim - Green Bright')
+PlotCI_vM(mod_CI_tb['green_hl',],
+          col = 'darkgreen',
+          radius = 1+0.3)
 
-with(data.frame(t(mod_CI_tb['green_hl',])),
-     {
-       angle_seq = 
-         c(
-    seq(from = m1.2.5.,
-        to = m1.2.5. +
-              Mod360.180(m1.50.-m1.2.5.),
-        length.out =1e2/2),
-    seq(from = m1.50.,
-        to = m1.50. +
-              Mod360.180(m1.97.5.-m1.50.) ,
-        length.out =1e2/2)
-  )
-lines(x = (1+0.3)*sin( rad(angle_seq) ),
-y = (1+0.3)*cos( rad(angle_seq) ),
-col = 'darkgreen',
-lwd = 2,
-lend = 'butt'
-)
-     }
-)
-
-
-plot.circular(x = circular(unlist(mu_diff_uhl)),
-              col = col,
+plot.circular(x = circular(unlist(mu_diff_ul),
+                           units = angle_unit,
+                           rot = angle_rot
+                           ),
+              col = 'purple',
               stack = TRUE,
               sep = 0.1,
               bins = 355/5,
-              units = 'degrees',
-              rotation = 'clock',
+              units = angle_unit,
+              rotation = angle_rot,
               zero = pi/2,
               shrink = 1.5)
-mtext(text = 'UV Dim - UV Bright',
-      side = side,
+mtext(text = 'UV Dim - Green Bright',
+      side = 1,
       line = -2)
 lines(x = c(0,0),
-      y = c(0,1),
+      y = c(-1,1),
       col = 'gray')
+PlotMV_circMLE(mod_par = mod_diff_par['uvg_hl',],
+               col1 = 'purple')
+PlotCI_vM(mod_CI_tb['uvg_hl',],
+          col = 'purple',
+          radius = 1+0.3)
+
 PCfun(angles = unlist(mu_diff_uh),
       col = 'gray40',
       shrink = 1.5,
       title = 'UV Bright - Green Bright')
-PCfun(angles = unlist(mu_diff_gul),
-      col = 'gray25',
-      shrink = 1.5,
-      title = 'UV Dim - Green Dim')
+PlotCI_vM(mod_CI_tb['uvg_h',],
+          col = 'gray40',
+          radius = 1+0.3)
+
+plot.circular(x = circular(unlist(mu_diff_gul),
+                           units = angle_unit,
+                           rot = angle_rot
+                           ),
+              col = 'gray25',
+              stack = TRUE,
+              sep = 0.1,
+              bins = 355/5,
+              units = angle_unit,
+              rotation = angle_rot,
+              zero = pi/2,
+              shrink = 1.5)
+mtext(text = 'UV Dim - Green Dim',
+      side = 1,
+      line = -2)
+lines(x = c(0,0),
+      y = c(-1,1),
+      col = 'gray')
+PlotMV_circMLE(mod_par = mod_diff_par['uvg_l',],
+               col1 = 'gray25')
+PlotCI_vM(mod_CI_tb['uvg_l',],
+          col = 'gray25',
+          radius = 1+0.3)
 ```
+Here we see that the confidence interval for the difference between the green conditions overlaps with 0°, and the one for the two bright conditions almost does (the one sided CI does, but looks odd due it its asymmetry).
+To confirm whether these models better explain the data than the null hypothesis of the same mean for each condition (no difference), we can perform a likelihood-ratio test.
 
 
