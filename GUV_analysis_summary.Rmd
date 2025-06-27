@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~06~12$
+> James Foster $2025~06~27$
 
 > **DESCRIPTION**
 >
@@ -314,6 +314,7 @@ stripchart(mean_vector~colour*brightn,
            vertical = TRUE,
            method = 'jitter',
            jitter = 0.02,
+           ylim = c(0,1),
            col = adjustcolor(c('green2',
                                'purple',
                                'darkgreen',
@@ -1079,21 +1080,17 @@ For the UV high to UV low change, this will be a bimodal distribution.
 
 ```{r Organise heading changes} 
 #collect all heading differences
-
-# Test for differences between conditions ---------------------------------
-
-#collect all heading differences 
 pair_diffs_lst = lapply(X = list(mu_diff_gl,
                                  mu_diff_uh,
                                  mu_diff_ul,
                                  mu_diff_gul), 
                         FUN = unlist) 
+#Give a simpler name
 names(pair_diffs_lst) = c('green_hl',
                           'uvg_h',
                           'uvg_hl',
                           'uvg_l')
-#Calculate maximum likelihood distribution
-
+#Provide appropriate data format
 angle_unit = 'degrees' 
 angle_rot = 'clock'
 #make sure they are in circular format
@@ -1121,50 +1118,12 @@ ml_diff_lst = lapply(X = pair_diffs_lst,
 mod_diff_lst = lapply(X = pair_diffs_lst,
                       circ_mle)
 
-MD_extract = function(md)
-{
-  md_order = with(md, {rownames(results)})
-  md_best = with(md, {results[md_order %in% bestmodel,]})
-  with(md_best,
-       {
-         return(
-           list(mu1 = deg(q1),
-                kappa1 = k1,
-                mu2 = deg(q2),
-                kappa2 = k2,
-                weight1 = lamda,
-                loglikelihood = -Likelihood
-                )
-         )
-       }
-       )
-}
 
+#Extract the parameters of the model with the lowest AIC
 mod_diff_par = t( sapply(X = mod_diff_lst,
                       FUN = MD_extract) )
 
-## Calculate likelihood ------------------------------------------------------------
-
-#function to calculate the likelihood of a sample, given the input ML parameters
-LLcalc = function(ml,
-                  angles,
-                  au = 'degrees',
-                  ar = 'clock',
-                  ...)
-{
-  with(ml,
-       {
-         sum( # add together
-           dvonmises(x = circular(x = angles,
-                                  units = au,
-                                  rotation = ar), # probability density for each observed angle
-                     mu = mu, # ML estimated mean
-                     kappa = kappa, # ML estimated concentration
-                     log = TRUE) # on a log scale (i.e. add instead of multiplying)
-         )
-       }
-  )
-}
+# Calculate likelihood 
 #calculate all in list
 all_ll = mapply(FUN = LLcalc,
                 ml = c(ml_same_lst, ml_diff_lst), #apply to both sets of ML estimates
@@ -1183,165 +1142,30 @@ rownames(rspar) = paste( sort(
                            times = 2) 
                        )
 rspar = rspar[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
-rspar = cbind(rspar, all_ll)
-print(rspar)
-print(mod_diff_par)
+rspar = cbind(rspar, loglikelihood = all_ll)
+rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
+#reorder for easy comparison
+rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the different directly after the same
+print(rspar, digits = 3)
+print(mod_diff_par, digits = 3)
 
 ```
-
+As expected, the bimodal models fitted by `circ_mle` have the highest likelihood, followed by the models for differences and then the models for no difference. The difference models require at ≥1 more parameter, so should increase likelihood by >1 order of magnitude to be appropriate. The bimodal model require ≥2 more parameters, so should increase likelihood by >2 log units.
 ## Estimate confidence intervals
 For each mean, simulate a distribution of mean estimates
-```{r Set up functions for mean simulations}
-#generic mean angle calculator
-MeanRvm = function(n, mu = circular(0), kappa, au = 'degrees', ar = 'clock')
-{
-  mean.circular(rvonmises(n = n, 
-                          mu = circular(mu, units = au, rotation = ar), 
-                          kappa = kappa,
-                          control.circular = list(units = au, rotation = ar)))
-}
+```{r Calculate the confidence intervals}
 
-CI_vM = function(angles, 
-                 m1,
-                 k1,
-                 m2 = NULL,
-                 k2 = NULL,
-                 w1 = 1,
-                 n = 1e4,
-                 au = 'degrees', 
-                 ar = 'clock',
-                 calc_q = TRUE,
-                 interval = 0.95,
-                 speedup_parallel = TRUE
-)
-{
-  if(speedup_parallel) #3x faster
-  {
-    cl = parallel::makePSOCKcluster(parallel::detectCores()-1)
-    parallel::clusterExport(cl = cl, 
-                            varlist = c('mean.circular',
-                                        'circular',
-                                        'rvonmises'),
-                            envir = .GlobalEnv
-    )
-    parallel::clusterExport(cl = cl, 
-                            varlist = c('MeanRvm',
-                                        'angles',
-                                         'm1',
-                                         'k1',
-                                         'm2',
-                                         'k2',
-                                         'w1',
-                                        'n',
-                                        'au',
-                                        'ar'),
-                            envir = environment()
-    )
-    m1_est = 
-         parallel::parSapply(cl = cl,
-                             X = 1:n,
-                             FUN = function(i)
-                             {
-                               eval.parent(
-                                 {
-                                 MeanRvm(n = round(length(angles)*w1), 
-                                        mu = m1, 
-                                        kappa = k1,
-                                        au = au,
-                                        ar = ar)
-                                 }
-                               )
-                             },
-                             simplify = 'array'
-         )
-    if(!is.null(m2))
-    {
-    m2_est = 
-         parallel::parSapply(cl = cl,
-                             X = 1:n,
-                             FUN = function(i)
-                             {
-                               eval.parent(
-                                 {
-                                 MeanRvm(n = round(length(angles)*(1-w1)), 
-                                        mu = m2, 
-                                        kappa = k2,
-                                        au = au,
-                                        ar = ar)
-                                 }
-                               )
-                             },
-                             simplify = 'array'
-         )
-    }
-    parallel::stopCluster(cl)
-  }else
-  {
-    m1_est = replicate(n = n, 
-                      MeanRvm(n = round(length(angles)*w1), 
-                              mu = m1, 
-                              kappa = k1,
-                              au = au,
-                              ar = ar)
-            )
-    if(!is.null(m2) & !is.na(m2))
-    {
-    m2_est = replicate(n = n, 
-                      MeanRvm(n = round(length(angles)*(1-w1)), 
-                              mu = m2, 
-                              kappa = k2,
-                              au = au,
-                              ar = ar)
-            )
-    }
-  }
-  return(
-    if(calc_q)
-    {
-      if(is.null(m2) | is.na(m2))
-      {
-        Mod360.180(
-    quantile.circular(x = circular(x = m1_est,
-                                   units = au,
-                                   rotation = ar),
-                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
-      )
-      }else
-      {
-      list(m1 = Mod360.180(
-    quantile.circular(x = circular(x = m1_est,
-                                   units = au,
-                                   rotation = ar),
-                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
-      ),
-    m2 = Mod360.180(
-    quantile.circular(x = circular(x = m2_est,
-                                   units = au,
-                                   rotation = ar),
-                      probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
-      )
-      )
-      }
-    }else
-    {
-      if(is.null(m2) | is.na(m2))
-      {
-          m1_est = 
-          sapply(X = m1_est, FUN = Mod360.180)
-      }else
-      {
-      list(
-            m1_est = 
-          sapply(X = m1_est, FUN = Mod360.180),     
-            m2_est = 
-          sapply(X = m2_est, FUN = Mod360.180),
-          )
-      }
-    }
-  )
-}
-
-
+mle_CI = with(data.frame(do.call(rbind, c(ml_same_lst, ml_diff_lst))), 
+              {
+              mapply(FUN = CI_vM, 
+                     angles = pair_diffs_lst, 
+                     m1 = mu, 
+                     k1 = kappa, 
+                     w1 = 1)
+                }
+              )
+mle_CI =  t(mle_CI)[c(rbind(1:4, 1:4+4)),]
+rownames(mle_CI) = rownames(rspar)
 mod_CI = with(data.frame(mod_diff_par), 
               {
               mapply(FUN = CI_vM, 
@@ -1353,7 +1177,7 @@ mod_CI = with(data.frame(mod_diff_par),
                      w1 = weight1)
                 }
               )
-
-print(do.call(rbind, mod_CI))
+print(mle_CI, digits = 3)
+print(unlist(mod_CI[3:4]), digits = 3) #find a better display method
 
 ```
