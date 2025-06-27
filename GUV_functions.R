@@ -588,3 +588,205 @@ RVMgenerator = function(param,
 }
 
 
+# Maximum Likelihood Modelling --------------------------------------------
+
+#Extract the parameters of the top model fit by circ_mle
+MD_extract = function(md)
+{
+  #extract the order of models in the circm_mle results
+  md_order = with(md, {rownames(results)})
+  #extract the results for just the "best model" lowest AIC
+  md_best = with(md, {results[md_order %in% bestmodel,]})
+  #extract just the relevant parameters
+  with(md_best,
+       {
+         return(
+           list(mu1 = deg(q1), #convert to degrees
+                kappa1 = k1,
+                mu2 = deg(q2), #convert to degrees
+                kappa2 = k2,
+                weight1 = lamda,
+                loglikelihood = -Likelihood #convert to true log likelihood
+           )
+         )
+       }
+  )
+}
+
+#function to calculate the likelihood of a sample, given the input ML parameters
+LLcalc = function(ml,
+                  angles,
+                  au = 'degrees',
+                  ar = 'clock',
+                  ...)
+{
+  with(ml,
+       {
+         sum( # add together
+           dvonmises(x = circular(x = angles,
+                                  units = au,
+                                  rotation = ar), # probability density for each observed angle
+                     mu = mu, # ML estimated mean
+                     kappa = kappa, # ML estimated concentration
+                     log = TRUE) # on a log scale (i.e. add instead of multiplying)
+         )
+       }
+  )
+}
+
+#generic mean angle simulator
+MeanRvm = function(n, #representative sample size
+                   mu = circular(0), #mean (defaults to 0rad)
+                   kappa, #kappa required
+                   au = 'degrees', #units
+                   ar = 'clock') #rotation direction
+{
+  mean.circular(rvonmises(n = n, 
+                          mu = circular(mu, units = au, rotation = ar), 
+                          kappa = kappa,
+                          control.circular = list(units = au, rotation = ar)))
+}
+
+#Simulate confidence intervals for a unimodal or bimodal distribution
+#fitted to a vector of "angles"
+CI_vM = function(angles, #vector of angles fitted (used for sample size)
+                 m1, #primary mean
+                 k1, #primary concentration
+                 m2 = NA, #secondary mean (ignored if NULL or NA)
+                 k2 = NA, #secondary kappa
+                 w1 = 1, #weighting of primary mean
+                 n = 1e4, #number of simulations
+                 au = 'degrees', 
+                 ar = 'clock',
+                 calc_q = TRUE,
+                 interval = 0.95, #confidence interval to calculate
+                 speedup_parallel = TRUE
+)
+{
+  if(speedup_parallel) #3x faster
+  {
+    cl = parallel::makePSOCKcluster(parallel::detectCores()-1)
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('mean.circular',
+                                        'circular',
+                                        'rvonmises'),
+                            envir = .GlobalEnv
+    )
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('MeanRvm',
+                                        'angles',
+                                        'm1',
+                                        'k1',
+                                        'm2',
+                                        'k2',
+                                        'w1',
+                                        'n',
+                                        'au',
+                                        'ar'),
+                            envir = environment()
+    )
+    #simulate primary mean
+    m1_est = 
+      parallel::parSapply(cl = cl,
+                          X = 1:n,
+                          FUN = function(i)
+                          {
+                            eval.parent(
+                              {
+                                MeanRvm(n = round(length(angles)*w1), #estimate number of observations at primary mean
+                                        mu = m1, 
+                                        kappa = k1,
+                                        au = au,
+                                        ar = ar)
+                              }
+                            )
+                          },
+                          simplify = 'array' #return an array of simulated angles
+      )
+    if(!is.na(m2)) #if there is a valid secondary mean
+    {
+      m2_est = 
+        parallel::parSapply(cl = cl,
+                            X = 1:n,
+                            FUN = function(i)
+                            {
+                              eval.parent(
+                                {
+                                  MeanRvm(n = round(length(angles)*(1-w1)), #estimate number of observations at secondary mean
+                                          mu = m2, 
+                                          kappa = k2,
+                                          au = au,
+                                          ar = ar)
+                                }
+                              )
+                            },
+                            simplify = 'array' #return an array of simulated angles
+        )
+    }
+    parallel::stopCluster(cl)
+  }else
+  { #if not using parallel, use the slower version via replicate()
+    m1_est = replicate(n = n, 
+                       MeanRvm(n = round(length(angles)*w1), 
+                               mu = m1, 
+                               kappa = k1,
+                               au = au,
+                               ar = ar)
+    )
+    if(!is.na(m2))
+    {
+      m2_est = replicate(n = n, 
+                         MeanRvm(n = round(length(angles)*(1-w1)), 
+                                 mu = m2, 
+                                 kappa = k2,
+                                 au = au,
+                                 ar = ar)
+      )
+    }
+  }
+  return(
+    if(calc_q) #calculate quantiles only if requested
+    {
+      if(is.na(m2))
+      {
+        Mod360.180(
+          quantile.circular(x = circular(x = m1_est,
+                                         units = au,
+                                         rotation = ar),
+                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+        )
+      }else
+      {
+        list(m1 = Mod360.180(
+          quantile.circular(x = circular(x = m1_est,
+                                         units = au,
+                                         rotation = ar),
+                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+        ),
+        m2 = Mod360.180(
+          quantile.circular(x = circular(x = m2_est,
+                                         units = au,
+                                         rotation = ar),
+                            probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+        )
+        )
+      }
+    }else
+    { #if quantiles not requested, return the simulations (mainly for troubleshooting)
+      if(is.na(m2))
+      {
+        m1_est = 
+          sapply(X = m1_est, FUN = Mod360.180)
+      }else
+      {
+        list(
+          m1_est = 
+            sapply(X = m1_est, FUN = Mod360.180),     
+          m2_est = 
+            sapply(X = m2_est, FUN = Mod360.180),
+        )
+      }
+    }
+  )
+}
+
