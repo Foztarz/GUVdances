@@ -1118,10 +1118,17 @@ ml_diff_lst = lapply(X = pair_diffs_lst,
 mod_diff_lst = lapply(X = pair_diffs_lst,
                       FUN = circ_mle,#converts circular format data to radians
                       niter = 1e4)#some stochastic variability for green stim
+#Forced multiple different means
+bim_diff_lst = lapply(X = pair_diffs_lst,
+                      FUN = circ_mle,#converts circular format data to radians
+                      exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
+                      niter = 1e4)#some stochastic variability for green stim
 
 
 #Extract the parameters of the model with the lowest AIC
 mod_diff_par = t( sapply(X = mod_diff_lst,
+                      FUN = MD_extract) )
+bim_diff_par = t( sapply(X = bim_diff_lst,
                       FUN = MD_extract) )
 
 # Calculate likelihood 
@@ -1149,8 +1156,18 @@ rspar = cbind(rspar, loglikelihood = all_ll)
 rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
 #reorder for easy comparison
 rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the different directly after the same
-print(rspar, digits = 3)
-print(mod_diff_par, digits = 3)
+rspar[,3:4] = NA
+rspar = cbind(rspar, weight1 = 1.0)
+colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
+rownames(bim_diff_par) = paste('multi', rownames(bim_diff_par))
+all_res = rbind(data.frame(rspar),
+                data.frame(bim_diff_par) )
+all_res = apply(all_res, MARGIN = 2, FUN = unlist)
+all_res = all_res[c(1:2, 9, 3:4, 10, 5:6, 11, 7:8, 12),]
+# print(rspar, digits = 3)
+# print(mod_diff_par, digits = 3)
+# print(bim_diff_par, digits = 3)
+print(all_res, digits = 3)
 
 ```
 As expected, the bimodal models fitted by `circ_mle` have the highest likelihood, followed by the models for differences and then the models for no difference. The difference models require at ≥1 more parameter, so should increase likelihood by >1 order of magnitude to be appropriate. The bimodal model require ≥2 more parameters, so should increase likelihood by >2 log units.
