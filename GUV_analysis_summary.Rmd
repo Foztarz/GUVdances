@@ -1116,7 +1116,8 @@ ml_diff_lst = lapply(X = pair_diffs_lst,
                      bias = TRUE)
 #Distribution for multiple different means
 mod_diff_lst = lapply(X = pair_diffs_lst,
-                      circ_mle)
+                      FUN = circ_mle,#converts circular format data to radians
+                      niter = 1e4)#some stochastic variability for green stim
 
 
 #Extract the parameters of the model with the lowest AIC
@@ -1132,16 +1133,18 @@ all_ll = mapply(FUN = LLcalc,
                 ar = angle_rot)
 
 #inspect resulting parameters
-rspar = do.call(rbind, c(ml_same_lst, ml_diff_lst))
-rownames(rspar) = paste( sort(
-                          rep(x = c( 'same', 'diff'),
+mod_diff_results = do.call(rbind, c(ml_same_lst, ml_diff_lst))
+#add easy to parse names
+rownames(mod_diff_results) = paste( sort( #distinguish same and different mean
+                          rep(x = c( 'same', 'diff'), 
                               times =  length(pair_diffs_lst) ),
                           decreasing = TRUE
                           ),
                        rep(x = names(pair_diffs_lst),
                            times = 2) 
                        )
-rspar = rspar[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
+#display version
+rspar = mod_diff_results[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
 rspar = cbind(rspar, loglikelihood = all_ll)
 rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
 #reorder for easy comparison
@@ -1151,21 +1154,26 @@ print(mod_diff_par, digits = 3)
 
 ```
 As expected, the bimodal models fitted by `circ_mle` have the highest likelihood, followed by the models for differences and then the models for no difference. The difference models require at ≥1 more parameter, so should increase likelihood by >1 order of magnitude to be appropriate. The bimodal model require ≥2 more parameters, so should increase likelihood by >2 log units.
+
 ## Estimate confidence intervals
 For each mean, simulate a distribution of mean estimates
 ```{r Calculate the confidence intervals}
-
-mle_CI = with(data.frame(do.call(rbind, c(ml_same_lst, ml_diff_lst))), 
+#estimate CI for unimodal von Mises models
+mle_CI = with(data.frame(mod_diff_results), 
               {
               mapply(FUN = CI_vM, 
                      angles = pair_diffs_lst, 
                      m1 = mu, 
                      k1 = kappa, 
-                     w1 = 1)
+                     w1 = 1,
+                     n = 1e4)#takes ≈30s for 10 000 simulations
                 }
               )
+#reorder for comparison like the original models
 mle_CI =  t(mle_CI)[c(rbind(1:4, 1:4+4)),]
 rownames(mle_CI) = rownames(rspar)
+
+#estimate CI for unimodal and bimodal von Mises models
 mod_CI = with(data.frame(mod_diff_par), 
               {
               mapply(FUN = CI_vM, 
@@ -1174,10 +1182,71 @@ mod_CI = with(data.frame(mod_diff_par),
                      k1 = kappa1, 
                      m2 = mu2, 
                      k2 = kappa2, 
-                     w1 = weight1)
+                     w1 = weight1,
+                     n = 1e4)#takes ≈15 for 10 000 simulations
                 }
               )
+#collapse to printable table
+mod_CI_tb = Table_vCI(mod_CI)
 print(mle_CI, digits = 3)
-print(unlist(mod_CI[3:4]), digits = 3) #find a better display method
+print(mod_CI_tb, digits = 3)
 
 ```
+We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that to not overlap with 0°.
+### Plot difference CI
+```{r Plot CI}
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright')
+
+with(data.frame(t(mod_CI_tb['green_hl',])),
+     {
+       angle_seq = 
+         c(
+    seq(from = m1.2.5.,
+        to = m1.2.5. +
+              Mod360.180(m1.50.-m1.2.5.),
+        length.out =1e2/2),
+    seq(from = m1.50.,
+        to = m1.50. +
+              Mod360.180(m1.97.5.-m1.50.) ,
+        length.out =1e2/2)
+  )
+lines(x = (1+0.3)*sin( rad(angle_seq) ),
+y = (1+0.3)*cos( rad(angle_seq) ),
+col = 'darkgreen',
+lwd = 2,
+lend = 'butt'
+)
+     }
+)
+
+
+plot.circular(x = circular(unlist(mu_diff_uhl)),
+              col = col,
+              stack = TRUE,
+              sep = 0.1,
+              bins = 355/5,
+              units = 'degrees',
+              rotation = 'clock',
+              zero = pi/2,
+              shrink = 1.5)
+mtext(text = 'UV Dim - UV Bright',
+      side = side,
+      line = -2)
+lines(x = c(0,0),
+      y = c(0,1),
+      col = 'gray')
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+```
+
+
