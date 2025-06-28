@@ -1394,15 +1394,17 @@ all_lr_results = within(all_lr_results,
 num_col = sapply(X = all_lr_results, FUN = is.numeric)
 print_lr_results = all_lr_results
 print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
-rownames(print_lr_results) = NULL
+# rownames(print_lr_results) = NULL #better to keep them for the html
 print_lr_results = within(print_lr_results,
                           {
                             rm(dev0,dev1, p)
-                          test = sub(sub(test, 
+                          test = sub(sub(sub(test, 
                                      pattern = '_', 
                                      replacement = ' '),
                                      pattern = '_', 
-                                     replacement = ' ')
+                                     replacement = ' '),
+                                     pattern = 'pairs ',
+                                     replacement = '')
                           }
                           )
 # rownames(print_lr_results) = print_lr_results$comparison
