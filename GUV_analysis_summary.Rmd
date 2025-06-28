@@ -53,8 +53,7 @@ editor_options:
 
 > **TODO**
 >
-> - move necessary functions to GUV_functions
-
+> -   move necessary functions to GUV_functions
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -756,6 +755,12 @@ legend(x = 'bottomright',
 It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light.
 In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun.
 In Kühn's data the stimuli were smaller (assuming a viewing distance of ≈200mm, an SMD with diameter 3.5mm would appear $deg(2*atan2(y = 3.5/2,x = 200)) =$ 1.0° across) than Edrich's (2.3°), which may have resulted in them being perceived as dimmer (left shift in this graph).
+Edrich $et~al.$ (1979) mention that the particular relationship with light intensity was variable.
+They also mention that the relative relationships remained constant, so we may also observe the same relationship but right shifted.
+
+> Unfortunately, the scatter of the dance directions as a function of light intensity proved to be unstable over long periods of time; the absolute values changed from day to day.
+> However, these changes were such that curves for adjacent wavelengths were shifted in parallel - the relative sensitivities remained constant.
+> --- Edrich et al. (1979), p154
 
 # Sun compass orientation
 
@@ -1078,7 +1083,7 @@ PCfun(angles = unlist(mu_diff_gul),
 For each change distribution, find the maximum likelihood von Mises distribution.
 For the UV high to UV low change, this will be a bimodal distribution.
 
-```{r Organise heading changes} 
+```{r Organise heading changes}
 #collect all heading differences
 pair_diffs_lst = lapply(X = list(mu_diff_gl,
                                  mu_diff_uh,
@@ -1100,7 +1105,10 @@ pair_diffs_lst = lapply(X = pair_diffs_lst,
                         rotation = angle_rot)
 ```
 
-Fit the maximum likelihood distribution for no difference between pairs, differences between pairs, and differences between pairs with two means. If angles shift in one direction between trials, the "difference" distribution should have significantly higher likelihood. If angles shift in two directions between pairs, then the "two means" distribution should be the best fit.
+Fit the maximum likelihood distribution for no difference between pairs, differences between pairs, and differences between pairs with two means.
+If angles shift in one direction between trials, the "difference" distribution should have significantly higher likelihood.
+If angles shift in two directions between pairs, then the "two means" distribution should be the best fit.
+
 ```{r Fit maximum likelihood von Mises distributions}
 #TODO neaten up!
 #Distribution for same means
@@ -1182,10 +1190,15 @@ all_res = within(data = data.frame(all_res),
 print(all_res, digits = 3)
 
 ```
-As expected, the bimodal models fitted by `circ_mle` have the highest likelihood, followed by the models for differences and then the models for no difference. The difference models require at ≥1 more parameter, so should increase likelihood by >1 order of magnitude to be appropriate. The bimodal model require ≥2 more parameters, so should increase likelihood by >2 log units.
+
+As expected, the bimodal models fitted by `circ_mle` have the highest likelihood, followed by the models for differences and then the models for no difference.
+The difference models require at ≥1 more parameter, so should increase likelihood by \>1 order of magnitude to be appropriate.
+The bimodal model require ≥2 more parameters, so should increase likelihood by \>2 log units.
 
 ## Estimate confidence intervals
+
 For each mean, simulate a distribution of mean estimates
+
 ```{r Calculate the confidence intervals}
 #estimate CI for unimodal von Mises models
 mle_CI = with(data.frame(mod_diff_results), 
@@ -1241,9 +1254,12 @@ print(mle_CI, digits = 3)
 print(mod_CI_tb, digits = 3)
 
 ```
+
 We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions nearly overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that to not overlap with 0°.
-N.B. For *one-sided* calculations, the CI do overlap with 0° for green conditions, bright conditions and the leftmost mean for dim conditions.
+N.B.
+For *one-sided* calculations, the CI do overlap with 0° for green conditions, bright conditions and the leftmost mean for dim conditions.
 ### Plot difference CI
+
 ```{r Plot CI}
 #TODO make bimodal version of PCfun
 par(mfrow = c(2,2), mar = c(0,0,0,0))
@@ -1341,11 +1357,15 @@ PlotCI_vM(mod_CI_tb['uvg_l',],
           col = 'gray25',
           radius = 1+0.3)
 ```
+
 Here we see that the confidence interval for the difference between the green conditions overlaps with 0°, and the one for the two bright conditions almost does (the one sided CI does, but looks odd due it its asymmetry).
 To confirm whether these models better explain the data than the null hypothesis of the same mean for each condition (no difference), we can perform a likelihood-ratio test.
 
 ## Likelihood ratio tests
-For each condition, compare the models for same mean, different mean and multiple means. First perform all tests separately, then collect them together and finally adjust for multiple tests before reporting.
+
+For each condition, compare the models for same mean, different mean and multiple means.
+First perform all tests separately, then collect them together and finally adjust for multiple tests before reporting.
+
 ```{r Perform LR tests}
 #TODO add turn angles
 mod_details= lapply(X = names(pair_diffs_lst),
@@ -1422,4 +1442,5 @@ print(print_lr_results,
       digits = 3)
 
 ```
+
 These tests confirm, that there is no significant difference between the two green conditions, a significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
