@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~06~27$
+> James Foster $2025~06~28$
 
 > **DESCRIPTION**
 >
@@ -1102,6 +1102,7 @@ pair_diffs_lst = lapply(X = pair_diffs_lst,
 
 Fit the maximum likelihood distribution for no difference between pairs, differences between pairs, and differences between pairs with two means. If angles shift in one direction between trials, the "difference" distribution should have significantly higher likelihood. If angles shift in two directions between pairs, then the "two means" distribution should be the best fit.
 ```{r Fit maximum likelihood von Mises distributions}
+#TODO neaten up!
 #Distribution for same means
 ml_same_lst = lapply(X = pair_diffs_lst,
                      mle.vonmises,
@@ -1159,11 +1160,22 @@ rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the different directly after the same
 rspar[,3:4] = NA
 rspar = cbind(rspar, weight1 = 1.0)
 colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
-rownames(bim_diff_par) = paste('multi', rownames(bim_diff_par))
 all_res = rbind(data.frame(rspar),
                 data.frame(bim_diff_par) )
 all_res = apply(all_res, MARGIN = 2, FUN = unlist)
+rownames(all_res[9:12,]) = paste('multi', rownames(bim_diff_par))
 all_res = all_res[c(1:2, 9, 3:4, 10, 5:6, 11, 7:8, 12),]
+
+all_res = within(data = data.frame(all_res),
+                 {
+                   model = c('same',
+                             'diff',
+                             'multi')
+                   dataset = c(sapply(X = names(pair_diffs_lst),
+                                    FUN = rep,
+                                    times = 3) )
+                 }
+                )
 # print(rspar, digits = 3)
 # print(mod_diff_par, digits = 3)
 # print(bim_diff_par, digits = 3)
@@ -1203,11 +1215,28 @@ mod_CI = with(data.frame(mod_diff_par),
                      k2 = kappa2, 
                      w1 = weight1,
                      alternative = 'two.sided',#not a hypothesis test (symmetrical)
+                     # SIMPLIFY = FALSE,
+                     n = 1e4)#takes ≈15 for 10 000 simulations
+                }
+              )
+#estimate CI for unimodal and bimodal von Mises models
+bim_CI = with(data.frame(bim_diff_par), 
+              {
+              mapply(FUN = CI_vM, 
+                     angles = pair_diffs_lst, 
+                     m1 = mu1, 
+                     k1 = kappa1, 
+                     m2 = mu2, 
+                     k2 = kappa2, 
+                     w1 = weight1,
+                     SIMPLIFY = FALSE,
+                     alternative = 'two.sided',#not a hypothesis test (symmetrical)
                      n = 1e4)#takes ≈15 for 10 000 simulations
                 }
               )
 #collapse to printable table
 mod_CI_tb = Table_vCI(mod_CI)
+bim_CI_tb = Table_vCI(bim_CI)
 print(mle_CI, digits = 3)
 print(mod_CI_tb, digits = 3)
 
@@ -1257,6 +1286,33 @@ PCfun(angles = unlist(mu_diff_uh),
 PlotCI_vM(mod_CI_tb['uvg_h',],
           col = 'gray40',
           radius = 1+0.3)
+#according to model comparison, this is slightly better
+#But this is not truly bimodal, kappa2 = 0
+  # plot.circular(x = circular(unlist(mu_diff_uh),
+  #                            units = angle_unit,
+  #                            rot = angle_rot
+  #                            ),
+  #               col = 'gray40',
+  #               stack = TRUE,
+  #               sep = 0.1,
+  #               bins = 355/5,
+  #               units = angle_unit,
+  #               rotation = angle_rot,
+  #               zero = pi/2,
+  #               shrink = 1.5)
+  # mtext(text = 'UV Bright - Green Bright',
+  #       side = 1,
+  #       line = -2)
+  # lines(x = c(0,0),
+  #       y = c(-1,1),
+  #       col = 'gray')
+  # PlotMV_circMLE(mod_par = bim_diff_par['uvg_h',],
+  #                col1 = 'gray40')
+  # PlotCI_vM(bim_CI_tb['uvg_h',],
+  #           col = 'gray40',
+  #           radius = 1+0.3)
+
+
 
 plot.circular(x = circular(unlist(mu_diff_gul),
                            units = angle_unit,
@@ -1285,4 +1341,62 @@ PlotCI_vM(mod_CI_tb['uvg_l',],
 Here we see that the confidence interval for the difference between the green conditions overlaps with 0°, and the one for the two bright conditions almost does (the one sided CI does, but looks odd due it its asymmetry).
 To confirm whether these models better explain the data than the null hypothesis of the same mean for each condition (no difference), we can perform a likelihood-ratio test.
 
+## Likelihood ratio tests
+For each condition, compare the models for same mean, different mean and multiple means. First perform all tests separately, then collect them together and finally adjust for multiple tests before reporting.
+```{r Perform LR tests}
+mod_details= lapply(X = names(pair_diffs_lst),
+                     FUN = CollectDetails,
+                     ll = all_res,
+                     bimod = TRUE)
+names(mod_details) = names(pair_diffs_lst)
 
+#set up tests for hypotheses
+lr_tests = c('pairs_diff_zero', #is the turn different from zero?
+             'pairs_multi_diff', #is the turn in one or two directions?
+             'pairs_multi_zero' #are the two directions different from zero?
+             )#multiple tests
+
+#Perform collect likelihood ratio tests for each hypothesis
+all_lr_results_lst = lapply(X =mod_details,
+                           FUN = LR_calc_lst,
+                           tst = lr_tests)
+all_lr_results = do.call(what = rbind,
+                          args = all_lr_results_lst
+                          )
+all_lr_results = within(data.frame(all_lr_results),
+                        {
+                            comparison = c( sapply(X = names(mod_details), 
+                            FUN = rep,
+                            times = length(lr_tests)
+                            ) )
+                            test = c( sapply(X = lr_tests, 
+                            FUN = rep,
+                            times = length(names(mod_details))
+                            ) )
+                        }
+                      )
+# lapply(
+#        all_lr_results_lst,
+#        FUN = print,
+#        digits = 3
+#        )
+
+#add labels to interpret each test according to p value and sign of comparison
+all_lr_results = within(all_lr_results,
+                     {
+                       result = mapply(tst = lr_tests,
+                                       d0 = unlist(dev0),
+                                       d1 = unlist(dev1),
+                                       pa = p_adjusted,
+                                       FUN = H1label
+                       )
+                     }
+)
+num_col = sapply(X = all_lr_results, FUN = is.numeric)
+print_lr_results = all_lr_results
+print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = signif, digits = 3)
+print(print_lr_results,
+      digits = 3)
+
+```
+These tests confirm, that there is no significant difference between the two green conditions, a significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
