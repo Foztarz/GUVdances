@@ -1251,7 +1251,10 @@ PCfun(angles = unlist(mu_diff_gl),
       col = 'darkgreen',
       shrink = 1.5,
       title = 'Green Dim - Green Bright')
-PlotCI_vM(mod_CI_tb['green_hl',],
+# PlotCI_vM(mod_CI_tb['green_hl',],
+#           col = 'darkgreen',
+#           radius = 1+0.3)
+PlotCI_vM(mle_CI['diff green_hl',],
           col = 'darkgreen',
           radius = 1+0.3)
 
@@ -1394,7 +1397,6 @@ all_lr_results = within(all_lr_results,
 num_col = sapply(X = all_lr_results, FUN = is.numeric)
 print_lr_results = all_lr_results
 print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
-# rownames(print_lr_results) = NULL #better to keep them for the html
 print_lr_results = within(print_lr_results,
                           {
                             rm(dev0,dev1, p)
@@ -1407,8 +1409,7 @@ print_lr_results = within(print_lr_results,
                                      replacement = '')
                           }
                           )
-# rownames(print_lr_results) = print_lr_results$comparison
-# print_lr_results = within(print_lr_results, {rm(comparison)})
+rownames(print_lr_results) = with(print_lr_results, paste(comparison, test))#better to keep them for the html
 print(print_lr_results,
       digits = 3)
 
