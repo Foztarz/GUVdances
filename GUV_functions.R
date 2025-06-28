@@ -959,3 +959,236 @@ PlotMV_circMLE = function(mod_par,
   }
   
 }
+
+CollectDetails = function(ll,
+                          dts = 'all',
+                          bimod = FALSE,# whether a bimodal version is also considered
+                          ...)
+{
+  if(!bimod)
+  {
+  with( subset(ll, dataset == dts),
+        {
+          data.frame(
+            modnm = c('pairs same','pairs diff'),
+            ll = c(
+                   loglikelihood[model %in% 'same'],
+                   loglikelihood[model %in% 'diff']
+                   ),
+            deviance = c(
+                         -2*loglikelihood[model %in% 'same'],
+                         -2*loglikelihood[model %in% 'diff']
+                      ), 
+            rnk = rank(
+                        c(
+                          -2*loglikelihood[model %in% 'same'],
+                          -2*loglikelihood[model %in% 'diff'] 
+                      ) ),#paired differences use fewer observations, don't include in ranking 
+            df = c(1, 2)
+          )
+        }
+  )
+  }else
+  {
+    with( subset(ll, dataset == dts),
+        {
+            data.frame(
+              modnm = c('pairs same','pairs diff', 'pairs multi'),
+              ll = c(
+                loglikelihood[model %in% 'same'],
+                loglikelihood[model %in% 'diff'],
+                loglikelihood[model %in% 'multi']
+              ),
+              deviance = c(
+                -2*loglikelihood[model %in% 'same'],
+                -2*loglikelihood[model %in% 'diff'],
+                -2*loglikelihood[model %in% 'multi']
+              ), 
+              rnk = rank(
+                c(
+                  -2*loglikelihood[model %in% 'same'],
+                  -2*loglikelihood[model %in% 'diff'], 
+                  -2*loglikelihood[model %in% 'multi']
+                ) ),#paired differences use fewer observations, don't include in ranking 
+              df = c(1,
+                     2,
+                     5)
+          )
+        }
+    )
+  }
+}
+
+
+#function to prepare and perform the LR test
+LR_calc = function(tst, mdt)
+{
+  #collect the deviances for h0 and h1 and calculate the difference in degrees of freedom
+  lr_res = 
+    with(mdt,
+         {
+           switch(EXPR = tst,
+                  #test for uniformity (i.e. more comprehensive Rayleigh test)
+                  uniformity = data.frame(
+                    dev0 = deviance[modnm == 'uniform'],#null hypothesis: uniform distribution
+                    dev1 = deviance[rnk == 1], #lowest rank is most likely model, any non-uniform distribution
+                    d.f. = df[rnk == 1] #uniform has 0 degrees of freedom, test degrees of freedom are best model - 0
+                  ),
+                  #test for unpaired grand mean
+                  trials_same_mean = data.frame(
+                    dev0 = deviance[rnk == 2], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'trial mean'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'trial mean'] -
+                      df[rnk == 2] #2nd best fitting model
+                  ),
+                  #test for nonzero differences of pairs
+                  pairs_diff_zero = data.frame(
+                    dev0 = deviance[modnm == 'pairs same'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs diff'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs diff'] -
+                      df[modnm == 'pairs same'] #grand mean has half the number of params
+                  ),
+                  #test for nonzero multimodal differences of pairs
+                  pairs_multi_zero = data.frame(
+                    dev0 = deviance[modnm == 'pairs same'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs multi'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs multi'] -
+                      df[modnm == 'pairs same'] #grand mean has half the number of params
+                  ),
+                  #test for multimodal rather than unimodal differences of pairs
+                  pairs_multi_diff = data.frame(
+                    dev0 = deviance[modnm == 'pairs diff'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs multi'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs multi'] -
+                      df[modnm == 'pairs diff'] #grand mean has half the number of params
+                  ),
+                  
+           )
+         }
+    )
+  #calculate the change in deviance (chi-squared distributed)
+  lr_res = within(lr_res,
+                  {
+                    chi_squared = abs(unlist(dev0) - unlist(dev1))
+                  }
+  )
+  #calculate the p value
+  lr_res = within(lr_res,
+                  {
+                    p = pchisq(q = unlist(chi_squared),
+                               df = unlist(d.f.),
+                               lower.tail = FALSE)
+                  }
+  )
+  #adjust for multiple comparisons (3 in this case)
+  lr_res = within(lr_res,
+                  {
+                    p_adjusted = p.adjust(p = p,
+                                          method = 'BH',
+                                          n = length(p))#could this be flexible?
+                  }
+  )
+  return(lr_res)
+  
+}
+#function to prepare and perform the LR test
+LR_calc_lst = function(tst, mdt, digits = 6)
+{
+  #collect the deviances for h0 and h1 and calculate the difference in degrees of freedom
+  lr_res = 
+    with(mdt,
+         { data.frame(
+           t(
+           sapply(X = tst,
+                  FUN = switch,
+                  #test for uniformity (i.e. more comprehensive Rayleigh test)
+                  uniformity = data.frame(
+                    dev0 = deviance[modnm == 'uniform'],#null hypothesis: uniform distribution
+                    dev1 = deviance[rnk == 1], #lowest rank is most likely model, any non-uniform distribution
+                    d.f. = df[rnk == 1] #uniform has 0 degrees of freedom, test degrees of freedom are best model - 0
+                  ),
+                  #test for unpaired grand mean
+                  trials_same_mean = data.frame(
+                    dev0 = deviance[rnk == 2], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'trial mean'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'trial mean'] -
+                      df[rnk == 2] #2nd best fitting model
+                  ),
+                  #test for nonzero differences of pairs
+                  pairs_diff_zero = data.frame(
+                    dev0 = deviance[modnm == 'pairs same'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs diff'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs diff'] -
+                      df[modnm == 'pairs same'] #grand mean has half the number of params
+                  ),
+                  #test for nonzero multimodal differences of pairs
+                  pairs_multi_zero = data.frame(
+                    dev0 = deviance[modnm == 'pairs same'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs multi'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs multi'] -
+                      df[modnm == 'pairs same'] #grand mean has half the number of params
+                  ),
+                  #test for multimodal rather than unimodal differences of pairs
+                  pairs_multi_diff = data.frame(
+                    dev0 = deviance[modnm == 'pairs diff'], #null hypothesis: trials don't differ
+                    dev1 = deviance[modnm == 'pairs multi'], #within trial obs. share a mean, expect lower deviance with more params
+                    d.f. = df[modnm == 'pairs multi'] -
+                      df[modnm == 'pairs diff'] #grand mean has half the number of params
+                  ),
+           )
+           )
+         )
+         }
+    )
+  #calculate the change in deviance (chi-squared distributed)
+  lr_res =  within(lr_res,
+                      expr = 
+                  {
+                    chi_squared = abs(unlist(dev0) - unlist(dev1))
+                  }
+  )
+  
+  #calculate the p value
+  lr_res = within(lr_res,
+                  {
+                    p = pchisq(q = unlist(chi_squared),
+                               df = unlist(d.f.),
+                               lower.tail = FALSE)
+                  }
+  )
+  #adjust for multiple comparisons (3 in this case)
+  lr_res = within(lr_res,
+                  {
+                    p_adjusted = p.adjust(p = p,
+                                          method = 'BH',
+                                          n = length(p))#could this be flexible?
+                  }
+  )
+  lr_res = apply(X = lr_res,
+                 MARGIN = 2,
+                 FUN = unlist)#for whatever reason entries are still in list format
+  return(lr_res)
+  
+}
+
+#Interpret the hypothesis tests depending on size and sign of difference in deviance
+H1label = function(tst, d0, d1, pa)
+{
+  switch(EXPR = tst,
+         uniformity = if(d0 > d1 & pa <0.05) # data may be oriented, not significantly oriented, or significantly disoriented
+         {'data are significantly oriented'}else
+         {'data _are not_ significantly oriented'},
+         trials_same_mean = if(d0 > d1 & pa <0.05) # trials significantly differ in mean, not significantly differ in mean, or share a significant mean
+         {'trial means differ significantly'}else
+         {'trial means _do not_ differ significantly'},
+         pairs_diff_zero = if(d0 > d1 & pa <0.05) # trials significantly differ in mean, not significantly differ in mean, or share a significant mean
+         {'paired trials differ significantly'}else
+         {'paired trials _do not_ differ significantly'},
+         pairs_multi_zero = if(d0 > d1 & pa <0.05) # trials significantly differ with multiple means, not significantly differ in mean, or share a significant mean
+         {'paired trials differ significantly with multiple means'}else
+         {'paired trials _do not_ differ significantly with multiple means'},
+         pairs_multi_diff = if(d0 > d1 & pa <0.05) # trials significantly differ with multiple means, not significantly differ in mean, or share a significant mean
+         {'paired trials differ significantly with no single mean'}else
+         {'paired trials _do not_ differ significantly with no single mean'}
+  )
+}
