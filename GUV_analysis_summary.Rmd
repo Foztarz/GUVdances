@@ -1347,6 +1347,7 @@ To confirm whether these models better explain the data than the null hypothesis
 ## Likelihood ratio tests
 For each condition, compare the models for same mean, different mean and multiple means. First perform all tests separately, then collect them together and finally adjust for multiple tests before reporting.
 ```{r Perform LR tests}
+#TODO add turn angles
 mod_details= lapply(X = names(pair_diffs_lst),
                      FUN = CollectDetails,
                      ll = all_res,
@@ -1407,8 +1408,11 @@ print_lr_results = within(print_lr_results,
                                      replacement = ' '),
                                      pattern = 'pairs ',
                                      replacement = '')
+                          mu1 = all_res$mu1
                           }
                           )
+print_lr_results = within(print_lr_results,
+                           {mu2 = all_res$mu2})
 rownames(print_lr_results) = with(print_lr_results, paste(comparison, test))#better to keep them for the html
 print(print_lr_results,
       digits = 3)
