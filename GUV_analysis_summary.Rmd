@@ -1395,9 +1395,7 @@ all_lr_results = within(all_lr_results,
                        )
                      }
 )
-num_col = sapply(X = all_lr_results, FUN = is.numeric)
 print_lr_results = all_lr_results
-print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
 print_lr_results = within(print_lr_results,
                           {
                             rm(dev0,dev1, p)
@@ -1408,12 +1406,18 @@ print_lr_results = within(print_lr_results,
                                      replacement = ' '),
                                      pattern = 'pairs ',
                                      replacement = '')
-                          mu1 = all_res$mu1
+                          mu1 = round(all_res$mu1, 1)
                           }
                           )
 print_lr_results = within(print_lr_results,
-                           {mu2 = all_res$mu2})
+                           {mu2 = round(all_res$mu2, 1)}
+                          )
 rownames(print_lr_results) = with(print_lr_results, paste(comparison, test))#better to keep them for the html
+#Round numeric columns
+# print_lr_results = apply(print_lr_results, MARGIN = 2, FUN = unlist)
+num_col = sapply(X = print_lr_results, FUN = is.numeric)
+print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
+#Print the results
 print(print_lr_results,
       digits = 3)
 
