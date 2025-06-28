@@ -1369,10 +1369,9 @@ all_lr_results = within(data.frame(all_lr_results),
                             FUN = rep,
                             times = length(lr_tests)
                             ) )
-                            test = c( sapply(X = lr_tests, 
-                            FUN = rep,
-                            times = length(names(mod_details))
-                            ) )
+                            test = rep(lr_tests, 
+                                      times = length(names(mod_details))
+                            ) 
                         }
                       )
 # lapply(
@@ -1394,7 +1393,20 @@ all_lr_results = within(all_lr_results,
 )
 num_col = sapply(X = all_lr_results, FUN = is.numeric)
 print_lr_results = all_lr_results
-print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = signif, digits = 3)
+print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
+rownames(print_lr_results) = NULL
+print_lr_results = within(print_lr_results,
+                          {
+                            rm(dev0,dev1, p)
+                          test = sub(sub(test, 
+                                     pattern = '_', 
+                                     replacement = ' '),
+                                     pattern = '_', 
+                                     replacement = ' ')
+                          }
+                          )
+# rownames(print_lr_results) = print_lr_results$comparison
+# print_lr_results = within(print_lr_results, {rm(comparison)})
 print(print_lr_results,
       digits = 3)
 
