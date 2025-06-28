@@ -1189,6 +1189,6 @@ H1label = function(tst, d0, d1, pa)
          {'paired trials _do not_ differ significantly with multiple means'},
          pairs_multi_diff = if(d0 > d1 & pa <0.05) # trials significantly differ with multiple means, not significantly differ in mean, or share a significant mean
          {'paired trials differ significantly with no single mean'}else
-         {'paired trials _do not_ differ significantly with no single mean'}
+         {'paired trials _do not_ differ significantly with multiple means'}
   )
 }
