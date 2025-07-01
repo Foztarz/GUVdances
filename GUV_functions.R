@@ -52,6 +52,8 @@ suppressMessages(#these are disturbing users unnecessarily
     require(circular)#package for handling circular data
     require(CircMLE)#package for circular mixture models
     require(brms)#package for preparing Stan models
+    require(ARTool)#package for non-parametric linear models
+    require(emmeans)#package for post-hoc comparisons
   }
 )
 
@@ -1192,3 +1194,23 @@ H1label = function(tst, d0, d1, pa)
          {'paired trials _do not_ differ significantly with multiple means'}
   )
 }
+
+
+# Extract model summaries -------------------------------------------------
+ART_extract = function(mod,
+                       co,
+                       adjust = 'sidak',
+                       method = 'pairwise',
+                       ...)#passed to emmeans::contrast
+{
+  co1 = sub(x = co, pattern = ':', replacement = '')
+  fo = as.formula(paste('~', co1))
+  em = emmeans(artlm.con(mod, co),
+               specs = fo)
+  ct = contrast(em,
+                method = method,
+                adjust = adjust,
+                ...)
+  return(ct)
+}
+
