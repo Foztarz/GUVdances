@@ -303,6 +303,7 @@ abline(h = c(0,1))
 ```
 
 Print summary statistics
+
 ```{r Mean vector summary per condition}
 mv_agg =  aggregate(mean_vector~colour*brightn,
            data = mean_vectors,
@@ -343,8 +344,11 @@ invisible(
   })
 abline(h = c(0,1))
 ```
+
 ### Non-parametric tests on accuracy
+
 Here non-parametric or parametric statistics could be revealing.
+
 ```{r Comparison of mean vector lengths within full condition dances}
 #Identify all effects as factors for aligned ranks transform
 mean_vectors_full = within(mean_vectors_full,
@@ -371,7 +375,12 @@ message('\nSuccessful rank alignment:\n',
         '\n')
 print(anova(mv_full_art), digits = 3)
 ```
-We can successfully fit an aligned ranks model to compare across individuals. Note that the "boundary" level random effects indicate that individual effects were too small to estimate. In the individual linear models (e.g. `summary(artlm(mv_full_art, "brightn"))$varcor`) there may still be substantial individual differences. The primary effect appears to be that of brightness, but there may also be effects of interest in the post-hoc contrasts.
+
+We can successfully fit an aligned ranks model to compare across individuals.
+Note that the "boundary" level random effects indicate that individual effects were too small to estimate.
+In the individual linear models (e.g. `summary(artlm(mv_full_art, "brightn"))$varcor`) there may still be substantial individual differences.
+The primary effect appears to be that of brightness, but there may also be effects of interest in the post-hoc contrasts.
+
 ```{r Extract contrasts from aligned ranks model}
 cn_mv_full_art = sapply(X = c('brightn', 'colour', 'colour:brightn'),
                         FUN = ART_extract,
@@ -381,9 +390,11 @@ cn_mv_full_art = sapply(X = c('brightn', 'colour', 'colour:brightn'),
 print(cn_mv_full_art)
 
 ```
-The post-hoc tests indicate a large difference between bright and dim conditions, as expected, but very little evidence for differences between colours. The interactions (for which there was low support in the overall model) reflect the pattern we expect, that all bright conditions have higher accuracy than all dim conditions, and that while the two dim conditions have similar accuracy, the bright UV bright condition may be slightly more accurate the bright green condition (p = 0.158).
-### Parametric beta-distributed model of accuracy
-To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables. One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
+
+The post-hoc tests indicate a large difference between bright and dim conditions, as expected, but very little evidence for differences between colours.
+The interactions (for which there was low support in the overall model) reflect the pattern we expect, that all bright conditions have higher accuracy than all dim conditions, and that while the two dim conditions have similar accuracy, the bright UV bright condition may be slightly more accurate the bright green condition (p = 0.158).
+### Parametric beta-distributed model of accuracy To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
+One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
 
 ```{r Set up priors for a Bayesian beta model}
 
@@ -522,7 +533,6 @@ plot(x = beta_cond_eff,
      ask = FALSE
     )
 ```
-
 
 ### Comparison with Edrich *et al.* (1979)
 
