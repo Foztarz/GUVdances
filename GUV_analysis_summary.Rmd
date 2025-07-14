@@ -396,7 +396,7 @@ The interactions (for which there was low support in the overall model) reflect 
 ### Parametric beta-distributed model of accuracy To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
 One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
 
-## \# Beta model for accuracy
+### Beta model for accuracy
 
 ```{r Set up priors for a Bayesian beta model}
 
@@ -491,7 +491,6 @@ print(priors_bmod_mxRE)#all parameters are accounted for
 ```
 
 ```{r Fit the Bayesian beta model, echo = FALSE}
-#TODO Extract contrasts
 ## Run the models --------------------------------------------------------
 system.time( #takes about 2 minutes
   {
@@ -572,15 +571,15 @@ contr_phi = with(data.frame(draws_phi),
                 {
                   data.frame(
                     #bright green -> dim green = low brightness effect
-                    gh_gl_phi = b_phi_brightnl, 
+                    gh_gl = b_phi_brightnl, 
                     #bright UV -> dim UV = dim + UVdim - UV effect
-                    uvh_uvl_phi = b_phi_brightnl + `b_phi_brightnl.colouru` - b_phi_colouru, 
+                    uvh_uvl = b_phi_brightnl + `b_phi_brightnl.colouru` - b_phi_colouru, 
                     #bright green -> bright UV = UV effect
-                    gh_uvh_phi = b_phi_colouru, 
+                    gh_uvh = b_phi_colouru, 
                     #bright green -> dim UV = UV + dim + UVdim
-                    gh_uvl_phi = b_phi_brightnl + b_phi_colouru + b_phi_brightnl.colouru, 
+                    gh_uvl = b_phi_brightnl + b_phi_colouru + b_phi_brightnl.colouru, 
                     #dim green -> dim UV = UV effect + UVdim - dim effect
-                    gl_uvl_phi = b_phi_colouru + `b_phi_brightnl.colouru` - b_phi_brightnl
+                    gl_uvl = b_phi_colouru + `b_phi_brightnl.colouru` - b_phi_brightnl
                   )
                 }
                 )
@@ -588,18 +587,29 @@ contr_all = cbind(contr_mu, contr_phi)
 quant_all = apply(X = contr_all,
                   MARGIN = 2,
                   FUN = quantile,
-                  probs = c(0,1)+c(1,-1)*(0.05)/2
+                  probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
                   )
-stripchart(x = contr_all,
-           at = 1:dim(contr_all)[2],
+quant_mu = apply(X = contr_mu,
+                  MARGIN = 2,
+                  FUN = quantile,
+                  probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
+                  )
+quant_phi = apply(X = contr_phi,
+                  MARGIN = 2,
+                  FUN = quantile,
+                  probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
+                  )
+stripchart(x = round(contr_mu,2),
+           at = 1:dim(contr_mu)[2],
            group.names = gsub(pattern = '_',
-                              replacement = ' - ',
-                              x = names(contr_all)),
-           main = 'Beta GLMM - Contrasting Effects',
+                              replacement = ' → ',
+                              x = names(contr_mu)),
+           main = 'Beta GLMM - Effects on Mean Accuracy',
+           ylab = 'logit mean change in accuracy',
            vertical  = TRUE,
-           method = 'jitter',
-           offset =  0.5,
-           ylim = c(-1, 1)*6,
+           method = 'stack',
+           offset =  0.05,
+           ylim = c(-1, 1)*4,
            pch = 20,
            col = gray(0, alpha = 4/2e3),
            cex.axis = 1.0,
@@ -607,23 +617,9 @@ stripchart(x = contr_all,
            )
 abline(h = 0,
        lty = 2)
-# boxplot(x = contr_all,
-#         at = 1:dim(contr_all)[2],
-#         add  = TRUE,
-#         col = adjustcolor(c('darkgreen',
-#                             'purple',
-#                             'gray40',
-#                             'gray25'
-#                             ), alpha = 0.5),
-#         outline = FALSE,
-#         range = 0, #extend to extremes
-#         pars = list(boxwex = 0.5,
-#                     staplewex = 0),
-#         axes = FALSE
-#            )
-with(data.frame(t(quant_all)),
+with(data.frame(t(quant_mu)),
      {
-      arrows(x0 = 1:dim(contr_all)[2],
+      arrows(x0 = 1:dim(quant_mu)[2],
              y0 = X2.5.,
              y1 = X97.5.,
              length = 0, 
@@ -637,22 +633,81 @@ with(data.frame(t(quant_all)),
              )
      }
 )
-# PCfun(angles = unlist(mu_diff_gl),
-#       col = 'darkgreen',
-#       shrink = 1.5,
-#       title = 'Green Dim - Green Bright')
-# PCfun(angles = unlist(mu_diff_uhl),
-#       col = 'purple',
-#       shrink = 1.5,
-#       title = 'UV Dim - UV Bright')
-# PCfun(angles = unlist(mu_diff_uh),
-#       col = 'gray40',
-#       shrink = 1.5,
-#       title = 'UV Bright - Green Bright')
-# PCfun(angles = unlist(mu_diff_gul),
-#       col = 'gray25',
-#       shrink = 1.5,
-#       title = 'UV Dim - Green Dim')
+legend(x = 'topleft',
+       legend = c('estimates',
+                  '95% credible interval'),
+       pch = c(20, NA),
+       lty = c(NA, 1),
+       lwd = c(5, 3),
+       col = c('gray', 'black'),
+       cex = 0.7
+       )
+stripchart(x = round(contr_phi,2),
+           at = 1:dim(contr_phi)[2],
+           group.names = sub(pattern = '_',
+                              replacement = ' → ',
+                              x = names(contr_phi)),
+           main = 'Effects on Accuracy Precision',
+           ylab = 'log change in accuracy precision',
+           vertical  = TRUE,
+           method = 'stack',
+           offset =  0.05,
+           ylim = c(-1, 1)*6,
+           pch = 20,
+           col = gray(0, alpha = 4/2e3),
+           cex.axis = 1.0,
+           las = 3
+           )
+abline(h = 0,
+       lty = 2)
+with(data.frame(t(quant_phi)),
+     {
+      arrows(x0 = 1:dim(quant_phi)[2],
+             y0 = X2.5.,
+             y1 = X97.5.,
+             length = 0, 
+             angle = 90,
+             lwd = 5,
+             col = adjustcolor(c('darkgreen',
+                            'purple',
+                            'gray40',
+                            'gray25'
+                            ), alpha = 0.7)
+             )
+     }
+)
+#can also calculate these with emmeans
+em_beta = emmeans(object = md_beta,
+                  specs = ~brightn*colour)
+ct_beta_mu = contrast(object = em_beta,
+                   specs = ~brightn*colour,
+                   method = 'pairwise',
+                   side = c(1,-1,1,-1,-1,1)
+                   )
+print(ct_beta_mu, digits = 3)
+
+#collect and estimate p values from samples
+empirical.p = function(x, tails = 2){ifelse(test = median(x)>0,
+                                            yes = mean(x<0)*tails, 
+                                            no = mean(x>0)*tails)
+}
+
+p_beta_mu = apply(X = contr_mu, MARGIN = 2, FUN = empirical.p, tails = 2)
+p_beta_phi = apply(X = contr_phi, MARGIN = 2, FUN = empirical.p, tails = 2)
+beta_all_res = data.frame(mu_lower = quant_mu[1,],
+                          mu_median = quant_mu[2,],
+                          mu_upper = quant_mu[3,],
+                          p_mu = p_beta_mu,
+                          p_mu_adj = p.adjust(p = p_beta_mu,
+                                              method = 'BH'),
+                          phi_lower = quant_phi[1,],
+                          phi_median = quant_phi[2,],
+                          phi_upper = quant_phi[3,],
+                          p_phi = p_beta_phi,
+                          p_phi_adj = p.adjust(p = p_beta_phi,
+                                              method = 'BH')
+                          )
+print(beta_all_res[,c(2,5,7,10)], digits = 3)
 ```
 
 ### Comparison with Edrich *et al.* (1979)
