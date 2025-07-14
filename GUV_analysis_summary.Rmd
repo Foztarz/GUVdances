@@ -524,7 +524,7 @@ print(sm_beta$fixed[, c(1, 3:4)], digits = 3)
 
 Extract the model's predictions and compare with the original data.
 
-```{r Plot model predictions, echo = FALSE}
+```{r Plot accuracy model predictions, echo = FALSE}
 # Extract model predictions -----------------------------------------------
 beta_cond_eff = conditional_effects(md_beta)
 #Plot including individual data points
