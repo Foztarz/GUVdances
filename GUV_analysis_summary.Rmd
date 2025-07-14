@@ -54,6 +54,7 @@ editor_options:
 > **TODO**
 >
 > -   move necessary functions to GUV_functions
+> -   make functions for result extraction from BRMS
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -1464,16 +1465,15 @@ For the UV high to UV low change, this will be a bimodal distribution.
 
 ```{r Organise heading changes}
 #collect all heading differences
-pair_diffs_lst = lapply(X = list(mu_diff_gl,
-                                 mu_diff_uh,
-                                 mu_diff_ul,
-                                 mu_diff_gul), 
+pair_diffs_lst = lapply(X = list(#bright vs dim green
+                                green_hl = mu_diff_gl, 
+                                #bright vs dim UV
+                                uv_hl = mu_diff_uhl,
+                                #bright green vs bright uv 
+                                uvg_h = mu_diff_uh,
+                                #dim green vs bright UV
+                                 uvg_l = mu_diff_gul ), 
                         FUN = unlist) 
-#Give a simpler name
-names(pair_diffs_lst) = c('green_hl',
-                          'uvg_h',
-                          'uvg_hl',
-                          'uvg_l')
 #Provide appropriate data format
 angle_unit = 'degrees' 
 angle_rot = 'clock'
@@ -1634,7 +1634,7 @@ print(mod_CI_tb, digits = 3)
 
 ```
 
-We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions nearly overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that to not overlap with 0°.
+We see here that while the confidence interval for the difference distribution between the two green conditions and the two bright conditions nearly overlap with 0° (and the 0° distribution CI overlap with the mean difference), for differences between green lights and dim UV there is a bimodal distribution with CI that do not overlap with 0°.
 N.B.
 For *one-sided* calculations, the CI do overlap with 0° for green conditions, bright conditions and the leftmost mean for dim conditions.
 ### Plot difference CI
@@ -1653,7 +1653,7 @@ PlotCI_vM(mle_CI['diff green_hl',],
           col = 'darkgreen',
           radius = 1+0.3)
 
-plot.circular(x = circular(unlist(mu_diff_ul),
+plot.circular(x = circular(unlist(mu_diff_uhl),
                            units = angle_unit,
                            rot = angle_rot
                            ),
@@ -1671,9 +1671,9 @@ mtext(text = 'UV Dim - Green Bright',
 lines(x = c(0,0),
       y = c(-1,1),
       col = 'gray')
-PlotMV_circMLE(mod_par = mod_diff_par['uvg_hl',],
+PlotMV_circMLE(mod_par = mod_diff_par['uv_hl',],
                col1 = 'purple')
-PlotCI_vM(mod_CI_tb['uvg_hl',],
+PlotCI_vM(mod_CI_tb['uv_hl',],
           col = 'purple',
           radius = 1+0.3)
 
@@ -1814,8 +1814,12 @@ print_lr_results = within(print_lr_results,
 rownames(print_lr_results) = with(print_lr_results, paste(comparison, test))#better to keep them for the html
 #Round numeric columns
 # print_lr_results = apply(print_lr_results, MARGIN = 2, FUN = unlist)
-num_col = sapply(X = print_lr_results, FUN = is.numeric)
-print_lr_results[,num_col] = apply(print_lr_results[,num_col], MARGIN = 2, FUN = round, digits = 3)
+num_col = sapply(X = print_lr_results, 
+                 FUN = is.numeric)
+print_lr_results[,num_col] = apply(X = print_lr_results[,num_col],
+                                   MARGIN = 2, 
+                                   FUN = round, 
+                                   digits = 3)
 #Print the results
 print(print_lr_results,
       digits = 3)
