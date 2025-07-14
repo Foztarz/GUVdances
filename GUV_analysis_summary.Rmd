@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~07~01$
+> James Foster $2025~07~14$
 
 > **DESCRIPTION**
 >
@@ -396,6 +396,8 @@ The interactions (for which there was low support in the overall model) reflect 
 ### Parametric beta-distributed model of accuracy To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
 One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
 
+## \# Beta model for accuracy
+
 ```{r Set up priors for a Bayesian beta model}
 
 ### Maximal formula with all random effects ---------------------
@@ -488,7 +490,7 @@ priors_bmod_mxRE = within(get_prior(formula = frm_bmod_maxRE,
 print(priors_bmod_mxRE)#all parameters are accounted for
 ```
 
-```{r Fit the Bayesian beta model}
+```{r Fit the Bayesian beta model, echo = FALSE}
 #TODO Extract contrasts
 ## Run the models --------------------------------------------------------
 system.time( #takes about 2 minutes
@@ -518,10 +520,14 @@ rh_beta = rhat(md_beta)
 sm_beta = summary(md_beta)
 print(summary(rh_beta), digits= 4)#all ≤1.01
 print(sm_beta$fixed[, c(1, 3:4)], digits = 3)
+```
 
+Extract the model's predictions and compare with the original data.
+
+```{r Plot model predictions, echo = FALSE}
 # Extract model predictions -----------------------------------------------
-
 beta_cond_eff = conditional_effects(md_beta)
+#Plot including individual data points
 plot(x = beta_cond_eff, 
      points = TRUE, 
      point_args = list(width = 0.3, 
@@ -532,6 +538,121 @@ plot(x = beta_cond_eff,
      ylim = c(0,1),
      ask = FALSE
     )
+```
+
+This seems to suggest that dances were more accurate in the bright UV condition, which the aligned-ranks test was sceptical of.
+We can quantify this difference by extracting and comparing the parameter estimates from each (post-warmup) iteration of the model.
+
+```{r Extract Beta model contrasts}
+draws_beta = prepare_predictions(md_beta,
+                                 re_formula = NA)#just population level effects
+#for the average vector length
+draws_mu = draws_beta$dpars$mu$fe$b
+#for variance in vector length
+draws_phi = draws_beta$dpars$phi$fe$b
+#N.B. Could also just calculate predictions, then subtract
+contr_mu = with(data.frame(draws_mu),
+                {
+                  data.frame(
+                    #bright green -> dim green = low brightness effect
+                    gh_gl = b_brightnl, 
+                    #bright UV -> dim UV = dim + UVdim - UV effect
+                    uvh_uvl = b_brightnl + `b_brightnl.colouru` - b_colouru, 
+                    #bright green -> bright UV = UV effect
+                    gh_uvh = b_colouru, 
+                    #bright green -> dim UV = UV + dim + UVdim
+                    gh_uvl = b_brightnl + b_colouru + `b_brightnl.colouru`, 
+                    #dim green -> dim UV = UV effect + UVdim - dim effect
+                    gl_uvl = b_colouru + `b_brightnl.colouru` - b_brightnl
+                  )
+                }
+                )
+
+contr_phi = with(data.frame(draws_phi),
+                {
+                  data.frame(
+                    #bright green -> dim green = low brightness effect
+                    gh_gl_phi = b_phi_brightnl, 
+                    #bright UV -> dim UV = dim + UVdim - UV effect
+                    uvh_uvl_phi = b_phi_brightnl + `b_phi_brightnl.colouru` - b_phi_colouru, 
+                    #bright green -> bright UV = UV effect
+                    gh_uvh_phi = b_phi_colouru, 
+                    #bright green -> dim UV = UV + dim + UVdim
+                    gh_uvl_phi = b_phi_brightnl + b_phi_colouru + b_phi_brightnl.colouru, 
+                    #dim green -> dim UV = UV effect + UVdim - dim effect
+                    gl_uvl_phi = b_phi_colouru + `b_phi_brightnl.colouru` - b_phi_brightnl
+                  )
+                }
+                )
+contr_all = cbind(contr_mu, contr_phi)
+quant_all = apply(X = contr_all,
+                  MARGIN = 2,
+                  FUN = quantile,
+                  probs = c(0,1)+c(1,-1)*(0.05)/2
+                  )
+stripchart(x = contr_all,
+           at = 1:dim(contr_all)[2],
+           group.names = gsub(pattern = '_',
+                              replacement = ' - ',
+                              x = names(contr_all)),
+           main = 'Beta GLMM - Contrasting Effects',
+           vertical  = TRUE,
+           method = 'jitter',
+           offset =  0.5,
+           ylim = c(-1, 1)*6,
+           pch = 20,
+           col = gray(0, alpha = 4/2e3),
+           cex.axis = 1.0,
+           las = 3
+           )
+abline(h = 0,
+       lty = 2)
+# boxplot(x = contr_all,
+#         at = 1:dim(contr_all)[2],
+#         add  = TRUE,
+#         col = adjustcolor(c('darkgreen',
+#                             'purple',
+#                             'gray40',
+#                             'gray25'
+#                             ), alpha = 0.5),
+#         outline = FALSE,
+#         range = 0, #extend to extremes
+#         pars = list(boxwex = 0.5,
+#                     staplewex = 0),
+#         axes = FALSE
+#            )
+with(data.frame(t(quant_all)),
+     {
+      arrows(x0 = 1:dim(contr_all)[2],
+             y0 = X2.5.,
+             y1 = X97.5.,
+             length = 0, 
+             angle = 90,
+             lwd = 5,
+             col = adjustcolor(c('darkgreen',
+                            'purple',
+                            'gray40',
+                            'gray25'
+                            ), alpha = 0.7)
+             )
+     }
+)
+# PCfun(angles = unlist(mu_diff_gl),
+#       col = 'darkgreen',
+#       shrink = 1.5,
+#       title = 'Green Dim - Green Bright')
+# PCfun(angles = unlist(mu_diff_uhl),
+#       col = 'purple',
+#       shrink = 1.5,
+#       title = 'UV Dim - UV Bright')
+# PCfun(angles = unlist(mu_diff_uh),
+#       col = 'gray40',
+#       shrink = 1.5,
+#       title = 'UV Bright - Green Bright')
+# PCfun(angles = unlist(mu_diff_gul),
+#       col = 'gray25',
+#       shrink = 1.5,
+#       title = 'UV Dim - Green Dim')
 ```
 
 ### Comparison with Edrich *et al.* (1979)
