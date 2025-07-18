@@ -234,7 +234,7 @@ Calculate the mean vectors for each set of waggle-runs under each lighting condi
 
 ```{r Summarise, echo=FALSE}
 #calculate mean vectors
-mean_vectors = aggregate(angle~ID*brightn*colour+sun_az, # N.B. Including sun azimuth drops some cases without a time stamp
+mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad, # N.B. Including sun azimuth drops some cases without a time stamp
                          data = cd,
                          FUN = rho.circular
 )
@@ -243,7 +243,7 @@ mean_vectors = within(mean_vectors,
                       {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
 )
 #add kappa
-mle_estimates = aggregate(angle~ID*brightn*colour+sun_az,
+mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
                           data = cd,
                           FUN = MLE_est
 )
@@ -709,6 +709,174 @@ beta_all_res = data.frame(mu_lower = quant_mu[1,],
                                               method = 'BH')
                           )
 print(beta_all_res[,c(2,5,7,10)], digits = 3)
+```
+#### Investigate effect of sun elevation
+
+```{r Set up priors for a sun elevation model}
+
+### Maximal formula with all random effects ---------------------
+#set up model formula with indiv effects on light type
+frm_elemod_maxRE = bf(mean_vector~ cos(sun_el_rad) + # accuracy is affected by projection distortion at high elevations following a cosine law
+                            (1 |ID), # each individual is more or less oriented
+              phi ~ cos(sun_el_rad) + # accuracy is affected by projection distortion at high elevations following a cosine law
+                      (1 |ID), # some individuals vary more in accuracy than others
+              family = brms::Beta()) 
+
+#suggest prior values
+pr_mu_Intercept = list(dist = 'normal',
+             mu = 0,
+             sd = 1)#deconstrain to beat divergences?
+pr_phi_Intercept = list(dist = 'normal',
+             mu = 1,
+             sd = 1)
+pr_mu_b = list(dist = 'normal',
+             mu = 0,
+             sd = 1)#deconstrain to beat divergences?
+pr_phi_b = list(dist = 'normal',
+             mu = 0,
+             sd = 1)
+pr_mu_sd_Intercept = list(dist = 'student_t',
+             df = 3,
+             mu = 0,
+             sd = 0.1)#constrain to beat divergences?
+pr_phi_sd_Intercept = list(dist = 'student_t',
+                 df = 3,
+                 mu = 0,
+                 sd = 0.1)#constrain to beat divergences?
+pr_mu_sd = list(dist = 'student_t',
+             df = 3,
+             mu = 0,
+             sd = 0.1)#constrain to beat divergences?
+pr_phi_sd = list(dist = 'student_t',
+                 df = 3,
+                 mu = 0,
+                 sd = 0.1)#constrain to beat divergences?
+
+### Assign priors --------------------------------------------------------
+
+#set priors on:
+# - all coefficients to a normal(0,1) = 95% probability of values 0.12–0.87
+# - all grouping paramters to a student_t(df = 3, mu = 0, sigma = 2.5) = values < 5.88
+# - all other parameters (?) to a normal(0,10)= 95% probability of values 0–1 +- 1e-7
+
+pr_expression = expression({
+  prior = sapply(class, 
+                 switch,
+                 Intercept = with(pr_mu_Intercept,
+                          {paste0(dist,'(',mu,',',sd,')')}),
+                 #the general prior for coefficients (should centre on 0)
+                 b = with(pr_mu_b,
+                          {paste0(dist,'(',mu,',',sd,')')}),
+                 #the general prior for standard deviations (should be long-tailed)
+                 sd =  with(pr_mu_sd,
+                           {paste0(dist,'(',df,',',mu,',',sd,')')}),
+                 cor = 'lkj(1)', # The only supported prior for correlation matrices is the 'lkj' prior
+                 'normal(0,1)' # with this many params need more informative priors
+      )
+  #special priors
+    #mu sd intercept
+  prior[dpar %in% '' & class %in% 'sd' & coef %in% ''] =  
+    with(pr_mu_sd_Intercept,
+                          {paste0(dist,'(',df,',',mu,',',sd,')')})
+  #phi b
+  prior[dpar %in% 'phi' & class %in% 'b'] =  
+    with(pr_phi_b,
+                          {paste0(dist,'(',mu,',',sd,')')})
+  #phi intercept
+  prior[dpar %in% 'phi' & class %in% 'b' & coef %in% ''] =  
+    with(pr_phi_Intercept,
+                          {paste0(dist,'(',mu,',',sd,')')})
+  #phi sd
+  prior[dpar %in% 'phi' & class %in% 'sd'] =  
+    with(pr_phi_sd,
+                          {paste0(dist,'(',df,',',mu,',',sd,')')})  
+  #phi sd intercept
+  prior[dpar %in% 'phi' & class %in% 'sd' & coef %in% ''] =  
+    with(pr_phi_sd_Intercept,
+                          {paste0(dist,'(',df,',',mu,',',sd,')')})
+}
+)
+
+#model with all random effects
+priors_elemod_mxRE = within(get_prior(formula = frm_elemod_maxRE, 
+                                    data = mean_vectors_full), 
+                          expr = eval(pr_expression))
+print(priors_elemod_mxRE)#all parameters are accounted for
+```
+```{r Fit the sun elevation model, echo = FALSE}
+## Run the models --------------------------------------------------------
+system.time( #takes about 2 minutes
+  {
+md_ele = brm(formula = frm_elemod_maxRE,
+                 prior = priors_elemod_mxRE,
+                 data = within(mean_vectors_full,
+                               {
+                               mean_vector = ifelse(mean_vector == 1.0,
+                                                    yes = 1.0 - 1e-3,
+                                                    no = mean_vector)
+                               }
+                               ),
+                 family = Beta(link = 'logit',
+                               link_phi = 'log'),
+                 iter = 2e3, # only small number necessary
+                 control = list( adapt_delta = 0.99 ), # divergences are hard to beat, so set very high
+                 cores = 4,
+                 backend = 'cmdstanr',
+                 silent = 2, #don't print lots of iteration information
+                 refresh = 0
+)
+  }
+)
+#too many divergent transitions, check chains
+rh_ele = rhat(md_ele)
+sm_ele = summary(md_ele)
+print(summary(rh_ele), digits= 4)#all ≤1.01
+print(sm_ele$fixed[, c(1, 3:4)], digits = 3)
+```
+
+Extract the model's predictions and compare with the original data.
+
+```{r Plot sun elevation model predictions, echo = FALSE}
+# Extract model predictions -----------------------------------------------
+fx_ele = sm_ele$fixed[, c(1, 3:4)]
+with(mean_vectors_full,
+     {
+     plot(x = as.numeric(deg(sun_el_rad)),
+          y = mean_vector,
+          xlab = 'sun elevation (°)',
+          ylab = 'accuracy (mean vector length)',
+          main = 'general effect of cos(sun elevation) on accuracy',
+          xlim = c(20,70),
+          ylim = c(0,1),
+          pch = 19,
+          col = sapply(X = paste0(brightn, colour),
+                       FUN = switch,
+                       hg = 'green',
+                       lg = 'darkgreen',
+                       hu = 'magenta',
+                       lu = 'purple'
+                       )
+         )
+     }
+     )
+abline(h = c(0,1))
+polygon(x = c(0:85, 85:0),
+        y = plogis(
+          c(fx_ele$`u-95% CI`[1] + fx_ele$`u-95% CI`[3]*
+                        cos(rad(0:85)), 
+              rev( fx_ele$`l-95% CI`[1] + fx_ele$`l-95% CI`[3]*
+                        cos(rad(0:85)) )
+              )
+          ),
+        col = adjustcolor('red', alpha.f = 0.1),
+        border = NA)
+lines(x = 0:85,
+      y = plogis(
+                  fx_ele$Estimate[1] + fx_ele$Estimate[3]*
+                        cos(rad(0:85))
+                  ),
+      col = 'red',
+      lwd = 3)
 ```
 
 ### Comparison with Edrich *et al.* (1979)
