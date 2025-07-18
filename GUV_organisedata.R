@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 13
-#     MODIFIED:	James Foster              DATE: 2024 08 13
+#     MODIFIED:	James Foster              DATE: 2025 07 18
 #
 #  DESCRIPTION: Reorganise data and print out to csv
 #               
@@ -10,7 +10,7 @@ graphics.off()
 #               
 #      OUTPUTS: csv
 #
-#	   CHANGES: - 
+#	   CHANGES: - added sun elevation
 #
 #   REFERENCES: Natalie Cooper & Pen-Yuan Hsing, 2017 
 #               A Guide to Reproducible Code in Ecology and Evolution
@@ -22,9 +22,9 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Load data  
-#- Reorganise
-#- Add solar azimuth
+#- Load data  +
+#- Reorganise +
+#- Add solar azimuth +
 
 # Useful functions --------------------------------------------------------
 
@@ -180,6 +180,23 @@ GetSaz = function(tm,
     tm
   }
 }
+#handling function (sunAngle is bad with NAs and vectors)
+GetSel = function(tm,
+                  lon,
+                  lat)
+{
+  if(!is.na(tm))
+  {
+    oce::sunAngle(
+    t = tm,
+    longitude = lon,
+    latitude = lat,
+    useRefraction = TRUE)$altitude
+  }else
+  {
+    tm
+  }
+}
 
 #add sun azimuth
 cd = within(cd, 
@@ -192,10 +209,23 @@ cd = within(cd,
             }
             )
 
+#add sun azimuth
+cd = within(cd, 
+            {
+            sun_el = mapply(
+                   FUN = GetSel,
+                   tm = utc_time,
+                   lon = 8.811341,
+                   lat = 50.806299)
+            }
+            )
+
 #convert to signed radians for modelling
 cd = within(cd, 
             {
             sun_az_rad = circular(rad(Mod360.180(sun_az)),# bearing between -pi and pi
+                             rotation = 'clock') # circular format suppresses later warnings
+            sun_el_rad = circular(rad(Mod360.180(sun_el)),# for trignometric predictions
                              rotation = 'clock') # circular format suppresses later warnings
             rm(utc_time)
             }
