@@ -879,6 +879,11 @@ lines(x = 0:85,
       lwd = 3)
 ```
 
+```{r Compare LOO}
+loo_beta = loo(md_beta)
+loo_ele = loo(md_ele)
+loo_compare(loo_beta, loo_ele)
+```
 ### Comparison with Edrich *et al.* (1979)
 
 How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities?
