@@ -1919,7 +1919,6 @@ For each condition, compare the models for same mean, different mean and multipl
 First perform all tests separately, then collect them together and finally adjust for multiple tests before reporting.
 
 ```{r Perform LR tests}
-#TODO add turn angles
 mod_details= lapply(X = names(pair_diffs_lst),
                      FUN = CollectDetails,
                      ll = all_res,
