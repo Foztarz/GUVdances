@@ -12,8 +12,9 @@ graphics.off()
 #               
 #      OUTPUTS: Plots and test statistics
 #
-#	   CHANGES: - Investigation of MLE fit to each individual
-#             - CircMLE plots
+#	   CHANGES: - Implemented fmod link
+#             - Switched to normal priors for zkappa
+#             - Stacked zkappa (slower, but more logical)
 #
 #   REFERENCES: Sayin, S., Graving, J., et al. in revision
 #               
@@ -36,8 +37,11 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Remove all unnecessary sections
-#- Test with real data
+#- Remove all unnecessary sections  +
+#- Test with real data  +
+#- Double-check kappa extractions +
+#- Try priors for speed
+#- Test with full dataset
 #- Try normal raneff
 #- Try vM raneff
 #- Try bimodal fixef
@@ -323,7 +327,7 @@ real zkappa4;
 real kappa_id_condition1 = log1p_exp(zkappa1);
 real kappa_id_condition2 = log1p_exp(zkappa1+zkappa2);
 real kappa_id_condition3 = log1p_exp(zkappa1+zkappa3);
-real kappa_id_condition4 = log1p_exp(zkappa1+zkappa4);
+real kappa_id_condition4 = log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4);
           ", 
           block = 'genquant')
 
@@ -332,6 +336,21 @@ real kappa_id_condition4 = log1p_exp(zkappa1+zkappa4);
 stanvars_intercepts = stan_mvm_fun + mu_gen  #+ zmu_var+ zkappa_var
 stanvars_slopes = stan_mvm_fun + mu_gen  + zkappa_var_slope + 
   zmu_var_slope #includes intercepts+ zkappa_var
+
+#implementation for bimodal effects of condition?
+# b_zmu[i]
+
+# #set up a von Mises PDF that converts to modulo (adapted from BRMS default)
+# von_mises3_fun = stanvar(scode = "
+# real von_misesbim_lpdf(real y, real mu, real kappa, real lambda) {
+#      if (kappa < 100) {
+#        return von_mises_lpdf(mod_circular(y) | mu, kappa)+log(lambda) + von_mises_lpdf(mod_circular(y) | mu+pi(), kappa)+log(1.0-lambda);
+#      } else {
+#        return normal_lpdf(mod_circular(y) | mu, sqrt(1 / kappa)) +log(lambda) + normal_lpdf(mod_circular(y) | mu+pi(), sqrt(1 / kappa)) +log(1-lambda) ;
+#      }
+#    }
+# ",
+#                          block = 'functions')
 
 # Input Variables ----------------------------------------------------------
 
@@ -407,12 +426,13 @@ cd = within(cd,
             )
 
 ## Make a subset for testing with N individuals ----
-cd_subs = subset(x = cd, 
-                 subset = ID %in% 
-                             sample(u_id,
-                                    size =  10,
-                                    replace = FALSE)
-                )
+# cd_subs = subset(x = cd, 
+#                  subset = ID %in% 
+#                              sample(u_id,
+#                                     size =  10,
+#                                     replace = FALSE)
+#                 )
+cd_subs = cd
 
 
 ## Formula ---------------------------------------------------------------
@@ -483,7 +503,7 @@ prior_int_slope = within(prior_int_slope,
                          {
    #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
    prior[nlpar %in% 'fmu' & coef %in% 'Intercept'] = 'normal(0, 15*pi()/180)'# strong bias to zero
-   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/4)'#moderate bias to zero, no effect
+   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/4)'#moderate bias to zero, no effect #too small reduces efficiency!
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
@@ -496,12 +516,12 @@ prior_int_slope = within(prior_int_slope,
                  x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa3))'
    prior[nlpar %in% 'zmu' & class %in% 'b' 
          & grepl(pattern = 'BRl:CLu', #the random effect of low brightness & UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa4))'
+                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4))'
    #fixed effects on kappa are normally distributed on the softplus scale
    prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(3.0, 3.0)'#weak expectation of kappa around 3 (mean vector around 0.80)
-   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 5.0)'#weak expectation of condition effect around 0
+   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.5)'#expectation of condition effect around 0
    #random effects on kappa are t-distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 0.5)' #narrow prior 
+   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 1.5)' #narrow prior 
                          }
 )
 
@@ -522,14 +542,23 @@ prior_int_slope = within(prior_int_slope,
 
 #different strategy, anchor estimates around zkappa 1 but with wide dist
 #now attempting very wide dist on zkappa intercept, to include probability mass around zero
+    # prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
+    #   set_prior("target += student_t_lpdf(zkappa1 | 3, 30, 20)", #expect high concentration (low variation) 
+    #             check = FALSE)+
+    #   set_prior("target += student_t_lpdf(zkappa2 | 3, 0, 1.0)", #expect high concentration (low variation) 
+    #             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
+    #   set_prior("target += student_t_lpdf(zkappa3 | 3, 0, 1.0)", #expect high concentration (low variation) 
+    #             check = FALSE)+
+    #   set_prior("target += student_t_lpdf(zkappa4 | 3, 0, 0.5)", #expect high concentration (low variation) 
+    #             check = FALSE)
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa1 | 3, 30, 20)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa1 | 3, 3)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa2 | 3, 0, 1.0)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa2 | 0, 0.2)", #expect high concentration (low variation) 
             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += student_t_lpdf(zkappa3 | 3, 0, 1.0)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa3 | 0, 0.2)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += student_t_lpdf(zkappa4 | 3, 0, 1.0)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa4 | 0, 0.1)", #expect high concentration (low variation) 
             check = FALSE)
 
 
@@ -546,21 +575,21 @@ write.table(x = sc,
             row.names = FALSE)
 
 
-# ## Dummy run to check the influence of the priors ------------------
-# 
-# 
-# #double check that the prior distribution is viable by first setting up a short dummy run
-# # Dummy run
-# #Warning takes 15 min just to compile!
-# #TODO work out why this samples less efficiently than with data
-# system.time( #currently takes about 60 minutes for 10000 iterations
+## Dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
+#Warning takes a long time to compile!
+#TODO work out why this samples less efficiently than with data
+# system.time( #currently takes about <1 minutes for 1000 iterations
 #   {
 #     dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
 #                            data = cd_subs, # our data
-#                            prior = prior_int_slope, # our priors 
+#                            prior = prior_int_slope, # our priors
 #                            stanvars = stanvars_slopes,
 #                            sample_prior = 'only', #ignore the data to check the influence of the priors
-#                            iter = 10000, # can only estimate with enough iterations for params
+#                            iter = 1000, # can only estimate with enough iterations for params
 #                            chains = 4, # 4 chains in parallel
 #                            cores = 4, # on 4 CPUs
 #                            refresh = 0, # don't echo chain progress
@@ -592,21 +621,20 @@ write.table(x = sc,
 #        nvariables = 5,
 #        regex = TRUE,
 #        ask = FALSE)
-#   # plot(dummy_int_slope)
 # }
 
 
 ## Subset run --------------------------------------------------------------
 
 # subset run
-system.time(#takes less than 35 minutes for 50 individuals
+system.time(#takes less than 4 minutes for 10 individuals
   {
     full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
                           data = cd_subs, # our data
                           prior = prior_int_slope, # our priors 
                           stanvars = stanvars_slopes,
-                          warmup = 500,#may be necessary 
-                          iter = 500 +200, #doesn't take a lot of runs
+                          warmup = 1000,#may be necessary 
+                          iter = 1000+200, #doesn't take a lot of runs
                           chains = 4, # 4 chains in parallel
                           cores = 4, # on 4 CPUs
                           refresh = 0, # don't echo chain progress
@@ -625,7 +653,6 @@ if(all_plots)
        variable = '^b_kappa',
        regex = TRUE)
   #conditional kappa mostly converge except condition 2 
-  #TODO check how this is calculated
   plot(full_int_slope,
        variable = '^kappa_id',
        regex = TRUE)
@@ -633,11 +660,6 @@ if(all_plots)
   plot(full_int_slope,
        variable = '^zkappa',
        regex = TRUE)
-  # plot(full_int_slope,
-  #      variable = 'zmu_id',
-  #      transform = unwrap_circular_deg,
-  #      nvariables = 5,
-  #      ask = FALSE)
   #individual means converge well, some bimodality in posterior
   plot(full_int_slope,
        variable = '^zmu_id_condition',
@@ -645,6 +667,10 @@ if(all_plots)
        nvariables = 4,
        regex = TRUE,
        ask = FALSE)
+  #individual kappas
+  plot(full_int_slope,
+       variable = '^sd_ID__kappa',
+       regex = TRUE)
   # plot(full_int_slope)
 }
 
@@ -680,15 +706,20 @@ uw_mu_circ = apply(X = full_int_slope_mu_circ_draws[1:4],
 
 
 # . Collect random effects predictions ------------------------------------
+u_id = with(cd_subs, unique(ID))
+n_indiv = length(u_id)
 Cpal = colorRampPalette(colors = c(2:6,
                                    'seagreen',
-                                   # 'salmon',
-                                   # 'slategray3',
-                                   'orange',
-                                   'navajowhite4'
+                                   'salmon3',
+                                   'gray25',
+                                   # 'slategray4',
+                                   'orange3',
+                                   # 'navajowhite4'
+                                   'darkred',
+                                   'darkblue'
 ))
 id_cols = sample(x = Cpal(n = 20),
-                 size = 20,
+                 size = n_indiv,
                  replace = FALSE)
 # [1] "#E59B14" "#DF536B" "#3EB0A2" "#BA22C0" "#24B0E5" "#626078" "#8A9630"
 # [8] "#8B795E" "#7DB455" "#3ACAE0"
@@ -737,7 +768,7 @@ gh_nms = !(gl_nms | uh_nms | ul_nms |
              grepl(pattern = 'chain|iteration|draw', 
                                             x = zmu_nms ))
 
-#TODO #appears to need unwrapping?
+#Sort according to name
 zmu_draws_gh = full_int_slope_zmu_condition_draws[
                           ,gh_nms]
 zmu_draws_gl = full_int_slope_zmu_condition_draws[
@@ -841,7 +872,7 @@ for(id in u_id)
          sep = 2/dt_dim[1],
          stack = TRUE,
          bins = 360/5,
-         col = adjustcolor(id_cols[1], alpha.f = 200/256)
+         col = 'green3'
          ) 
        }
   )
@@ -880,7 +911,8 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(median(cf_vm_k_gh)),
+  y = Softpl_to_meanvec(est_vm$kappa_Intercept +
+                                 cf_vm_k_gh[id, 'Estimate']),
   length =0, 
   lwd = 1,
   col = adjustcolor(id_cols[i], alpha.f = 1)
@@ -902,7 +934,7 @@ for(id in u_id)
          sep = 2/dt_dim[1],
          stack = TRUE,
          bins = 360/5,
-         col = adjustcolor(id_cols[1], alpha.f = 200/256)
+         col = 'darkgreen'
          ) 
        }
   )
@@ -941,7 +973,9 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(median(cf_vm_k_gl)),
+  y = Softpl_to_meanvec(
+                        est_vm$kappa_Intercept + est_vm$kappa_BRl +
+                         cf_vm_k_gl[id, 'Estimate'] ),
   length =0, 
   lwd = 1,
   col = adjustcolor(id_cols[i], alpha.f = 1)
@@ -964,7 +998,7 @@ for(id in u_id)
          sep = 2/dt_dim[1],
          stack = TRUE,
          bins = 360/5,
-         col = adjustcolor(id_cols[1], alpha.f = 200/256)
+         col = 'magenta'
          ) 
        }
   )
@@ -1003,7 +1037,8 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(median(cf_vm_k_uh)),
+  y = Softpl_to_meanvec(est_vm$kappa_Intercept + est_vm$kappa_CLu +
+                          cf_vm_k_uh[id, 'Estimate']),
   length =0, 
   lwd = 1,
   col = adjustcolor(id_cols[i], alpha.f = 1)
@@ -1026,7 +1061,7 @@ for(id in u_id)
          sep = 2/dt_dim[1],
          stack = TRUE,
          bins = 360/5,
-         col = adjustcolor(id_cols[1], alpha.f = 200/256)
+         col = 'purple'
          ) 
        }
   )
@@ -1065,25 +1100,14 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(median(cf_vm_k_ul)),
+  y = Softpl_to_meanvec(
+                        est_vm$kappa_Intercept + est_vm$kappa_BRl +
+                         est_vm$kappa_CLu + est_vm$kappa_BRl.CLu +
+                           cf_vm_k_ul[id, 'Estimate']
+                        ),
   length =0, 
   lwd = 1,
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
 }
-# points.circular(x = circular(x = deg(uw_mu_circ[,1]),
-#                              type = 'angles',
-#                              unit = angle_unit,
-#                              template = 'geographics',
-#                              modulo = '2pi',
-#                              zero = pi/2,
-#                              rotation = angle_rot
-# ),
-# sep = -1e-3,
-# stack = TRUE,
-# bins = 360,
-# col = adjustcolor(id_cols[i], alpha.f = 1/256)
-# ) 
-# 
-# #these are wrong, because of the unbalanced nature of the dataset!
 
