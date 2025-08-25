@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 08 24
-#     MODIFIED:	James Foster              DATE: 2025 08 24
+#     MODIFIED:	James Foster              DATE: 2025 08 25
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -40,6 +40,7 @@ graphics.off()
 #- Remove all unnecessary sections  +
 #- Test with real data  +
 #- Double-check kappa extractions +
+#- Extract coefficients
 #- Try priors for speed
 #- Test with full dataset
 #- Try normal raneff
@@ -145,7 +146,7 @@ NormCirc = function(x,
 ## von Mises model inspection functions ----------------------------------
 
 #histograms on a vertical axis
-#any data, but plotted as a histogram on a vertical rather tahn horizontal axis
+#any data, but plotted as a histogram on a vertical rather than horizontal axis
 VertHist = function(data, # numerical data vector
                     breaks = 1e2,
                     ylab = 'data',
@@ -215,6 +216,413 @@ PlotVMfix = function(mod,
        transformations = Make_vmtrans(mod, angfun, kapfun),
        regex = TRUE)
 }
+
+PCfun = function(angles,
+                 col,
+                 shrink = 1.5,
+                 title = '',
+                 side = 1)
+{
+  ca = circular(x = angles,
+                units = 'degrees',
+                rotation = 'clock')
+  plot.circular(x = ca,
+                col = col,
+                stack = TRUE,
+                sep = 0.1,
+                bins = 355/5,
+                units = 'degrees',
+                rotation = 'clock',
+                zero = pi/2,
+                shrink = shrink)
+  mtext(text = title,
+        side = side,
+        line = -2)
+  lines(x = c(0,0),
+        y = c(-1,1),
+        col = 'gray')
+  arrows.circular(x = mean.circular(ca),
+                  y = rho.circular(ca),
+                  zero = pi/2,
+                  rotation = 'clock',
+                  col = col,
+                  length =0.1)
+}
+
+
+#generic mean angle simulator
+MeanRvm = function(n, #representative sample size
+                   mu = circular(0), #mean (defaults to 0rad)
+                   kappa, #kappa required
+                   au = 'degrees', #units
+                   ar = 'clock') #rotation direction
+{
+  mean.circular(rvonmises(n = n, 
+                          mu = circular(mu, units = au, rotation = ar), 
+                          kappa = kappa,
+                          control.circular = list(units = au, rotation = ar)))
+}
+
+
+#Simulate confidence intervals for a unimodal or bimodal distribution
+#fitted to a vector of "angles"
+#Simulate confidence intervals for a unimodal or bimodal distribution
+#fitted to a vector of "angles"
+CI_vM = function(angles, #vector of angles fitted (used for sample size)
+                 m1, #primary mean
+                 k1, #primary concentration
+                 m2 = NA, #secondary mean (ignored if NULL or NA)
+                 k2 = NA, #secondary kappa
+                 w1 = 1, #weighting of primary mean
+                 force_mu = FALSE, #force median at true mu?
+                 n = 1e4, #number of simulations
+                 au = 'degrees', 
+                 ar = 'clock',
+                 calc_q = TRUE,
+                 alternative = 'one.sided', #two.sided less conservative
+                 interval = 0.95, #confidence interval to calculate
+                 speedup_parallel = TRUE
+)
+{
+  if(speedup_parallel) #3x faster
+  {
+    cl = parallel::makePSOCKcluster(parallel::detectCores()-1)
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('mean.circular',
+                                        'circular',
+                                        'rvonmises'),
+                            envir = .GlobalEnv
+    )
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('MeanRvm',
+                                        'angles',
+                                        'm1',
+                                        'k1',
+                                        'm2',
+                                        'k2',
+                                        'w1',
+                                        'n',
+                                        'au',
+                                        'ar'),
+                            envir = environment()
+    )
+    #simulate primary mean
+    m1_est = 
+      parallel::parSapply(cl = cl,
+                          X = 1:n,
+                          FUN = function(i)
+                          {
+                            eval.parent(
+                              {
+                                MeanRvm(n = round(length(angles)*w1), #estimate number of observations at primary mean
+                                        mu = m1, 
+                                        kappa = k1,
+                                        au = au,
+                                        ar = ar)
+                              }
+                            )
+                          },
+                          simplify = 'array' #return an array of simulated angles
+      )
+    if(!is.na(m2)) #if there is a valid secondary mean
+    {
+      m2_est = 
+        parallel::parSapply(cl = cl,
+                            X = 1:n,
+                            FUN = function(i)
+                            {
+                              eval.parent(
+                                {
+                                  MeanRvm(n = round(length(angles)*(1-w1)), #estimate number of observations at secondary mean
+                                          mu = m2, 
+                                          kappa = k2,
+                                          au = au,
+                                          ar = ar)
+                                }
+                              )
+                            },
+                            simplify = 'array' #return an array of simulated angles
+        )
+    }
+    parallel::stopCluster(cl)
+  }else
+  { #if not using parallel, use the slower version via replicate()
+    m1_est = replicate(n = n, 
+                       MeanRvm(n = round(length(angles)*w1), 
+                               mu = m1, 
+                               kappa = k1,
+                               au = au,
+                               ar = ar)
+    )
+    if(!is.na(m2))
+    {
+      m2_est = replicate(n = n, 
+                         MeanRvm(n = round(length(angles)*(1-w1)), 
+                                 mu = m2, 
+                                 kappa = k2,
+                                 au = au,
+                                 ar = ar)
+      )
+    }
+  }
+  return(
+    if(calc_q) #calculate quantiles only if requested
+    {
+      #either two-sided, symmetrical around mean change
+      #or one-sided, from zero change towards mean change
+      probs1 = switch(alternative,
+                      two.sided = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)),
+                      one.sided = sort(c(c(0,1)+
+                                           (if(Mod360.180(m1)>0) #N.B. quantile.circular counts anticlockwise
+                                           {c(1,0)}else
+                                           {c(0,-1)}
+                                           )*(1-interval), 0.5)),
+                      sort(c(c(0,1)+ #default to one-sided
+                               (if(Mod360.180(m1)>0)
+                               {c(1,0)}else
+                               {c(0,-1)}
+                               )*(1-interval), 0.5))
+      )
+      if(is.na(m2))
+      {
+        if(force_mu)
+        {
+          Mod360.180(
+            quantile( Mod360.180(as.numeric(m1_est) - m1),
+                      probs = probs1) + m1
+          )
+        }else
+        {
+          Mod360.180(
+            quantile.circular(x = circular(x = m1_est,
+                                           units = au,
+                                           rotation = ar),
+                              probs = probs1)
+          )
+        }
+      }else
+      {
+        probs2 = switch(alternative,
+                        two.sided = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)),
+                        one.sided = sort(c(c(0,1)+
+                                             (if(Mod360.180(m2)>0)
+                                             {c(1,0)}else
+                                             {c(0,-1)}
+                                             )*(1-interval), 0.5)),
+                        sort(c(c(0,1)+ #default to one-sided
+                                 (if(Mod360.180(m2)<0)
+                                 {c(1,0)}else
+                                 {c(0,-1)}
+                                 )*(1-interval), 0.5))
+        )
+        list(m1 = if(force_mu)
+        {
+          Mod360.180(
+            quantile( Mod360.180(as.numeric(m1_est) - m1),
+                      probs = probs1) + m1
+          )
+        }else
+        {
+          Mod360.180(
+            quantile.circular(x = circular(x = m1_est,
+                                           units = au,
+                                           rotation = ar),
+                              probs = probs1)
+          )
+        },
+        m2 = if(force_mu)
+        {
+          Mod360.180(
+            quantile( Mod360.180(as.numeric(m2_est) - m2),
+                      probs = probs2) + m2
+          )
+        }else
+        {
+          Mod360.180(
+            quantile.circular(x = circular(x = m2_est,
+                                           units = au,
+                                           rotation = ar),
+                              probs = probs2)
+          )
+        }
+        )
+      }
+    }else
+    { #if quantiles not requested, return the simulations (mainly for troubleshooting)
+      if(is.na(m2))
+      {
+        m1_est = 
+          sapply(X = m1_est, FUN = Mod360.180)
+      }else
+      {
+        list(
+          m1_est = 
+            sapply(X = m1_est, FUN = Mod360.180),     
+          m2_est = 
+            sapply(X = m2_est, FUN = Mod360.180),
+        )
+      }
+    }
+  )
+}
+
+
+PlotCI_vM = function(ci_vec,
+                     col = 'salmon',
+                     lwd = 2,
+                     radius = 0.95,
+                     ...)#passed to lines()
+{
+  ci_vec = as.numeric(ci_vec)#remove circular formatting!
+  #changed on 20250815, plotting issues near median
+  angle_seq1.1 = 
+    seq(from = ci_vec[1], #lower
+        to = ci_vec[1] +
+          Mod360.180(ci_vec[2]-ci_vec[1]), #median
+        length.out =1e2/2)
+  angle_seq1.2 = 
+    seq(from = ci_vec[2], #median
+        to = ci_vec[2] +
+          Mod360.180(ci_vec[3]-ci_vec[2]) , #upper
+        length.out =1e2/2)
+  lines(x = radius*sin( rad(angle_seq1.1) ),
+        y = radius*cos( rad(angle_seq1.1) ),
+        col = col,
+        lwd = lwd,
+        lend = 'butt',
+        ...
+  )
+  lines(x = radius*sin( rad(angle_seq1.2) ),
+        y = radius*cos( rad(angle_seq1.2) ),
+        col = col,
+        lwd = lwd,
+        lend = 'butt',
+        ...
+  )
+  if(!is.na(ci_vec[4]))
+  {
+    #changed on 20250815
+    angle_seq2.1 = 
+      seq(from = ci_vec[1+3],
+          to = ci_vec[1+3] +
+            Mod360.180(ci_vec[2+3]-ci_vec[1+3]),
+          length.out =1e2/2)
+    
+    angle_seq2.2 = 
+      seq(from = ci_vec[2+3],
+          to = ci_vec[2+3] +
+            Mod360.180(ci_vec[3+3]-ci_vec[2+3]) ,
+          length.out =1e2/2)
+    lines(x = radius*sin( rad(angle_seq2.1) ),
+          y = radius*cos( rad(angle_seq2.1) ),
+          col = col,
+          lwd = lwd,
+          lend = 'butt',
+          ....)
+    lines(x = radius*sin( rad(angle_seq2.1) ),
+          y = radius*cos( rad(angle_seq2.1) ),
+          col = col,
+          lwd = lwd,
+          lend = 'butt',
+          ...)
+  }
+}
+
+#plot circular model estimates
+PCestimates = function(angles,
+                       col = 'darkblue',
+                       adjcol = 1/256,
+                       sep = 2/length(unlist(angles)),
+                       shrink = 1.5,
+                       lw = 3,
+                       title = '',
+                       titline = -2,
+                       side = 1,
+                       add_mv = TRUE,
+                       add_ci = FALSE,
+                       add_cred = TRUE,
+                       force_mu = TRUE,
+                       interval = 0.95,
+                       angle_unit = 'degrees',
+                       angle_rot = 'clock'
+)
+{
+  ca = circular(unlist(angles),
+                units = angle_unit,
+                rot = angle_rot
+  )
+  plot.circular(x = ca,
+                col = adjustcolor(col,
+                                  alpha.f = 1/256),
+                stack = TRUE,
+                sep = sep,
+                bins = 355/5,
+                units = angle_unit,
+                rotation = angle_rot,
+                zero = pi/2,
+                shrink = shrink)
+  mtext(text = title,
+        side = side,
+        line = titline)
+  lines(x = c(0,0),
+        y = c(-1,1),
+        col = 'gray')
+  if(add_mv)
+  {
+    arrows.circular(x = mean.circular(ca),
+                    y = rho.circular(ca),
+                    zero = pi/2,
+                    rotation = angle_rot,
+                    col = col,
+                    lwd = lw,
+                    length =0.1)
+  }
+  if(add_ci)
+  {
+    mlevm = mle.vonmises(ca, bias = TRUE)
+    
+    #calculate vector of estimates
+    
+    civ = with(mlevm,
+               {
+                 CI_vM(angles = ca,
+                       m1 = mu,
+                       k1 = kappa,
+                       alternative = 'two.sided',
+                       force_mu = if(kappa == 0 ){TRUE}else{FALSE})
+               }
+    )
+  }
+  if(add_cred)
+  {
+    if(force_mu)
+    {
+      civ =  Mod360.180(
+        quantile( Mod360.180(as.numeric(ca) - mean.circular(ca)),
+                  ,
+                  probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5))) + mean.circular(ca)
+      )
+    }else
+    {
+      civ = Mod360.180(
+        quantile.circular(x = ca,
+                          probs = sort(c(c(0,1)+c(1,-1)*(1-interval)/2, 0.5)))
+      )
+    }
+  }
+  #plot quantiles of estimates
+  if(add_ci | add_cred)
+  {
+    PlotCI_vM(ci_vec = civ,
+              col = col, 
+              lwd = lw,
+              # radius = 1+250*sep*shrink)
+              radius = 1+0.5)
+  }
+}
+
+
+
 
 ## Stan variables ---------------------------------------------------------
 
@@ -503,7 +911,7 @@ prior_int_slope = within(prior_int_slope,
                          {
    #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
    prior[nlpar %in% 'fmu' & coef %in% 'Intercept'] = 'normal(0, 15*pi()/180)'# strong bias to zero
-   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/4)'#moderate bias to zero, no effect #too small reduces efficiency!
+   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/3)'#moderate bias to zero, no effect #too small reduces efficiency!
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
@@ -519,9 +927,9 @@ prior_int_slope = within(prior_int_slope,
                  x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4))'
    #fixed effects on kappa are normally distributed on the softplus scale
    prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(3.0, 3.0)'#weak expectation of kappa around 3 (mean vector around 0.80)
-   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 1.5)'#expectation of condition effect around 0
+   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 2.0)'#expectation of condition effect around 0
    #random effects on kappa are t-distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 1.5)' #narrow prior 
+   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 2.0)' #narrow prior 
                          }
 )
 
@@ -554,11 +962,11 @@ prior_int_slope = within(prior_int_slope,
 prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
   set_prior("target += normal_lpdf(zkappa1 | 3, 3)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa2 | 0, 0.2)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa2 | 0, 0.5)", #expect high concentration (low variation) 
             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += normal_lpdf(zkappa3 | 0, 0.2)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa3 | 0, 0.5)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa4 | 0, 0.1)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(zkappa4 | 0, 0.3)", #expect high concentration (low variation) 
             check = FALSE)
 
 
@@ -695,15 +1103,33 @@ prms_vm = with(sm_vm,
 )
 est_vm = data.frame(t(t(prms_vm)['Estimate',])) # extract just the estimate
 #all draws for circular variables
-#circular intercept
+#circular fixed effects
 full_int_slope_mu_circ_draws = brms::as_draws_df(full_int_slope,
-                                                  variable = 'mu_circ') 
-                                    # 
+                                                  variable = 'mu_circ')
+#kappa effects
+full_int_slope_kappa_draws = brms::as_draws_df(full_int_slope,
+                                               variable = 'kappa',
+                                               regex = TRUE)
+#invert link
+#unwrap link
 uw_mu_circ = apply(X = full_int_slope_mu_circ_draws[1:4],
                   MARGIN = 2,
                   FUN = unwrap_circular
                   )
-
+#softplus link
+gh_kappa = softplus(full_int_slope_kappa_draws[,1])
+gl_kappa = softplus(apply(X =
+                            full_int_slope_kappa_draws[,1:2],
+                          FUN = sum,
+                          MARGIN = 1))
+uh_kappa = softplus(apply(X = 
+                            full_int_slope_kappa_draws[,c(1,3)],
+                          FUN = sum,
+                          MARGIN = 1))
+ul_kappa = softplus(apply(X = 
+                            full_int_slope_kappa_draws[,c(1:4)],
+                          FUN = sum,
+                          MARGIN = 1))
 
 # . Collect random effects predictions ------------------------------------
 u_id = with(cd_subs, unique(ID))
@@ -1110,4 +1536,125 @@ for(id in u_id)
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
 }
+
+
+# Plot coefficients -------------------------------------------------------
+
+par(
+    mfrow = c(2, 4),
+    mar = c(4,4,4,4)
+    )
+
+PCestimates(angles =  deg(uw_mu_circ[,1]),
+      col = 'green3',
+      title = 'Green Bright (Intercept)',
+      titline = 2
+)
+PCestimates(angles =  deg(uw_mu_circ[,2]),
+      col = 'darkgreen',
+      title = 'Green Dim - Green Bright',
+      titline = 2
+)
+PCestimates(angles =  deg(uw_mu_circ[,4]),
+      col = 'purple',
+      title = 'UV Dim - Green Bright',
+      titline = 2
+)
+PCestimates(angles =  deg(uw_mu_circ[,3]),
+      col = 'gray40',
+      title = 'UV Bright - Green Bright',
+      titline = 2
+)
+
+VertHist(data = unlist(gh_kappa),
+         ylab = 'kappa',
+         breaks = 2e1,
+         main = 'Green Bright (Intercept)',
+         col = 'green3'
+         )
+
+VertHist(data = unlist(gl_kappa - gh_kappa),
+         ylab = 'Δkappa',
+         breaks = 2e1,
+         ylim = c(-1, 1)*8,
+         col = 'darkgreen',
+         main = 'Green Dim - Green Bright')
+abline(h = 0,
+       col = 'gray')
+
+VertHist(data = unlist(ul_kappa - gh_kappa),
+         ylab = 'Δkappa',
+         breaks = 2e1,
+         ylim = c(-1, 1)*8,
+         col = 'purple',
+         main = 'UV Dim - Green Bright')
+abline(h = 0,
+       col = 'gray')
+
+VertHist(data = unlist(uh_kappa - gh_kappa),
+         ylab = 'Δkappa',
+         breaks = 2e1,
+         ylim = c(-1, 1)*8,
+         col = 'gray40',
+         main = 'UV Bright - Green Bright')
+abline(h = 0,
+       col = 'gray')
+
+#rho version
+par(
+    mfrow = c(2, 4),
+    mar = c(4,4,4,4)
+    )
+
+PCestimates(angles =  deg(uw_mu_circ[,1]),
+      col = 'green3',
+      title = 'Green Bright (Intercept)'
+)
+PCestimates(angles =  deg(uw_mu_circ[,2]),
+      col = 'darkgreen',
+      title = 'Green Dim - Green Bright'
+)
+PCestimates(angles =  deg(uw_mu_circ[,4]),
+      col = 'purple',
+      title = 'UV Dim - Green Bright'
+)
+PCestimates(angles =  deg(uw_mu_circ[,3]),
+      col = 'gray40',
+      title = 'UV Bright - Green Bright'
+)
+
+VertHist(data = A1(unlist(gh_kappa)),
+         ylab = 'rho',
+         ylim = c(0,1),
+         breaks = 2e1,
+         main = 'Green Bright (Intercept)',
+         col = 'green3'
+         )
+
+VertHist(data = A1(unlist(gl_kappa)) - A1(unlist(gh_kappa)),
+         ylab = 'Δrho',
+         breaks = 2e1,
+         ylim = c(-1, 1)*0.5,
+         col = 'darkgreen',
+         main = 'Green Dim - Green Bright')
+abline(h = 0,
+       col = 'gray')
+
+VertHist(data = A1(unlist(ul_kappa)) - A1(unlist(gh_kappa)),
+         ylab = 'Δrho',
+         breaks = 2e1,
+         ylim = c(-1, 1)*0.5,
+         col = 'purple',
+         main = 'UV Dim - Green Bright')
+abline(h = 0,
+       col = 'gray')
+
+VertHist(data = A1(unlist(uh_kappa)) - A1(unlist(gh_kappa)),
+         ylab = 'Δrho',
+         breaks = 2e1,
+         ylim = c(-1, 1)*0.5,
+         col = 'gray40',
+         main = 'UV Bright - Green Bright')
+abline(h = 0,
+       col = 'gray')
 
