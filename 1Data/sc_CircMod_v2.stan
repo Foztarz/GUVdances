@@ -171,10 +171,10 @@ transformed parameters {
   r_1_kappa_2 = r_1[, 2];
   r_1_kappa_3 = r_1[, 3];
   r_1_kappa_4 = r_1[, 4];
-  lprior += normal_lpdf(b_fmu[1] | 0, pi()/4);
-  lprior += normal_lpdf(b_fmu[2] | 0, pi()/4);
-  lprior += normal_lpdf(b_fmu[3] | 0, pi()/4);
-  lprior += normal_lpdf(b_fmu[4] | 0, pi()/4);
+  lprior += normal_lpdf(b_fmu[1] | 0, pi()/3);
+  lprior += normal_lpdf(b_fmu[2] | 0, pi()/3);
+  lprior += normal_lpdf(b_fmu[3] | 0, pi()/3);
+  lprior += normal_lpdf(b_fmu[4] | 0, pi()/3);
   lprior += von_mises3_lpdf(b_zmu[1] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[2] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[3] | 0, log1p_exp(zkappa1));
@@ -286,9 +286,9 @@ model {
   target += lprior;
   target += std_normal_lpdf(to_vector(z_1));
   target += normal_lpdf(zkappa1 | 3, 3);
-  target += normal_lpdf(zkappa2 | 0, 0.2);
-  target += normal_lpdf(zkappa3 | 0, 0.2);
-  target += normal_lpdf(zkappa4 | 0, 0.1);
+  target += normal_lpdf(zkappa2 | 0, 0.5);
+  target += normal_lpdf(zkappa3 | 0, 0.5);
+  target += normal_lpdf(zkappa4 | 0, 0.5);
 }
 generated quantities {
   // actual population-level intercept
