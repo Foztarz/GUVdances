@@ -753,12 +753,13 @@ real kappa_id_condition4 = log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4);
           block = 'genquant')
 
 lambda_mix = stanvar(scode = "
+real Intercept_logit_lambda;  // lambda for each individual
 vector[K_zmu] b_logit_lambda;  // lambda for each individual
                            ",
                    block = "parameters") +
                    stanvar(scode = "
   for (i in 1:K_zmu) {
-    lprior += von_misesmix_lpdf(b_fmu2[4] | 0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(b_logit_lambda[1]));
+    lprior += von_misesmix_lpdf(b_fmu2[4] | 0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda + b_logit_lambda[1]));
                       }       ",
                    block = "tparameters")
   
@@ -1004,7 +1005,7 @@ prior_mix = within(prior_mix,
    prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/3)'#moderate bias to zero, no effect #too small reduces efficiency!
    prior[nlpar %in% 'fmu'  & coef %in% c("BRl:CLu")] = 'normal(pi()/2, pi()/3)'#strong bias to the rightward turns
    prior[nlpar %in% 'fmu2' & coef %in% c("BRh:CLg", "BRh:CLu", "BRl:CLg")] = 'normal(0, 1e-3)'#No effect on nearly all conditions
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(quantile(b_logit_lambda,0.5)))'#Bimodal effect with change of either 0 or 180°
+   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
@@ -1074,7 +1075,9 @@ prior_mix = prior_mix + #random effects kappas are t-distributed on a softplus s
             check = FALSE)+
   set_prior("target += normal_lpdf(zkappa4 | 0, 0.3)", #expect high concentration (low variation) 
             check = FALSE)+
-  set_prior("target += normal_lpdf(logit_lambda | 0, 1)", #expect high concentration (low variation) 
+  set_prior("target += normal_lpdf(Intercept_logit_lambda | 0, 1)", #expect high concentration (low variation) 
+            check = FALSE)+
+  set_prior("target += normal_lpdf(b_logit_lambda | 0, 1)", #expect high concentration (low variation) 
             check = FALSE)
 
 
@@ -1242,7 +1245,7 @@ if(all_plots)
        transform = unwrap_circular_deg) 
   #weighting parameter
   plot(full_mix,
-       variable = 'lambda',
+       variable = '^Intercept_logit_lambda',
        regex = TRUE,
        transform = plogis) 
   #main effects means converge well
@@ -1425,7 +1428,7 @@ full_mix_zmu_condition_draws = brms::as_draws_df(full_mix,
                                                        variable = '^b_zmu',
                                                        regex = TRUE) 
 full_mix_lambda_draws = brms::as_draws_df(full_mix,
-                                                       variable = '^logit_lambda',
+                                                       variable = 'logit_lambda',
                                                        regex = TRUE) 
 
 zmu_nms = names(full_int_slope_zmu_condition_draws)
@@ -2263,7 +2266,12 @@ for(id in u_id)
       cf_mix_k_ul[id, 'Estimate']
   ),
   length =0, 
-  lwd = 1*plogis(median(full_mix_lambda_draws$logit_lambda)),
+  lwd = with(full_mix_lambda_draws,
+             {
+             1*plogis(
+               median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
+                        Intercept_logit_lambda) )
+               }),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
@@ -2281,7 +2289,12 @@ for(id in u_id)
       cf_mix_k_ul[id, 'Estimate']
   ),
   length =0, 
-  lwd = 1*plogis(-median(full_mix_lambda_draws$logit_lambda)),
+  lwd = with(full_mix_lambda_draws,
+             {
+               1*plogis(
+                 -median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
+                          Intercept_logit_lambda) )
+             }),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
 }
