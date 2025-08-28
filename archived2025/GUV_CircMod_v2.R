@@ -1005,7 +1005,8 @@ prior_mix = within(prior_mix,
    prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/3)'#moderate bias to zero, no effect #too small reduces efficiency!
    prior[nlpar %in% 'fmu'  & coef %in% c("BRl:CLu")] = 'normal(pi()/2, pi()/3)'#strong bias to the rightward turns
    prior[nlpar %in% 'fmu2' & coef %in% c("BRh:CLg", "BRh:CLu", "BRl:CLg")] = 'normal(0, 1e-3)'#No effect on nearly all conditions
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
+   # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
+   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 20, 0, 20, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
@@ -1227,8 +1228,8 @@ system.time(#takes 22 minutes for 10 individuals
                           data = cd_subs, # our data
                           prior = prior_mix, # our priors 
                           stanvars = stanvars_mix,
-                          warmup = 500,#may be necessary 
-                          iter = 500+200, #doesn't take a lot of runs
+                          warmup = 1000,#may be necessary 
+                          iter = 1000+500, #doesn't take a lot of runs
                           chains = 4, # 4 chains in parallel
                           cores = 4, # on 4 CPUs
                           refresh = 0, # don't echo chain progress

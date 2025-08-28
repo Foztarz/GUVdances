@@ -190,7 +190,7 @@ transformed parameters {
   lprior += normal_lpdf(b_fmu2[1] | 0, 1e-3);
   lprior += normal_lpdf(b_fmu2[2] | 0, 1e-3);
   lprior += normal_lpdf(b_fmu2[3] | 0, 1e-3);
-  lprior += von_misesmix_lpdf(b_fmu2[4] | 0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda));
+  lprior += von_misesmix_lpdf(b_fmu2[4] | pi(), 20, 0, 20, inv_logit(Intercept_logit_lambda));
   lprior += von_mises3_lpdf(b_zmu[1] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[2] | 0, log1p_exp(zkappa1));
   lprior += von_mises3_lpdf(b_zmu[3] | 0, log1p_exp(zkappa1));
