@@ -41,11 +41,13 @@ graphics.off()
 #- Test with real data  +
 #- Double-check kappa extractions +
 #- Extract coefficients +
+#- Try bimodal fixef  +
+#- Try simpler model (bimodal prior on fmu[4] & fmu2[4], but unifmodal for fmu2)
+#- Sorted version of bimodal
 #- Try priors for speed
 #- Test with full dataset
 #- Try normal raneff
 #- Try vM raneff
-#- Try bimodal fixef
 
 
 # Set up workspace --------------------------------------------------------
@@ -1006,7 +1008,7 @@ prior_mix = within(prior_mix,
    prior[nlpar %in% 'fmu'  & coef %in% c("BRl:CLu")] = 'normal(pi()/2, pi()/3)'#strong bias to the rightward turns
    prior[nlpar %in% 'fmu2' & coef %in% c("BRh:CLg", "BRh:CLu", "BRl:CLg")] = 'normal(0, 1e-3)'#No effect on nearly all conditions
    # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 3, 0, 3, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
+   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 3, 0, 300, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
@@ -1332,6 +1334,11 @@ uw_fmu2_mix = apply(X = full_mix_fmu2_draws[1:4],
                   MARGIN = 2,
                   FUN = unwrap_circular
                   )
+#extract mu1 and mu2 from UV-dim condition in case of multimodal chains
+uw_ul_mix = M5A(data = apply(X = uw_mu_circ_mix[,1:4],
+                          MARGIN = 1,
+                          FUN = sum) + uw_fmu2_mix[,4])$par[c(1, 3)]
+
 #softplus link
 gh_kappa = softplus(full_int_slope_kappa_draws[,1])
 gl_kappa = softplus(apply(X =
@@ -1584,6 +1591,26 @@ mix_pred_ul2 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]] +
                                uw_mu_circ_mix[,2]) + 
                                deg(apply(uw_fmu2_mix, MARGIN = 1, FUN = sum)) + 
                          mix_pred_gh,
+                    type = 'angles',
+                    unit = 'degrees',
+                    template = 'geographics',
+                    modulo = '2pi',
+                    zero = pi/2,
+                    rotation = 'clock')
+mix_m5a_ul1 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]]) + 
+                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] ) +
+                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] ) + 
+                         deg(uw_ul_mix[1]),
+                    type = 'angles',
+                    unit = 'degrees',
+                    template = 'geographics',
+                    modulo = '2pi',
+                    zero = pi/2,
+                    rotation = 'clock')
+mix_m5a_ul2 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]]) + 
+                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] ) +
+                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] ) + 
+                         deg(uw_ul_mix[2]),,
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
@@ -1992,7 +2019,7 @@ abline(h = 0,
 
 
 # Bimodal model -----------------------------------------------------------
-
+lw = 5
 par(pty = 's')#sometimes gets skipped? Needs to come first
 par(mar =rep(0,4),
     # mfrow = rep(x = ceiling(sqrt(n_indiv)),
@@ -2062,7 +2089,7 @@ for(id in u_id)
   y = Softpl_to_meanvec(est_mix$kappa_Intercept +
                           cf_mix_k_gh[id, 'Estimate']),
   length =0, 
-  lwd = 1,
+  lwd = lw,
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   #gl
@@ -2125,7 +2152,7 @@ for(id in u_id)
     est_mix$kappa_Intercept + est_mix$kappa_BRl +
       cf_mix_k_gl[id, 'Estimate'] ),
   length =0, 
-  lwd = 1,
+  lwd = lw,
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   
@@ -2188,7 +2215,7 @@ for(id in u_id)
   y = Softpl_to_meanvec(est_mix$kappa_Intercept + est_mix$kappa_CLu +
                           cf_mix_k_uh[id, 'Estimate']),
   length =0, 
-  lwd = 1,
+  lwd = lw,
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   
@@ -2249,11 +2276,11 @@ for(id in u_id)
   sep = -1e-3,
   stack = TRUE,
   bins = 360,
-  col = adjustcolor(id_cols[i], alpha.f = 1/256)
+  col = adjustcolor(id_cols[i], alpha.f = 1/256,red.f = 0.1)#slightly redder?)
   )
   
   # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = mix_pred_ul1[,i],
+  arrows.circular(x = median.circular(circular(x = mix_m5a_ul1[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -2269,14 +2296,14 @@ for(id in u_id)
   length =0, 
   lwd = with(full_mix_lambda_draws,
              {
-             1*plogis(
+             lw*plogis(
                median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
                         Intercept_logit_lambda) )
                }),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = mix_pred_ul2[,i],
+  arrows.circular(x = median.circular(circular(x = mix_m5a_ul2[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -2292,7 +2319,7 @@ for(id in u_id)
   length =0, 
   lwd = with(full_mix_lambda_draws,
              {
-               1*plogis(
+               lw*plogis(
                  -median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
                           Intercept_logit_lambda) )
              }),
@@ -2300,5 +2327,51 @@ for(id in u_id)
   )
 }
   
+  # # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
+  # arrows.circular(x = median.circular(circular(x = mix_pred_ul1[,i],
+  #                                              type = 'angles',
+  #                                              unit = angle_unit,
+  #                                              template = 'geographics',
+  #                                              modulo = '2pi',
+  #                                              zero = pi/2,
+  #                                              rotation = angle_rot
+  # )),
+  # y = Softpl_to_meanvec(
+  #   est_mix$kappa_Intercept + est_mix$kappa_BRl +
+  #     est_mix$kappa_CLu + est_mix$kappa_BRl.CLu +
+  #     cf_mix_k_ul[id, 'Estimate']
+  # ),
+  # length =0, 
+  # lwd = with(full_mix_lambda_draws,
+  #            {
+  #            1*plogis(
+  #              median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
+  #                       Intercept_logit_lambda) )
+  #              }),
+  # col = adjustcolor(id_cols[i], alpha.f = 1)
+  # )
+  # # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
+  # arrows.circular(x = median.circular(circular(x = mix_pred_ul2[,i],
+  #                                              type = 'angles',
+  #                                              unit = angle_unit,
+  #                                              template = 'geographics',
+  #                                              modulo = '2pi',
+  #                                              zero = pi/2,
+  #                                              rotation = angle_rot
+  # )),
+  # y = Softpl_to_meanvec(
+  #   est_mix$kappa_Intercept + est_mix$kappa_BRl +
+  #     est_mix$kappa_CLu + est_mix$kappa_BRl.CLu +
+  #     cf_mix_k_ul[id, 'Estimate']
+  # ),
+  # length =0, 
+  # lwd = with(full_mix_lambda_draws,
+  #            {
+  #              1*plogis(
+  #                -median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
+  #                         Intercept_logit_lambda) )
+  #            }),
+  # col = adjustcolor(id_cols[i], alpha.f = 1)
+  # )
 
 
