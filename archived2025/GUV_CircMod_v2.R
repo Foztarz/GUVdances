@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 08 24
-#     MODIFIED:	James Foster              DATE: 2025 08 28
+#     MODIFIED:	James Foster              DATE: 2025 09 01
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -42,7 +42,8 @@ graphics.off()
 #- Double-check kappa extractions +
 #- Extract coefficients +
 #- Try bimodal fixef  +
-#- Try simpler model (bimodal prior on fmu[4] & fmu2[4], but unifmodal for fmu2)
+#- Try simpler model (bimodal prior on fmu[4] & fmu2[4], but unimodal for fmu2) +
+#- Individual effects fmu2
 #- Sorted version of bimodal
 #- Try priors for speed
 #- Test with full dataset
@@ -764,6 +765,11 @@ vector[K_zmu] b_logit_lambda;  // lambda for each individual
     lprior += von_misesmix_lpdf(b_fmu2[4] | 0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda + b_logit_lambda[1]));
                       }       ",
                    block = "tparameters")
+  #                  stanvar(scode = "
+  # for (i in 1:K_zmu) {
+  #   lprior += von_misesmix_lpdf(b_fmu2[4] | 0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda + b_logit_lambda[1]));
+  #                     }       ",
+  #                  block = "tparameters")
   
 
 stanvars_intercepts = stan_mvm_fun + mu_gen  #+ zmu_var+ zkappa_var
@@ -895,6 +901,7 @@ formula_mix = bf(
     mod_circular(fmu + fmu2 + zmu), # mean angle combines fixed and random effects
   fmu ~  BR + CL + BR:CL, # fixed effects only change as a function of condition
   fmu2 ~ 0 + BR:CL, # bimodal fixed effects only for the UV-dim condition
+  # fmu2 ~ 0 + BR:CL + ID:BR:CL, # bimodal fixed effects only for the UV-dim condition
   zmu ~  0+ID + ID:BR + ID:CL + ID:BR:CL, #random effects change as a function of individual and condition and their interaction
   kappa ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
   family = von_mises(link = "identity", # the mean angle will be returned as-is
@@ -1008,7 +1015,8 @@ prior_mix = within(prior_mix,
    prior[nlpar %in% 'fmu'  & coef %in% c("BRl:CLu")] = 'normal(pi()/2, pi()/3)'#strong bias to the rightward turns
    prior[nlpar %in% 'fmu2' & coef %in% c("BRh:CLg", "BRh:CLu", "BRl:CLg")] = 'normal(0, 1e-3)'#No effect on nearly all conditions
    # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 3, 0, 300, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
+   # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 3, 0, 300, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
+   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_mises(b_fmu[4] + pi(), 3)'#Strong expectation of bimodal effect with change of either 0 or 180°
    #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
    #the intercept condition is high intensity green light
    prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
