@@ -898,11 +898,11 @@ sc_uw = make_stancode(formula = formula_unwrap,
 
 bb_uw = brm(formula = formula_unwrap,
          data = cd_subs,
-         warmup = 300,#may be necessary 
-         iter = 300+200, #doesn't take a lot of runs
+         warmup = 500,#may be necessary 
+         iter = 500+500, #doesn't take a lot of runs
          chains = 4, # 4 chains in parallel
          cores = 4, # on 4 CPUs
-         silent = 1,
+         silent = 2,#for now, print lots of info
          stanvars = stan_unwrap_fun + mod_circular_fun,
          backend = 'cmdstanr')
 #main effects means converge well
@@ -925,32 +925,62 @@ plot(bb_uw,
 ### Bimodal --------------------------------------------------------------
 
 #set up model fit
-formula_mix = bf(
-  formula = angle ~ #set up a formula for the mean angles, modulus to (-pi,pi)
-                    BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
-            kappa1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-            kappa2 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-            theta1 ~ (BR:CL|ID), #for mixture weighting, this is specific to individual and condition combination
-  family = mixture(von_mises(link = "identity", # the mean angle will be returned as-is
-                     link_kappa = 'softplus'),#kappa will be returned via the softplus link https://en.wikipedia.org/wiki/Softplus
-                   von_mises(link = "identity", # the mean angle will be returned as-is
-                     link_kappa = 'softplus')
-                   ),#kappa will be returned via the softplus link https://en.wikipedia.org/wiki/Softplus
-  nl = FALSE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+formula_mix = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mod_circular(mu),#set up a formula for the mean angles, modulus to (-pi,pi)
+              mu1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
+              mu2 ~ BR:CL, # mean angle effect of condition combination
+              kappa1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+              kappa2 ~ 1 + (BR:CL|ID), #for 2nd mean, this is specific to individual and condition combination
+            theta1 ~ 1 + (BR:CL|ID), #for mixture weighting, this is specific to individual and condition combination
+  family = mixture(unwrap_von_mises,#mod mu, kappa via the softplus
+                   unwrap_von_mises
+                   ),#mixture, specified by the log ratio of theta1 : theta2
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 
-sc = make_stancode(formula = formula_mix,
-                   data = cd_subs)
-
-bb = brm(formula = formula_mix,
+sc_mix = make_stancode(formula = formula_mix,
+                   data = cd_subs,
+                   stanvars = stan_unwrap_fun + mod_circular_fun)
+system.time(
+  {
+bb_mix = brm(formula = formula_mix,
          data = cd_subs,
+         stanvars = stan_unwrap_fun + mod_circular_fun,
          warmup = 300,#may be necessary 
          iter = 300+200, #doesn't take a lot of runs
-         chains = 1, # 4 chains in parallel
+         chains = 4, # 4 chains in parallel
          cores = 4, # on 4 CPUs
-         threads = 4, # on 4 CPUs
-         silent = 1, # don't echo chain progress
+         # threads = 4, # on 4 CPUs
+         silent = 2, # echo chain progress
          backend = 'cmdstanr')
+}
+)
+
+#main effects means converge well
+plot(bb_mix,
+     variable = '^b_mu1', # now they all have similar names
+     regex = TRUE,
+     nvariables = 4,
+     transform = unwrap_circular_deg) 
+#secondary mu needs priors
+plot(bb_mix,
+     variable = '^b_mu2', # now they all have similar names
+     regex = TRUE,
+     nvariables = 5,
+     transform = unwrap_circular_deg) 
+#secondary mu needs priors
+plot(bb_mix,
+     variable = '^b_theta', # now they all have similar names
+     regex = TRUE) 
+#main effects means converge well
+plot(bb_uw,
+     variable = '^b_kappa',
+     regex = TRUE)#main effects means converge well
+#this one is harder
+plot(bb_uw,
+     variable = '^sd_',
+     nvariables = 10,
+     regex = TRUE)
 
 ## Priors ----------------------------------------------------------------
 #Unimodal
