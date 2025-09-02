@@ -710,6 +710,7 @@ beta_all_res = data.frame(mu_lower = quant_mu[1,],
                           )
 print(beta_all_res[,c(2,5,7,10)], digits = 3)
 ```
+
 #### Investigate effect of sun elevation
 
 ```{r Set up priors for a sun elevation model}
@@ -803,6 +804,7 @@ priors_elemod_mxRE = within(get_prior(formula = frm_elemod_maxRE,
                           expr = eval(pr_expression))
 print(priors_elemod_mxRE)#all parameters are accounted for
 ```
+
 ```{r Fit the sun elevation model, echo = FALSE}
 ## Run the models --------------------------------------------------------
 system.time( #takes about 2 minutes
@@ -884,6 +886,7 @@ loo_beta = loo(md_beta)
 loo_ele = loo(md_ele)
 loo_compare(loo_beta, loo_ele)
 ```
+
 ### Comparison with Edrich *et al.* (1979)
 
 How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities?
