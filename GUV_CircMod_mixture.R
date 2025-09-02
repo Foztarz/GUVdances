@@ -926,7 +926,7 @@ plot(bb_uw,
 
 #set up model fit
 formula_mix = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mod_circular(mu),#set up a formula for the mean angles, modulus to (-pi,pi)
+  formula = angle ~ mu,#set up a formula for the mean angles, modulus to (-pi,pi)
               mu1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
               mu2 ~ BR:CL, # mean angle effect of condition combination
               kappa1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -935,7 +935,7 @@ formula_mix = bf(#modulus may not be necessary, included in lpd function
   family = mixture(unwrap_von_mises,#mod mu, kappa via the softplus
                    unwrap_von_mises
                    ),#mixture, specified by the log ratio of theta1 : theta2
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = FALSE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 
 sc_mix = make_stancode(formula = formula_mix,
@@ -951,7 +951,7 @@ bb_mix = brm(formula = formula_mix,
          chains = 4, # 4 chains in parallel
          cores = 4, # on 4 CPUs
          # threads = 4, # on 4 CPUs
-         silent = 2, # echo chain progress
+         silent = 1, # echo chain progress
          backend = 'cmdstanr')
 }
 )
