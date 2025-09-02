@@ -860,17 +860,18 @@ cd_subs = subset(x = cd,
 ### Custom family --------------------------------------------------------
 unwrap_von_mises = custom_family(
   "unwrap_von_mises", dpars = c("mu", "kappa"),
-  links = c("mod_circular", "softplus"),
+  links = c('identity',#brms cannot accept custom link functions, do via nl instead
+            "softplus"), 
   lb = c(-pi, 0), ub = c(pi, NA),
-  type = "real", vars = "vreal[n]"
+  type = "real"
 )
 
 stan_unwrap_fun = stanvar(scode = "
   real unwrap_von_mises_lpdf(real y, real mu, real kappa) {
-    return vonmises_lpdf(y | mu, kappa);
+    return von_mises_lpdf(y | mod_circular(mu), kappa);
   }
   real unwrap_von_mises_rng(real mu, real kappa) {
-    return von_mises_rng( mu , kappa);
+    return von_mises_rng( mod_circular(mu) , kappa);
   }
 ",
   block = 'functions') + 
@@ -879,32 +880,46 @@ stan_unwrap_fun = stanvar(scode = "
     return mod_circular(y);
   }
 ",
-  block = 'functions') + 
+  block = 'functions') 
 
 ### Custom unimodal ------------------------------------------------------
 #set up model fit
 formula_unwrap = bf(
-  formula = angle ~ #set up a formula for the mean angles, modulus to (-pi,pi)
-    BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
-  kappa ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+  formula = angle ~ mod_circular(mu),#set up a formula for the mean angles, modulus to (-pi,pi)
+            mu ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
+            kappa ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
   family = unwrap_von_mises,
-  nl = FALSE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 
 sc_uw = make_stancode(formula = formula_unwrap,
                    data = cd_subs,
-                   stanvars = stan_unwrap_fun)
+                   stanvars = stan_unwrap_fun + mod_circular_fun)
 
-bb = brm(formula = formula_mix,
+bb_uw = brm(formula = formula_unwrap,
          data = cd_subs,
          warmup = 300,#may be necessary 
          iter = 300+200, #doesn't take a lot of runs
-         chains = 1, # 4 chains in parallel
+         chains = 4, # 4 chains in parallel
          cores = 4, # on 4 CPUs
-         threads = 4, # on 4 CPUs
-         silent = 1, # don't echo chain progress
+         silent = 1,
+         stanvars = stan_unwrap_fun + mod_circular_fun,
          backend = 'cmdstanr')
-
+#main effects means converge well
+plot(bb_uw,
+     variable = '^b_[^kappa]', # now they all have similar names
+     regex = TRUE,
+     nvariables = 8,
+     transform = unwrap_circular_deg) 
+#main effects means converge well
+plot(bb_uw,
+     variable = '^b_kappa',
+     regex = TRUE)#main effects means converge well
+#this one is harder
+plot(bb_uw,
+     variable = '^sd_',
+     nvariables = 10,
+     regex = TRUE)
 
 
 ### Bimodal --------------------------------------------------------------
