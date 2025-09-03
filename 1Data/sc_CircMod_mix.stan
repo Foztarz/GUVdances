@@ -250,11 +250,11 @@ transformed parameters {
   r_5_theta1_4 = r_5[, 4];
   lprior += normal_lpdf(b_mu1 | 0, pi()/4);
   lprior += normal_lpdf(Intercept_mu1 | 0, pi()/12);
-  lprior += normal_lpdf(b_kappa1 | 0, 2);
+  lprior += normal_lpdf(b_kappa1 | 0, 1);
   lprior += normal_lpdf(Intercept_kappa1 | 5, 1);
   lprior += normal_lpdf(b_mu2 | 0, pi()/4);
   lprior += normal_lpdf(Intercept_mu2 | pi(), pi()/12);
-  lprior += normal_lpdf(b_kappa2 | 0, 2);
+  lprior += normal_lpdf(b_kappa2 | 0, 1);
   lprior += normal_lpdf(Intercept_kappa2 | 5, 1);
   lprior += normal_lpdf(b_theta1 | 0, 3);
   lprior += normal_lpdf(Intercept_theta1 | 5, 1);
@@ -268,11 +268,11 @@ transformed parameters {
   lprior += lognormal_lpdf(sd_2[3] | log(pi()/12), 0.7);
   lprior += lognormal_lpdf(sd_2[4] | log(pi()/12), 0.7);
   lprior += lkj_corr_cholesky_lpdf(L_2 | 1);
-  lprior += student_t_lpdf(sd_3 | 3, 0, 2)
-    - 4 * student_t_lccdf(0 | 3, 0, 2);
+  lprior += student_t_lpdf(sd_3 | 3, 0, 1)
+    - 4 * student_t_lccdf(0 | 3, 0, 1);
   lprior += lkj_corr_cholesky_lpdf(L_3 | 1);
-  lprior += student_t_lpdf(sd_4 | 3, 0, 2)
-    - 4 * student_t_lccdf(0 | 3, 0, 2);
+  lprior += student_t_lpdf(sd_4 | 3, 0, 1)
+    - 4 * student_t_lccdf(0 | 3, 0, 1);
   lprior += lkj_corr_cholesky_lpdf(L_4 | 1);
   lprior += student_t_lpdf(sd_5 | 3, 0, 3)
     - 4 * student_t_lccdf(0 | 3, 0, 3);

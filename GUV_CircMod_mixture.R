@@ -934,10 +934,10 @@ pr_mu_mix =
 pr_kappa_mix = 
   prior(normal(5.0,1.0), class = Intercept, dpar = 'kappa1') + # bias to oriented
   prior(normal(5.0,1.0), class = Intercept, dpar = 'kappa2') + # bias to oriented
-  prior(normal(0,2.0), class = b, dpar = 'kappa1') + # weak bias to no change
-  prior(normal(0,2.0), class = b, dpar = 'kappa2') + # weak bias to no change
-  prior(student_t(3,0, 2.0), class = sd, dpar = 'kappa1') + # weak bias to no turn
-  prior(student_t(3,0, 2.0), class = sd, dpar = 'kappa2') # weak bias to no turn
+  prior(normal(0,1.0), class = b, dpar = 'kappa1') + # strong bias to no change
+  prior(normal(0,1.0), class = b, dpar = 'kappa2') + # strong bias to no change
+  prior(student_t(3,0, 1.0), class = sd, dpar = 'kappa1') + # weak bias to no turn
+  prior(student_t(3,0, 1.0), class = sd, dpar = 'kappa2') # weak bias to no turn
 #priors for theta (mixture weight)
 pr_theta_mix = 
   prior(normal(5,1), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
@@ -1002,6 +1002,10 @@ plot(full_mix,
      regex = TRUE,
      nvariables = 5,
      transform = unwrap_circular_deg) 
+#weighting (logistic scaled)
+plot(full_mix,
+     variable = '^b_theta1',
+     regex = TRUE) 
 #primary kappa
 plot(full_mix,
      variable = '^b_kappa1',
@@ -1010,10 +1014,6 @@ plot(full_mix,
 plot(full_mix,
      variable = '^b_kappa2',
      regex = TRUE)#main effects means converge well
-#weighting (logistic scaled)
-plot(full_mix,
-     variable = '^b_theta1',
-     regex = TRUE) 
 #linear SD should be less than 180°
 plot(full_mix,
      variable = '^sd_ID__mu1',
