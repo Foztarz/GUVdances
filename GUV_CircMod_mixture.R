@@ -38,7 +38,8 @@ graphics.off()
 #TODO   
 #- Remove all unnecessary sections  
 #- Make custom family +
-#- Generate mod circular variables
+#- Generate mod circular variables + 
+#- Think about priors for opposite means
 #- Extract bimodal effects
 #- Test von Mises version
 #- Individual effects fmu2
@@ -888,7 +889,6 @@ stan_unwrap_fun = stanvar(scode = "
 ",
   block = 'functions') 
 
-#TODO add generated quantities
 #generate modulo outputs of fixed effects
 unwrap_mu_gen = stanvar(scode = "
   vector [Kc_mu1 +1] mu_circ1; //modulo circular estimate
@@ -901,6 +901,8 @@ unwrap_mu_gen = stanvar(scode = "
   }
 ",
 block = 'genquant')
+
+# unwrap_von_mises_lpdf(Y[n] | mu2[n], kappa2[n])
 
 ## Formula ---------------------------------------------------------------
 #N.B. Was limited to just the interaction effects for 2nd distribution, now includes all
@@ -922,8 +924,8 @@ formula_mix = bf(#modulus may not be necessary, included in lpd function
 pr_mu_mix = 
   prior(normal(0,pi()/12), class = Intercept, dpar = 'mu1') + # anchor to 0°
   prior(normal(pi(),pi()/12), class = Intercept, dpar = 'mu2') + # anchor to 180°
-  prior(normal(0,pi()/3), class = b, dpar = 'mu1') + # weak bias to no turn
-  prior(normal(0,pi()/3), class = b, dpar = 'mu2') + # weak bias to no turn
+  prior(normal(0,pi()/4), class = b, dpar = 'mu1') + # weak bias to no turn
+  prior(normal(0,pi()/4), class = b, dpar = 'mu2') + # weak bias to no turn
   prior(lognormal( log(pi()/12), 0.7), dpar = 'mu1', class = 'sd', group  = 'ID') + #small differences across conditions
   prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', group  = 'ID') + #small differences across conditions
   prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', coef = 'Intercept', group  = 'ID') + #keep sd under 90°
