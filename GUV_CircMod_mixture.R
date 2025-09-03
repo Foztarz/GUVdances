@@ -37,15 +37,15 @@ graphics.off()
 #TODO   ---------------------------------------------
 #TODO   
 #- Remove all unnecessary sections  
-#- Make custom family (inv_link problem) 
-#- Move functions out of script
+#- Make custom family +
+#- Generate mod circular variables
 #- Extract bimodal effects
+#- Test von Mises version
 #- Individual effects fmu2
 #- Sorted version of bimodal
 #- Try priors for speed
+#- Move functions out of script
 #- Test with full dataset
-#- Try normal raneff
-#- Try vM raneff
 
 
 # Set up workspace --------------------------------------------------------
@@ -55,7 +55,6 @@ graphics.off()
 #needs installing before first use (in Rstudio, see automatic message)
 suppressMessages(#these are disturbing users unnecessarily
   {
-    # require(CircStats)#package for circular hypothesis tests #Is this being used at all?
     require(circular)#package for handling circular data
     require(CircMLE)#package for circular mixture models
     require(brms)#package for preparing Stan models
@@ -64,6 +63,7 @@ suppressMessages(#these are disturbing users unnecessarily
 
 
 ## Plot spacing function -------------------------------------------------
+#TODO check usage
 #generates the same spacing as R's default barplot function
 BarSpacer = function(n, 
                      spa = 0.2,
@@ -184,6 +184,7 @@ VertHist = function(data, # numerical data vector
   )
 }
 
+#TODO check usage
 #function to construct the transformation list
 #transforms variable estimates in the model output
 #by default circular estimates are converted to the 360° interval around the mean
@@ -528,6 +529,7 @@ PlotCI_vM = function(ci_vec,
   }
 }
 
+#TODO check usage
 #plot circular model estimates
 PCestimates = function(angles,
                        col = 'darkblue',
@@ -645,6 +647,8 @@ mod_circular_fun = stanvar(scode = "
   }
 ",
                            block = 'functions')
+
+#TODO check usage
 #set up a von Mises PDF that converts to modulo (adapted from BRMS default)
 von_mises3_fun = stanvar(scode = "
 real von_mises3_lpdf(real y, real mu, real kappa) {
@@ -656,6 +660,8 @@ real von_mises3_lpdf(real y, real mu, real kappa) {
    }
 ",
                          block = 'functions')
+
+#TODO check usage
 #set up a von Mises PDF that converts to modulo (adapted from BRMS default)
 # a mixture model of the form PDF = vonmises1*lambda + vonmises2*(1-lambda)
 von_misesmix_fun = stanvar(scode = "
@@ -668,6 +674,8 @@ real von_misesmix_lpdf(real y, real mu1, real kappa1, real mu2, real kappa2, rea
    }
 ",
                          block = 'functions')
+
+#TODO check usage
 #a circular mean that might be useful
 meancirc_fun = stanvar(scode = "
    // calculate the mean angle of a circular distribution (in radians)
@@ -685,6 +693,8 @@ meancirc_fun = stanvar(scode = "
    }
 ",
                        block = 'functions')
+
+#TODO check usage
 #could unwrap estimate; not especially useful as only one estimate per iteration
 unwrapcirc_fun = stanvar(scode = "
    // calculate the unwrapped version (no discontinuities)
@@ -752,6 +762,7 @@ real kappa_id_condition4 = log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4);
           ", 
           block = 'genquant')
 
+#TODO check usage
 lambda_mix = stanvar(scode = "
 real Intercept_logit_lambda;  // lambda for each individual
 vector[K_zmu] b_logit_lambda;  // lambda for each individual
@@ -768,15 +779,11 @@ stanvars_intercepts = stan_mvm_fun + mu_gen  #+ zmu_var+ zkappa_var
 stanvars_slopes = stan_mvm_fun + mu_gen  + zkappa_var_slope + 
   zmu_var_slope 
 stanvars_mix = stan_mvm_fun + mu_gen  + zkappa_var_slope + 
-  zmu_var_slope #+ lambda_mix #lambda may not be needed?
+  zmu_var_slope 
 
 
 # Input Variables ----------------------------------------------------------
-
 all_plots = FALSE # to speed up
-##  User input -----------------------------------------------------------
-
-
 
 ## System parameters -----------------------------------------------------
 
@@ -817,8 +824,10 @@ if(is.null(path_file) | !length(path_file))
 cd = read.table(file = path_file, 
                 header = T, 
                 sep  = ',')
-View(cd)
-
+if(all_plots)
+{
+  View(cd)
+}
 cd = within(cd,
             {
               ID = as.factor(ID) # beedance identifier as a factor
@@ -853,11 +862,8 @@ cd_subs = subset(x = cd,
                 )
 # cd_subs = cd
 
-
-## Formula ---------------------------------------------------------------
-
-
-### Custom family --------------------------------------------------------
+## Custom family --------------------------------------------------------
+#In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
   "unwrap_von_mises", dpars = c("mu", "kappa"),
   links = c('identity',#brms cannot accept custom link functions, do via nl instead
@@ -882,310 +888,72 @@ stan_unwrap_fun = stanvar(scode = "
 ",
   block = 'functions') 
 
-### Custom unimodal ------------------------------------------------------
-#set up model fit
-formula_unwrap = bf(
-  formula = angle ~ mod_circular(mu),#set up a formula for the mean angles, modulus to (-pi,pi)
-            mu ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
-            kappa ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+#TODO add generated quantities
+#generate modulo outputs of fixed effects
+unwrap_mu_gen = stanvar(scode = "
+  vector [Kc_mu1 +1] mu_circ1; //modulo circular estimate
+  vector [Kc_mu2 +1] mu_circ2; //modulo circular estimate
+  mu_circ1[1] = mod_circular(Intercept_mu1); //Intercept case
+  mu_circ2[1] = mod_circular(Intercept_mu2); //Intercept case
+  for (i in 1:Kc_mu1){
+  mu_circ1[i+1] = mod_circular(mu_circ1[1] + b_mu1[i]);
+  mu_circ2[i+1] = mod_circular(mu_circ2[1] + b_mu2[i]);
+  }
+",
+block = 'genquant')
 
-
-sc_uw = make_stancode(formula = formula_unwrap,
-                   data = cd_subs,
-                   stanvars = stan_unwrap_fun + mod_circular_fun)
-
-bb_uw = brm(formula = formula_unwrap,
-         data = cd_subs,
-         warmup = 500,#may be necessary 
-         iter = 500+500, #doesn't take a lot of runs
-         chains = 4, # 4 chains in parallel
-         cores = 4, # on 4 CPUs
-         silent = 2,#for now, print lots of info
-         stanvars = stan_unwrap_fun + mod_circular_fun,
-         backend = 'cmdstanr')
-#main effects means converge well
-plot(bb_uw,
-     variable = '^b_[^kappa]', # now they all have similar names
-     regex = TRUE,
-     nvariables = 8,
-     transform = unwrap_circular_deg) 
-#main effects means converge well
-plot(bb_uw,
-     variable = '^b_kappa',
-     regex = TRUE)#main effects means converge well
-#this one is harder
-plot(bb_uw,
-     variable = '^sd_',
-     nvariables = 10,
-     regex = TRUE)
-
-
-### Bimodal --------------------------------------------------------------
-
+## Formula ---------------------------------------------------------------
+#N.B. Was limited to just the interaction effects for 2nd distribution, now includes all
 #set up model fit
 formula_mix = bf(#modulus may not be necessary, included in lpd function
   formula = angle ~ mu,#set up a formula for the mean angles, modulus to (-pi,pi)
               mu1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle combines fixed and random effects
-              mu2 ~ BR:CL, # mean angle effect of condition combination
+              mu2 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), # mean angle effect of condition combination
               kappa1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-              kappa2 ~ 1 + (BR:CL|ID), #for 2nd mean, this is specific to individual and condition combination
-            theta1 ~ 1 + (BR:CL|ID), #for mixture weighting, this is specific to individual and condition combination
+              kappa2 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for 2nd mean, this is specific to individual and condition combination
+            theta1 ~ BR + CL + BR:CL + (1 + BR + CL + BR:CL|ID), #for mixture weighting, this is specific to individual and condition combination
   family = mixture(unwrap_von_mises,#mod mu, kappa via the softplus
                    unwrap_von_mises
                    ),#mixture, specified by the log ratio of theta1 : theta2
   nl = FALSE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+## Priors ----------------------------------------------------------------
+
+#priors for mu
+pr_mu_mix = 
+  prior(normal(0,pi()/12), class = Intercept, dpar = 'mu1') + # anchor to 0°
+  prior(normal(pi(),pi()/12), class = Intercept, dpar = 'mu2') + # anchor to 180°
+  prior(normal(0,pi()/3), class = b, dpar = 'mu1') + # weak bias to no turn
+  prior(normal(0,pi()/3), class = b, dpar = 'mu2') + # weak bias to no turn
+  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu1', class = 'sd', group  = 'ID') + #small differences across conditions
+  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', group  = 'ID') + #small differences across conditions
+  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', coef = 'Intercept', group  = 'ID') + #keep sd under 90°
+  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu1', class = 'sd', coef = 'Intercept', group  = 'ID') #keep sd under 90°
+#priors for kappa
+pr_kappa_mix = 
+  prior(normal(5.0,1.0), class = Intercept, dpar = 'kappa1') + # bias to oriented
+  prior(normal(5.0,1.0), class = Intercept, dpar = 'kappa2') + # bias to oriented
+  prior(normal(0,2.0), class = b, dpar = 'kappa1') + # weak bias to no change
+  prior(normal(0,2.0), class = b, dpar = 'kappa2') + # weak bias to no change
+  prior(student_t(3,0, 2.0), class = sd, dpar = 'kappa1') + # weak bias to no turn
+  prior(student_t(3,0, 2.0), class = sd, dpar = 'kappa2') # weak bias to no turn
+#priors for theta (mixture weight)
+pr_theta_mix = 
+  prior(normal(3,1), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
+  prior(normal(0,1), class = b, dpar = 'theta1') + # weak bias to zero
+  prior(student_t(3,0, 1.0), class = sd, dpar = 'theta1') 
+
+
+pr_mix = pr_mu_mix + pr_kappa_mix + pr_theta_mix
+
+
+## Save Stancode -----------------------------------------------------------
 
 
 sc_mix = make_stancode(formula = formula_mix,
                    data = cd_subs,
-                   stanvars = stan_unwrap_fun + mod_circular_fun)
-system.time(
-  {
-bb_mix = brm(formula = formula_mix,
-         data = cd_subs,
-         stanvars = stan_unwrap_fun + mod_circular_fun,
-         warmup = 300,#may be necessary 
-         iter = 300+200, #doesn't take a lot of runs
-         chains = 4, # 4 chains in parallel
-         cores = 4, # on 4 CPUs
-         # threads = 4, # on 4 CPUs
-         silent = 1, # echo chain progress
-         backend = 'cmdstanr')
-}
-)
+                   prior = pr_mix,
+                   stanvars = stan_unwrap_fun + mod_circular_fun + unwrap_mu_gen)
 
-#main effects means converge well
-plot(bb_mix,
-     variable = '^b_mu1', # now they all have similar names
-     regex = TRUE,
-     nvariables = 4,
-     transform = unwrap_circular_deg) 
-#secondary mu needs priors
-plot(bb_mix,
-     variable = '^b_mu2', # now they all have similar names
-     regex = TRUE,
-     nvariables = 5,
-     transform = unwrap_circular_deg) 
-#secondary mu needs priors
-plot(bb_mix,
-     variable = '^b_theta', # now they all have similar names
-     regex = TRUE) 
-#main effects means converge well
-plot(bb_uw,
-     variable = '^b_kappa',
-     regex = TRUE)#main effects means converge well
-#this one is harder
-plot(bb_uw,
-     variable = '^sd_',
-     nvariables = 10,
-     regex = TRUE)
-
-## Priors ----------------------------------------------------------------
-#Unimodal
-prior_int_slope = get_prior(formula = formula_int_slope,
-                            data = cd_subs,
-                            check = FALSE)
-dim(prior_int_slope)
-#suggests 695  possible priors!
-#they will take this general structure
-print(subset(prior_int_slope, nlpar %in% 'fmu')['coef'])
-## coef
-## ''    
-## BRl 
-## BRl:CLu
-## CLu 
-## Intercept 
-
-#Bimodal
-prior_mix = get_prior(formula = formula_mix,
-                            data = cd_subs,
-                            check = FALSE)
-dim(prior_mix)
-#suggests 695  possible priors!
-#they will take this general structure
-print(subset(prior_mix, nlpar %in% 'fmu2')['coef'])
-## coef
-## ''    
-## BRl 
-## BRl:CLu
-## CLu 
-## Intercept 
-
-
-### assign BRMS default priors -------------------------------------------
-
-#ideally the ones for zkappa should be vectorised like the ones for kappa
-# for (n in 1:N) {
-#   // add more terms to the linear predictor
-#   kappa[n] += r_1_kappa_1[J_1[n]] * Z_1_kappa_1[n] + r_1_kappa_2[J_1[n]] * Z_1_kappa_2[n] + r_1_kappa_3[J_1[n]] * Z_1_kappa_3[n] + r_1_kappa_4[J_1[n]] * Z_1_kappa_4[n];
-# }
-
-#potentially good priors
-# 
-# "Intercept": bmb.Prior("Normal", mu=vm_prior[1], sigma=1*np.pi/180), 
-# # We expect the effect of condition to be a change of 180° (2 x 90°), most priors find this fairly well
-# "Cond": bmb.Prior("Normal", mu=np.pi, sigma=60*np.pi/180), #
-# # No expectations about different mean headings by condition, beyond a wider spread
-# "catDoLP": bmb.Prior("Normal", mu=0, sigma=30*np.pi/180), #
-# # Individual-level effects for μ: #bias to high kappa appears to cause divergent transitions here
-# "1|Individual": bmb.Prior(
-#   # In these experiments, we have no expectation that beetles would choose the same direction in their 1st trial
-#   # Informative prior used expecting SD close to that measured empirically
-#   # Using a normal distribution because that converges better
-#   "Normal", mu=0, sigma=bmb.Prior("HalfStudentT", nu = 3, sigma = sd_prior/4) #assume zero, but scale by ML estimate
-# ),
-# # Priors for the κ-model (inside the "kappa" dictionary):
-# "kappa": {
-#   # Fixed effects for κ:
-#   # # Across two trials the MLE for this should range from ≈1.5–2.8
-#   #20250327 try higher precision to make individual mean directions easier to estimate
-#   "Intercept": bmb.Prior("Normal", mu=inverse_softplus(10), sigma=1.0), 
-#   "catDoLP": bmb.Prior("Normal", mu=0, sigma=1.0), 
-#   # Individual-level effects for κ:
-#   "1|Individual": bmb.Prior(
-#     "Normal", mu=0, sigma=bmb.Prior("LogNormal", mu=np.log(0.5), sigma=0.1) #Informative prior, individual differences in concentration are small
-#   ),
-
-
-### Unimodal -------------------------------------------------------------
-
-prior_int_slope = within(prior_int_slope,
-                         {
-   #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
-   prior[nlpar %in% 'fmu' & coef %in% 'Intercept'] = 'normal(0, 15*pi()/180)'# strong bias to zero
-   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/3)'#moderate bias to zero, no effect #too small reduces efficiency!
-   #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
-   #the intercept condition is high intensity green light
-   prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
-   prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa1))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'BRl', #the random effect of low brightness has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'CLu', #the random effect of UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa3))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'BRl:CLu', #the random effect of low brightness & UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4))'
-   #fixed effects on kappa are normally distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(3.0, 3.0)'#weak expectation of kappa around 3 (mean vector around 0.80)
-   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 2.0)'#expectation of condition effect around 0
-   #random effects on kappa are t-distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 2.0)' #narrow prior 
-                         }
-)
-
-
-### Bimodal -------------------------------------------------------------
-
-prior_mix = within(prior_mix,
-                         {
-   #fixed effects on mean angle are von Mises distributed (von_mises3 converts estimates to modulo (-pi,pi))                              
-   prior[nlpar %in% 'fmu' & coef %in% 'Intercept'] = 'normal(0, 15*pi()/180)'# strong bias to zero
-   prior[nlpar %in% 'fmu' & class %in% 'b'] = 'normal(0, pi()/3)'#moderate bias to zero, no effect #too small reduces efficiency!
-   prior[nlpar %in% 'fmu'  & coef %in% c("BRl:CLu")] = 'normal(pi()/2, pi()/3)'#strong bias to the rightward turns
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRh:CLg", "BRh:CLu", "BRl:CLg")] = 'normal(0, 1e-3)'#No effect on nearly all conditions
-   # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(0, log1p_exp(Intercept_kappa + sum(b_kappa)), pi(), log1p_exp(Intercept_kappa + sum(b_kappa)), inv_logit(Intercept_logit_lambda))'#Bimodal effect with change of either 0 or 180°
-   # prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_misesmix(pi(), 3, 0, 300, inv_logit(Intercept_logit_lambda))'#Strong expectation of bimodal effect with change of either 0 or 180°
-   prior[nlpar %in% 'fmu2' & coef %in% c("BRl:CLu")] = 'von_mises(b_fmu[4] + pi(), 3)'#Strong expectation of bimodal effect with change of either 0 or 180°
-   #random effects on mean angle are von Mises distributed, with a kappa parameter estimated from the data
-   #the intercept condition is high intensity green light
-   prior[nlpar %in% 'zmu' & coef %in% 'Intercept'] = 'von_mises3(0, log1p_exp(zkappa1))'
-   prior[nlpar %in% 'zmu' & class %in% 'b'] = 'von_mises3(0, log1p_exp(zkappa1))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'BRl', #the random effect of low brightness has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'CLu', #the random effect of UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa3))'
-   prior[nlpar %in% 'zmu' & class %in% 'b' 
-         & grepl(pattern = 'BRl:CLu', #the random effect of low brightness & UV has a different kappa
-                 x = coef)] = 'von_mises3(0, log1p_exp(zkappa1+zkappa2+zkappa3+zkappa4))'
-   #fixed effects on kappa are normally distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'Intercept'] = 'normal(3.0, 3.0)'#weak expectation of kappa around 3 (mean vector around 0.80)
-   prior[dpar %in% 'kappa' & class %in% 'b'] = 'normal(0.0, 2.0)'#expectation of condition effect around 0
-   #random effects on kappa are t-distributed on the softplus scale
-   prior[dpar %in% 'kappa' & class %in% 'sd'] = 'student_t(3, 0, 2.0)' #narrow prior 
-                         }
-)
-
-
-## add extra priors for the random effects mean angles -----------------
-
-
-
-# prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-#   set_prior("target += student_t_lpdf(zkappa1 | 3, 25, 5)", #expect high concentration (low variation) 
-#             check = FALSE)+
-#   set_prior("target += student_t_lpdf(zkappa1+zkappa2 | 3, 25, 5)", #expect high concentration (low variation) 
-#             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-#   set_prior("target += student_t_lpdf(zkappa1+zkappa3 | 3, 25, 5)", #expect high concentration (low variation) 
-#             check = FALSE)+
-#   set_prior("target += student_t_lpdf(zkappa1+zkappa4 | 3, 25, 5)", #expect high concentration (low variation) 
-#             check = FALSE)
-
-#different strategy, anchor estimates around zkappa 1 but with wide dist
-#now attempting very wide dist on zkappa intercept, to include probability mass around zero
-    # prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-    #   set_prior("target += student_t_lpdf(zkappa1 | 3, 30, 20)", #expect high concentration (low variation) 
-    #             check = FALSE)+
-    #   set_prior("target += student_t_lpdf(zkappa2 | 3, 0, 1.0)", #expect high concentration (low variation) 
-    #             check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-    #   set_prior("target += student_t_lpdf(zkappa3 | 3, 0, 1.0)", #expect high concentration (low variation) 
-    #             check = FALSE)+
-    #   set_prior("target += student_t_lpdf(zkappa4 | 3, 0, 0.5)", #expect high concentration (low variation) 
-    #             check = FALSE)
-
-#Unimodal
-prior_int_slope = prior_int_slope + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += normal_lpdf(zkappa1 | 3, 3)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa2 | 0, 0.5)", #expect high concentration (low variation) 
-            check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += normal_lpdf(zkappa3 | 0, 0.5)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa4 | 0, 0.3)", #expect high concentration (low variation) 
-            check = FALSE)
-
-#Bimodal
-prior_mix = prior_mix + #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += normal_lpdf(zkappa1 | 3, 3)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa2 | 0, 0.5)", #expect high concentration (low variation) 
-            check = FALSE)+ #random effects kappas are t-distributed on a softplus scale
-  set_prior("target += normal_lpdf(zkappa3 | 0, 0.5)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(zkappa4 | 0, 0.3)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(Intercept_logit_lambda | 0, 1)", #expect high concentration (low variation) 
-            check = FALSE)+
-  set_prior("target += normal_lpdf(b_logit_lambda | 0, 1)", #expect high concentration (low variation) 
-            check = FALSE)
-
-
-### Check they can be written out ---------------------------------------------------
-
-
-
-#unimodal
-sc = make_stancode(formula = formula_int_slope,
-                   data = cd,
-                   prior = prior_int_slope,
-                   stanvars = stanvars_slopes)
-write.table(x = sc,
-            file = file.path(dirname(path_file),
-                             'sc_CircMod_v2.stan'),
-            quote = FALSE,
-            col.names = FALSE,
-            row.names = FALSE)
-
-#bimodal
-sc_mix = make_stancode(formula = formula_mix,
-                   data = cd,
-                   prior = prior_mix,
-                   stanvars = stanvars_slopes)
 write.table(x = sc_mix,
             file = file.path(dirname(path_file),
                              'sc_CircMod_mix.stan'),
@@ -1193,176 +961,79 @@ write.table(x = sc_mix,
             col.names = FALSE,
             row.names = FALSE)
 
+## Run model -------------------------------------------------------------
 
-## Dummy run to check the influence of the priors ------------------
-
-
-#double check that the prior distribution is viable by first setting up a short dummy run
-# Dummy run
-#Warning takes a long time to compile!
-#TODO work out why this samples less efficiently than with data
-# system.time( #currently takes about <1 minutes for 1000 iterations
-#   {
-#     dummy_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-#                            data = cd_subs, # our data
-#                            prior = prior_int_slope, # our priors
-#                            stanvars = stanvars_slopes,
-#                            sample_prior = 'only', #ignore the data to check the influence of the priors
-#                            iter = 1000, # can only estimate with enough iterations for params
-#                            chains = 4, # 4 chains in parallel
-#                            cores = 4, # on 4 CPUs
-#                            refresh = 0, # don't echo chain progress
-#                            backend = 'cmdstanr') # use cmdstanr (other compilers broken)
-#   }
-# )
-# 
-# if(all_plots)
-# {
-#   plot(dummy_int_slope,
-#        variable = 'fmu',
-#        regex = TRUE,
-#        transform = unwrap_circular_deg)
-#   plot(dummy_int_slope,
-#        variable = '^kappa_id',
-#        regex = TRUE)
-#   #samples inefficiently?
-#   plot(dummy_int_slope,
-#        variable = '^zkappa',
-#        regex = TRUE)
-#   # plot(dummy_int_slope,
-#   #      variable = 'zmu_id',
-#   #      transform = unwrap_circular_deg,
-#   #      nvariables = 5,
-#   #      ask = FALSE)
-#   plot(dummy_int_slope,
-#        variable = '^zmu_id_condition',
-#        transform = unwrap_circular_deg,
-#        nvariables = 5,
-#        regex = TRUE,
-#        ask = FALSE)
-# }
-
-
-# Subset run --------------------------------------------------------------
-
-
-## Unimodal --------------------------------------------------------------
-
-# subset run
-system.time(#takes less than 4 minutes for 10 individuals
+#very long compile time
+system.time(
   {
-    full_int_slope = brm( formula = formula_int_slope, # using our nonlinear formula
-                          data = cd_subs, # our data
-                          prior = prior_int_slope, # our priors 
-                          stanvars = stanvars_slopes,
-                          warmup = 1000,#may be necessary 
-                          iter = 1000+1000, #doesn't take a lot of runs
-                          chains = 4, # 4 chains in parallel
-                          cores = 4, # on 4 CPUs
-                          refresh = 0, # don't echo chain progress
-                          backend = 'cmdstanr') # use cmdstanr (other compilers broken)
-  }
-)
-if(all_plots)
-{
-  #main effects means converge well
-  plot(full_int_slope,
-       variable = 'fmu',
-       regex = TRUE,
-       transform = unwrap_circular_deg) 
-  #main effects means converge well
-  plot(full_int_slope,
-       variable = '^b_kappa',
-       regex = TRUE)
-  #conditional kappa mostly converge except condition 2 
-  plot(full_int_slope,
-       variable = '^kappa_id',
-       regex = TRUE)
-  #random effects mu kappas converge well in inv_softplus space
-  plot(full_int_slope,
-       variable = '^zkappa',
-       regex = TRUE)
-  #individual means converge well, some bimodality in posterior
-  plot(full_int_slope,
-       variable = '^zmu_id_condition',
-       transform = unwrap_circular_deg,
-       nvariables = 4,
-       regex = TRUE,
-       ask = FALSE)
-  #individual kappas
-  plot(full_int_slope,
-       variable = '^sd_ID__kappa',
-       regex = TRUE)
-  # plot(full_int_slope)
+    
+bb_mix = brm(formula = formula_mix,
+         data = cd_subs,
+         prior = pr_mix,
+         stanvars = stan_unwrap_fun + #unwrapped lpdf
+                     mod_circular_fun + #relies on circular modulus
+                     unwrap_mu_gen, #add modulus to generated quantities
+         warmup = 1000,#may be necessary 
+         iter = 1000+200, #doesn't take a lot of runs
+         chains = 4, # 4 chains in parallel
+         cores = 4, # on 4 CPUs
+         # threads = 4, # on 4 CPUs
+         # open_progress = TRUE) # make a progress bar
+         refresh = 100, # echo chain progress every n iterations
+         backend = 'cmdstanr')
+
 }
-
-sm_vm = summary(full_int_slope, robust = TRUE)
-rn_sm_vm = rownames(sm_vm$fixed)
-#fairly good convergence for main effects means
-sm_vm$spec_pars
-sm_vm$fixed[grepl(pattern = '^kappa', x = rn_sm_vm ),]
-
-## Bimodal --------------------------------------------------------------
-
-# subset run
-system.time(#takes 22 minutes for 10 individuals
-  {
-    full_mix = brm( formula = formula_mix, # using our nonlinear formula
-                          data = cd_subs, # our data
-                          prior = prior_mix, # our priors 
-                          stanvars = stanvars_mix,
-                          warmup = 1000,#may be necessary 
-                          iter = 1000+500, #doesn't take a lot of runs
-                          chains = 4, # 4 chains in parallel
-                          cores = 4, # on 4 CPUs
-                          refresh = 0, # don't echo chain progress
-                          backend = 'cmdstanr') # use cmdstanr (other compilers broken)
-  }
 )
-if(all_plots)
-{
-  #main effects means converge well
-  plot(full_mix,
-       variable = 'fmu',
-       regex = TRUE,
-       nvariables = 8,
-       transform = unwrap_circular_deg) 
-  #weighting parameter
-  plot(full_mix,
-       variable = '^Intercept_logit_lambda',
-       regex = TRUE,
-       transform = plogis) 
-  #main effects means converge well
-  plot(full_mix,
-       variable = '^b_kappa',
-       regex = TRUE)
-  #conditional kappa mostly converge except condition 2 
-  plot(full_mix,
-       variable = '^kappa_id',
-       regex = TRUE)
-  #random effects mu kappas converge well in inv_softplus space
-  plot(full_mix,
-       variable = '^zkappa',
-       regex = TRUE)
-  #individual means converge well, some bimodality in posterior
-  plot(full_mix,
-       variable = '^zmu_id_condition',
-       transform = unwrap_circular_deg,
-       nvariables = 4,
-       regex = TRUE,
-       ask = FALSE)
-  #individual kappas
-  plot(full_mix,
-       variable = '^sd_ID__kappa',
-       regex = TRUE)
-  # plot(full_int_slope)
-}
 
-sm_mix = summary(full_mix, robust = TRUE)
-rn_sm_mix = rownames(sm_mix$fixed)
-#fairly good convergence for main effects means
+## Plot coefficients -----------------------------------------------------
+
+#main effects means
+#primary mu
+plot(bb_mix,
+     variable = '^b_mu1', # all effects have similar names
+     regex = TRUE,
+     nvariables = 4,
+     transform = unwrap_circular_deg) 
+#secondary mu
+plot(bb_mix,
+     variable = '^b_mu2', # all effects have similar names
+     regex = TRUE,
+     nvariables = 5,
+     transform = unwrap_circular_deg) 
+#primary kappa
+plot(bb_mix,
+     variable = '^b_kappa1',
+     regex = TRUE)#main effects means converge well
+#secondary kappa
+plot(bb_mix,
+     variable = '^b_kappa2',
+     regex = TRUE)#main effects means converge well
+#weighting (logistic scaled)
+plot(bb_mix,
+     variable = '^b_theta1',
+     regex = TRUE) 
+#linear SD should be less than 180°
+plot(bb_mix,
+     variable = '^sd_ID__mu1',
+     regex = TRUE,
+     transform = deg)
+plot(bb_mix,
+     variable = '^sd_ID__mu2',
+     regex = TRUE,
+     transform = deg)
+
+
+## Summarise coefficients ------------------------------------------------
+#extract the medians of all parameters
+sm_mix = summary(bb_mix, robust = TRUE)
+#find the names of the fixed effects
+rn_sm_mix = with(sm_mix, rownames(fixed) )
+#Investigate the 
 sm_mix$spec_pars
+sm_mix$fixed[grepl(pattern = '^mu', x = rn_sm_mix ),]
 sm_mix$fixed[grepl(pattern = '^kappa', x = rn_sm_mix ),]
+
+
 
 
 
@@ -1372,18 +1043,11 @@ sm_mix$fixed[grepl(pattern = '^kappa', x = rn_sm_mix ),]
 
 ## Collect fixed effects predictions -------------------------------------
 #Get fixef predictions
-sm_vm = summary(full_int_slope, robust = TRUE)
 sm_mix = summary(full_mix, robust = TRUE)
-
-prms_vm = with(sm_vm,
-               rbind(fixed, #the fixed effects
-                     spec_pars) #generated parameters 
-)
 prms_mix = with(sm_mix,
                rbind(fixed, #the fixed effects
                      spec_pars) #generated parameters 
 )
-est_vm = data.frame(t(t(prms_vm)['Estimate',])) # extract just the estimate
 est_mix = data.frame(t(t(prms_vm)['Estimate',])) # extract just the estimate
 #all draws for circular variables
 #circular fixed effects
