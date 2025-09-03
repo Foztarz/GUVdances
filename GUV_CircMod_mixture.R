@@ -938,9 +938,9 @@ pr_kappa_mix =
   prior(student_t(3,0, 2.0), class = sd, dpar = 'kappa2') # weak bias to no turn
 #priors for theta (mixture weight)
 pr_theta_mix = 
-  prior(normal(3,1), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
-  prior(normal(0,1), class = b, dpar = 'theta1') + # weak bias to zero
-  prior(student_t(3,0, 1.0), class = sd, dpar = 'theta1') 
+  prior(normal(5,1), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
+  prior(normal(0,3), class = b, dpar = 'theta1') + # weak bias to zero
+  prior(student_t(3,0, 3.0), class = sd, dpar = 'theta1') 
 
 
 pr_mix = pr_mu_mix + pr_kappa_mix + pr_theta_mix
@@ -967,7 +967,7 @@ write.table(x = sc_mix,
 system.time(
   {
     
-bb_mix = brm(formula = formula_mix,
+full_mix = brm(formula = formula_mix,
          data = cd_subs,
          prior = pr_mix,
          stanvars = stan_unwrap_fun + #unwrapped lpdf
@@ -989,43 +989,47 @@ bb_mix = brm(formula = formula_mix,
 
 #main effects means
 #primary mu
-plot(bb_mix,
+plot(full_mix,
      variable = '^b_mu1', # all effects have similar names
      regex = TRUE,
      nvariables = 4,
      transform = unwrap_circular_deg) 
 #secondary mu
-plot(bb_mix,
+plot(full_mix,
      variable = '^b_mu2', # all effects have similar names
      regex = TRUE,
      nvariables = 5,
      transform = unwrap_circular_deg) 
 #primary kappa
-plot(bb_mix,
+plot(full_mix,
      variable = '^b_kappa1',
      regex = TRUE)#main effects means converge well
 #secondary kappa
-plot(bb_mix,
+plot(full_mix,
      variable = '^b_kappa2',
      regex = TRUE)#main effects means converge well
 #weighting (logistic scaled)
-plot(bb_mix,
+plot(full_mix,
      variable = '^b_theta1',
      regex = TRUE) 
 #linear SD should be less than 180°
-plot(bb_mix,
+plot(full_mix,
      variable = '^sd_ID__mu1',
      regex = TRUE,
      transform = deg)
-plot(bb_mix,
+plot(full_mix,
      variable = '^sd_ID__mu2',
      regex = TRUE,
      transform = deg)
+plot(full_mix,
+     variable = '^mu_circ',
+     regex = TRUE,
+     transform = unwrap_circular_deg)
 
 
 ## Summarise coefficients ------------------------------------------------
 #extract the medians of all parameters
-sm_mix = summary(bb_mix, robust = TRUE)
+sm_mix = summary(full_mix, robust = TRUE)
 #find the names of the fixed effects
 rn_sm_mix = with(sm_mix, rownames(fixed) )
 #Investigate the 
@@ -1042,76 +1046,66 @@ sm_mix$fixed[grepl(pattern = '^kappa', x = rn_sm_mix ),]
 
 
 ## Collect fixed effects predictions -------------------------------------
+#TODO make a function
 #Get fixef predictions
 sm_mix = summary(full_mix, robust = TRUE)
 prms_mix = with(sm_mix,
                rbind(fixed, #the fixed effects
                      spec_pars) #generated parameters 
 )
-est_mix = data.frame(t(t(prms_vm)['Estimate',])) # extract just the estimate
+est_mix = data.frame(t(t(prms_mix)['Estimate',])) # extract just the estimate
 #all draws for circular variables
 #circular fixed effects
-full_int_slope_mu_circ_draws = brms::as_draws_df(full_int_slope,
-                                                  variable = 'mu_circ')
-full_mix_mu_circ_draws = brms::as_draws_df(full_mix,
-                                                  variable = 'mu_circ')
-full_mix_fmu2_draws = brms::as_draws_df(full_mix,
-                                                  variable = '^b_fmu2',
-                                        regex = TRUE)
+full_mix_mu1_draws = brms::as_draws_df(full_mix,
+                          variable = 'mu_circ1')
+full_mix_mu2_draws = brms::as_draws_df(full_mix,
+                          variable = 'mu_circ2')
 #kappa effects
-full_int_slope_kappa_draws = brms::as_draws_df(full_int_slope,
-                                               variable = 'kappa',
-                                               regex = TRUE)
-full_mix_kappa_draws = brms::as_draws_df(full_mix,
-                                               variable = 'kappa',
-                                               regex = TRUE)
+full_mix_kappa1_draws = brms::as_draws_df(full_mix,
+                               variable = 'kappa1',
+                               regex = TRUE)
+full_mix_kappa2_draws = brms::as_draws_df(full_mix,
+                                 variable = 'kappa2',
+                                 regex = TRUE)
 #invert link
 #unwrap link
-uw_mu_circ = apply(X = full_int_slope_mu_circ_draws[1:4],
+uw_mu1_circ = apply(X = full_mix_mu1_draws[1:4],
                   MARGIN = 2,
                   FUN = unwrap_circular
                   )
-uw_mu_circ_mix = apply(X = full_mix_mu_circ_draws[1:4],
+uw_mu2_circ = apply(X = full_mix_mu2_draws[1:4],
                   MARGIN = 2,
                   FUN = unwrap_circular
                   )
-uw_fmu2_mix = apply(X = full_mix_fmu2_draws[1:4],
-                  MARGIN = 2,
-                  FUN = unwrap_circular
-                  )
-#extract mu1 and mu2 from UV-dim condition in case of multimodal chains
-uw_ul_mix = M5A(data = apply(X = uw_mu_circ_mix[,1:4],
-                          MARGIN = 1,
-                          FUN = sum) + uw_fmu2_mix[,4])$par[c(1, 3)]
 
 #softplus link
-gh_kappa = softplus(full_int_slope_kappa_draws[,1])
+gh_kappa = softplus(full_mix_kappa1_draws[,1])
+gh_kappa2 = softplus(full_mix_kappa2_draws[,1])
 gl_kappa = softplus(apply(X =
-                            full_int_slope_kappa_draws[,1:2],
+                            full_mix_kappa1_draws[,1:2],
+                          FUN = sum,
+                          MARGIN = 1))
+gl_kappa2 = softplus(apply(X =
+                            full_mix_kappa2_draws[,1:2],
                           FUN = sum,
                           MARGIN = 1))
 uh_kappa = softplus(apply(X = 
-                            full_int_slope_kappa_draws[,c(1,3)],
+                            full_mix_kappa1_draws[,c(1,3)],
                           FUN = sum,
                           MARGIN = 1))
-ul_kappa = softplus(apply(X = 
-                            full_int_slope_kappa_draws[,c(1:4)],
+uh_kappa2 = softplus(apply(X = 
+                            full_mix_kappa2_draws[,c(1,3)],
+                          FUN = sum,
+                          MARGIN = 1))
+ul_kappa1 = softplus(apply(X = 
+                            full_mix_kappa1_draws[,c(1:4)],
+                          FUN = sum,
+                          MARGIN = 1))
+ul_kappa2 = softplus(apply(X = 
+                            full_mix_kappa2_draws[,c(1:4)],
                           FUN = sum,
                           MARGIN = 1))
 
-gh_kappa_mix = softplus(full_mix_kappa_draws[,1])
-gl_kappa_mix = softplus(apply(X =
-                            full_mix_kappa_draws[,1:2],
-                          FUN = sum,
-                          MARGIN = 1))
-uh_kappa_mix = softplus(apply(X = 
-                            full_mix_kappa_draws[,c(1,3)],
-                          FUN = sum,
-                          MARGIN = 1))
-ul_kappa_mix = softplus(apply(X = 
-                            full_mix_kappa_draws[,c(1:4)],
-                          FUN = sum,
-                          MARGIN = 1))
 
 ## Collect random effects predictions ------------------------------------
 u_id = with(cd_subs, unique(ID))
@@ -1140,17 +1134,7 @@ id_cols = sample(x = Cpal(n = 20),
 
 #Get raneff predictions for kappa
 # cf_vm_k = coef(full_int_slope)$ID[,,'kappa_Intercept']
-cf_vm = coef(full_int_slope)
 cf_mix = coef(full_mix)
-
-if_cf = names(coef(full_int_slope)$ID[1,1,])
-cf_vm_k = coef(full_int_slope)$ID[,,grepl(pattern = '^kappa', x = if_cf )]
-cf_mix_k = coef(full_mix)$ID[,,grepl(pattern = '^kappa', x = if_cf )]
-
-cf_vm_k_gh = cf_vm_k[,,'kappa_Intercept'] #intercept condition
-cf_vm_k_gl = cf_vm_k[,,'kappa_BRl']+cf_vm_k_gh # add intercept condition
-cf_vm_k_uh = cf_vm_k[,,'kappa_CLu']+cf_vm_k_gh
-cf_vm_k_ul = cf_vm_k[,,'kappa_BRl:CLu']+cf_vm_k_gh
 
 cf_mix_k_gh = cf_mix_k[,,'kappa_Intercept'] #intercept condition
 cf_mix_k_gl = cf_mix_k[,,'kappa_BRl']+cf_mix_k_gh # add intercept condition
