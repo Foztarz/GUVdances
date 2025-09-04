@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 09 02
-#     MODIFIED:	James Foster              DATE: 2025 09 02
+#     MODIFIED:	James Foster              DATE: 2025 09 04
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -39,10 +39,10 @@ graphics.off()
 #- Remove all unnecessary sections  
 #- Make custom family +
 #- Generate mod circular variables + 
+#- Extract bimodal effects +
+#- Left-right bimodal +
 #- Think about priors for opposite means
-#- Extract bimodal effects
 #- Test von Mises version
-#- Individual effects fmu2
 #- Sorted version of bimodal
 #- Try priors for speed
 #- Move functions out of script
@@ -50,7 +50,8 @@ graphics.off()
 
 
 # Set up workspace --------------------------------------------------------
-
+angle_unit = 'degrees'
+angle_rot = 'clock'
 
 ## Load packages ----------------------------------------------------------
 #needs installing before first use (in Rstudio, see automatic message)
@@ -896,8 +897,8 @@ unwrap_mu_gen = stanvar(scode = "
   mu_circ1[1] = mod_circular(Intercept_mu1); //Intercept case
   mu_circ2[1] = mod_circular(Intercept_mu2); //Intercept case
   for (i in 1:Kc_mu1){
-  mu_circ1[i+1] = mod_circular(mu_circ1[1] + b_mu1[i]);
-  mu_circ2[i+1] = mod_circular(mu_circ2[1] + b_mu2[i]);
+  mu_circ1[i+1] = mod_circular(b_mu1[i]);
+  mu_circ2[i+1] = mod_circular(b_mu2[i]);
   }
 ",
 block = 'genquant')
@@ -922,14 +923,14 @@ formula_mix = bf(#modulus may not be necessary, included in lpd function
 
 #priors for mu
 pr_mu_mix = 
-  prior(normal(0,pi()/12), class = Intercept, dpar = 'mu1') + # anchor to 0°
-  prior(normal(pi(),pi()/12), class = Intercept, dpar = 'mu2') + # anchor to 180°
-  prior(normal(0,pi()/4), class = b, dpar = 'mu1') + # weak bias to no turn
-  prior(normal(0,pi()/4), class = b, dpar = 'mu2') + # weak bias to no turn
-  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu1', class = 'sd', group  = 'ID') + #small differences across conditions
-  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', group  = 'ID') + #small differences across conditions
-  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu2', class = 'sd', coef = 'Intercept', group  = 'ID') + #keep sd under 90°
-  prior(lognormal( log(pi()/12), 0.7), dpar = 'mu1', class = 'sd', coef = 'Intercept', group  = 'ID') #keep sd under 90°
+  prior(normal(0,pi()/6), class = Intercept, dpar = 'mu1') + # anchor to 0° #TODO loosen
+  prior(normal(0,pi()/6), class = Intercept, dpar = 'mu2') + # anchor to 0° #TODO loosen
+  prior(normal(pi()/3,pi()/4), class = b, dpar = 'mu1') + # weak bias to right turns
+  prior(normal(-pi()/3,pi()/4), class = b, dpar = 'mu2') + # weak bias to left turns
+  prior(lognormal( log(pi()/12), 0.5), dpar = 'mu1', class = 'sd', group  = 'ID') + #small differences across conditions
+  prior(lognormal( log(pi()/12), 0.5), dpar = 'mu2', class = 'sd', group  = 'ID') + #small differences across conditions
+  prior(lognormal( log(pi()/12), 0.5), dpar = 'mu2', class = 'sd', coef = 'Intercept', group  = 'ID') + #keep sd under 90°
+  prior(lognormal( log(pi()/12), 0.5), dpar = 'mu1', class = 'sd', coef = 'Intercept', group  = 'ID') #keep sd under 90°
 #priors for kappa
 pr_kappa_mix = 
   prior(normal(5.0,1.0), class = Intercept, dpar = 'kappa1') + # bias to oriented
@@ -940,9 +941,9 @@ pr_kappa_mix =
   prior(student_t(3,0, 1.0), class = sd, dpar = 'kappa2') # weak bias to no turn
 #priors for theta (mixture weight)
 pr_theta_mix = 
-  prior(normal(5,1), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
-  prior(normal(0,3), class = b, dpar = 'theta1') + # weak bias to zero
-  prior(student_t(3,0, 3.0), class = sd, dpar = 'theta1') 
+  prior(normal(5,0.5), class = Intercept, dpar = 'theta1') + # bias to mu1 as primary
+  prior(normal(0,5), class = b, dpar = 'theta1') + # weak bias to zero
+  prior(student_t(3, 0, 1.0), class = sd, dpar = 'theta1') 
 
 
 pr_mix = pr_mu_mix + pr_kappa_mix + pr_theta_mix
@@ -975,13 +976,14 @@ full_mix = brm(formula = formula_mix,
          stanvars = stan_unwrap_fun + #unwrapped lpdf
                      mod_circular_fun + #relies on circular modulus
                      unwrap_mu_gen, #add modulus to generated quantities
-         warmup = 1000,#may be necessary 
-         iter = 1000+200, #doesn't take a lot of runs
+         warmup = 500,#may be necessary 
+         iter = 500+200, #doesn't take a lot of runs
          chains = 4, # 4 chains in parallel
          cores = 4, # on 4 CPUs
          # threads = 4, # on 4 CPUs
          # open_progress = TRUE) # make a progress bar
          refresh = 100, # echo chain progress every n iterations
+         silent = 0, # echo chain progress every n iterations
          backend = 'cmdstanr')
 
 }
@@ -1024,7 +1026,11 @@ plot(full_mix,
      regex = TRUE,
      transform = deg)
 plot(full_mix,
-     variable = '^mu_circ',
+     variable = '^mu_circ1',
+     regex = TRUE,
+     transform = unwrap_circular_deg)
+plot(full_mix,
+     variable = '^mu_circ2',
      regex = TRUE,
      transform = unwrap_circular_deg)
 
@@ -1037,6 +1043,7 @@ rn_sm_mix = with(sm_mix, rownames(fixed) )
 #Investigate the 
 sm_mix$spec_pars
 sm_mix$fixed[grepl(pattern = '^mu', x = rn_sm_mix ),]
+sm_mix$fixed[grepl(pattern = '^theta', x = rn_sm_mix ),]
 sm_mix$fixed[grepl(pattern = '^kappa', x = rn_sm_mix ),]
 
 
@@ -1058,56 +1065,110 @@ prms_mix = with(sm_mix,
 est_mix = data.frame(t(t(prms_mix)['Estimate',])) # extract just the estimate
 #all draws for circular variables
 #circular fixed effects
-full_mix_mu1_draws = brms::as_draws_df(full_mix,
-                          variable = 'mu_circ1')
-full_mix_mu2_draws = brms::as_draws_df(full_mix,
-                          variable = 'mu_circ2')
+md_mu1_draws = brms::as_draws_df(full_mix,
+                          variable = 'mu1',
+                          regex = TRUE)
+md_mu2_draws = brms::as_draws_df(full_mix,
+                          variable = 'mu2',
+                          regex = TRUE)
 #kappa effects
-full_mix_kappa1_draws = brms::as_draws_df(full_mix,
+md_kappa1_draws = brms::as_draws_df(full_mix,
                                variable = 'kappa1',
                                regex = TRUE)
-full_mix_kappa2_draws = brms::as_draws_df(full_mix,
+md_kappa2_draws = brms::as_draws_df(full_mix,
                                  variable = 'kappa2',
                                  regex = TRUE)
-#invert link
+#mixture weights
+md_theta1_draws = brms::as_draws_df(full_mix,
+                               variable = 'theta1',
+                               regex = TRUE)
+
+## Invert link functions -------------------------------------------------
+#and generate fixef predictions for each draw
+
 #unwrap link
-uw_mu1_circ = apply(X = full_mix_mu1_draws[1:4],
-                  MARGIN = 2,
-                  FUN = unwrap_circular
-                  )
-uw_mu2_circ = apply(X = full_mix_mu2_draws[1:4],
-                  MARGIN = 2,
-                  FUN = unwrap_circular
-                  )
+    # uw_mu1 = apply(X = md_mu1_draws[1:4],
+    #                   MARGIN = 2,
+    #                   FUN = unwrap_circular
+    #                   )
+    # uw_mu2 = apply(X = md_mu2_draws[1:4],
+    #                   MARGIN = 2,
+    #                   FUN = unwrap_circular
+    #                   )
+gh_mu1 = apply(X = md_mu1_draws[,1],
+                                 MARGIN = 2,
+                                 FUN = unwrap_circular
+                                 )
+gh_mu2 = apply(X = md_mu1_draws[,1],
+                                 MARGIN = 2,
+                                 FUN = unwrap_circular
+                                 )
+
+gl_mu1 = unwrap_circular(apply(X = md_mu1_draws[1:2],
+                           FUN = sum,
+                           MARGIN = 1))
+gl_mu2 = unwrap_circular(apply(X = md_mu2_draws[,1:2],
+                           FUN = sum,
+                           MARGIN = 1))
+
+uh_mu1 = unwrap_circular(apply(X = md_mu1_draws[,c(1,3)],
+                           FUN = sum,
+                           MARGIN = 1))
+uh_mu2 = unwrap_circular(apply(X = md_mu2_draws[,c(1,3)],
+                           FUN = sum,
+                           MARGIN = 1))
+
+ul_mu1 = unwrap_circular(apply(X = md_mu1_draws[,1:4],
+                           FUN = sum,
+                           MARGIN = 1))
+ul_mu2 = unwrap_circular(apply(X = md_mu2_draws[,1:4],
+                           FUN = sum,
+                           MARGIN = 1))
+
 
 #softplus link
-gh_kappa = softplus(full_mix_kappa1_draws[,1])
-gh_kappa2 = softplus(full_mix_kappa2_draws[,1])
-gl_kappa = softplus(apply(X =
-                            full_mix_kappa1_draws[,1:2],
+gh_kappa1 = softplus(md_kappa1_draws[,1])
+gh_kappa2 = softplus(md_kappa2_draws[,1])
+gl_kappa1 = softplus(apply(X =
+                            md_kappa1_draws[,1:2],
                           FUN = sum,
                           MARGIN = 1))
 gl_kappa2 = softplus(apply(X =
-                            full_mix_kappa2_draws[,1:2],
+                            md_kappa2_draws[,1:2],
                           FUN = sum,
                           MARGIN = 1))
-uh_kappa = softplus(apply(X = 
-                            full_mix_kappa1_draws[,c(1,3)],
+uh_kappa1 = softplus(apply(X = 
+                            md_kappa1_draws[,c(1,3)],
                           FUN = sum,
                           MARGIN = 1))
 uh_kappa2 = softplus(apply(X = 
-                            full_mix_kappa2_draws[,c(1,3)],
+                            md_kappa2_draws[,c(1,3)],
                           FUN = sum,
                           MARGIN = 1))
 ul_kappa1 = softplus(apply(X = 
-                            full_mix_kappa1_draws[,c(1:4)],
+                            md_kappa1_draws[,c(1:4)],
                           FUN = sum,
                           MARGIN = 1))
 ul_kappa2 = softplus(apply(X = 
-                            full_mix_kappa2_draws[,c(1:4)],
+                            md_kappa2_draws[,c(1:4)],
                           FUN = sum,
                           MARGIN = 1))
-
+#inv_logit link
+gh_lambda = apply(X = md_theta1_draws[,1], 
+                  MARGIN = 2,
+                  FUN = plogis)
+gl_lambda = plogis(apply(X =
+                            md_theta1_draws[,1:2],
+                          FUN = sum,
+                          MARGIN = 1))
+uh_lambda = plogis(apply(X = 
+                            md_theta1_draws[,c(1,3)],
+                          FUN = sum,
+                          MARGIN = 1))
+ul_lambda = plogis(apply(X = 
+                             md_theta1_draws[,c(1:4)],
+                           FUN = sum,
+                           MARGIN = 1))
 
 ## Collect random effects predictions ------------------------------------
 u_id = with(cd_subs, unique(ID))
@@ -1125,148 +1186,139 @@ Cpal = colorRampPalette(colors = c(2:6,
 id_cols = sample(x = Cpal(n = 20),
                  size = n_indiv,
                  replace = FALSE)
-# [1] "#E59B14" "#DF536B" "#3EB0A2" "#BA22C0" "#24B0E5" "#626078" "#8A9630"
-# [8] "#8B795E" "#7DB455" "#3ACAE0"
-
-# [1] "#2297E6" "#69923E" "#EE9E0D" "#3DAFA5" "#3FC3DF" "#57A4D9" "#BC8B35" "#9F2F9F" "#72BE53" "#B529C1"
-# [11] "#DF536B" "#CD6467" "#61D04F" "#5B6673" "#FFA500" "#884190" "#58C764" "#8B795E" "#DD981A" "#8667CD"
-# [21] "#28E2E5" "#447865" "#CD0BBC" "#A9885F" "#6E85D3" "#E1A10C" "#85AC57" "#2E8B57" "#4B8E4A" "#BB7663"
-# [31] "#AC8543" "#2B9FD0" "#22A1E5" "#9B7F50" "#24B7E5" "#B61DAD" "#979A5B" "#CD9228" "#4FBF7A" "#A59925"
-# [41] "#25C1E5" "#27D7E5" "#C39D18" "#23ACE5" "#725482" "#879631" "#9D48C7" "#34A7BA" "#26CCE5" "#46B78F"
 
 #Get raneff predictions for kappa
-# cf_vm_k = coef(full_int_slope)$ID[,,'kappa_Intercept']
-cf_mix = coef(full_mix)
+cf_mix = coef(full_mix)$ID
 
-cf_mix_k_gh = cf_mix_k[,,'kappa_Intercept'] #intercept condition
-cf_mix_k_gl = cf_mix_k[,,'kappa_BRl']+cf_mix_k_gh # add intercept condition
-cf_mix_k_uh = cf_mix_k[,,'kappa_CLu']+cf_mix_k_gh
-cf_mix_k_ul = cf_mix_k[,,'kappa_BRl:CLu']+cf_mix_k_gh
+cf_mix_k1_gh = cf_mix[,,'kappa1_Intercept'] #intercept condition
+cf_mix_k1_gl = cf_mix[,,'kappa1_BRl']+cf_mix_k1_gh # add intercept condition
+cf_mix_k1_uh = cf_mix[,,'kappa1_CLu']+cf_mix_k1_gh
+cf_mix_k1_ul = apply(X = cf_mix[,,c('kappa1_Intercept',
+                                    'kappa1_BRl',
+                                    'kappa1_CLu',
+                                    'kappa1_BRl:CLu')
+                                    ],
+                     MARGIN = 1,
+                     FUN = sum)
 
-#We can collect linear scaled predictions for zmu
-#these could potentially be wrong if the estimate is close to +-pi
-    # rn = rownames(prms_vm)
-    # rn_zmu = rn[grep(pattern = 'zmu',
-    #                  x = rn)]
-    # colnames(cf_vm) = colnames(prms_vm)[1:4]
-    # #these are likely wrong for zmu
-    # ran_prms_vm = rbind(cf_vm, prms_vm[rn_zmu,1:4])
+cf_mix_k2_gh = cf_mix[,,'kappa2_Intercept'] #intercept condition
+cf_mix_k2_gl = cf_mix[,,'kappa2_BRl']+cf_mix_k2_gh # add intercept condition
+cf_mix_k2_uh = cf_mix[,,'kappa2_CLu']+cf_mix_k2_gh
+cf_mix_k2_ul = apply(X = cf_mix[,,c('kappa2_Intercept',
+                                    'kappa2_BRl',
+                                    'kappa2_CLu',
+                                    'kappa2_BRl:CLu')
+                      ],
+                      MARGIN = 1,
+                      FUN = sum)
 
-#all draws
-# full_int_slope_zmu_draws = brms::as_draws_df(full_int_slope,
-#                                              variable = 'zmu_id') 
-full_int_slope_mu_condition_draws = brms::as_draws_df(full_int_slope,
-                                                       variable = 'mu_circ') 
-full_int_slope_zmu_condition_draws = brms::as_draws_df(full_int_slope,
-                                                       variable = '^b_zmu',
-                                                       regex = TRUE)
+#Get raneff predictions for lambda
 
-full_mix_mu_condition_draws = brms::as_draws_df(full_mix,
-                                                       variable = 'mu_circ') 
-full_mix_zmu_condition_draws = brms::as_draws_df(full_mix,
-                                                       variable = '^b_zmu',
-                                                       regex = TRUE) 
-full_mix_lambda_draws = brms::as_draws_df(full_mix,
-                                                       variable = 'logit_lambda',
-                                                       regex = TRUE) 
+cf_mix_l_gh = cf_mix[,,'theta1_Intercept'] #intercept condition
+cf_mix_l_gl = cf_mix[,,'theta1_BRl']+cf_mix_l_gh # add intercept condition
+cf_mix_l_uh = cf_mix[,,'theta1_CLu']+cf_mix_l_gh
+cf_mix_l_ul = apply(X = cf_mix[,,c('theta1_Intercept',
+                                    'theta1_BRl',
+                                    'theta1_CLu',
+                                    'theta1_BRl:CLu')
+                    ],
+                    MARGIN = 1,
+                    FUN = sum)
 
-zmu_nms = names(full_int_slope_zmu_condition_draws)
-ul_nms = grepl(pattern = 'BRl:CLu$', 
-               x = zmu_nms )
-gl_nms = grepl(pattern = 'BRl$', 
-               x = zmu_nms ) & !(ul_nms)
-uh_nms = grepl(pattern = 'CLu$', 
-               x = zmu_nms ) & !(ul_nms)
-gh_nms = !(gl_nms | uh_nms | ul_nms |
-             grepl(pattern = 'chain|iteration|draw', 
-                                            x = zmu_nms ))
+
+#find mu conditions
+nm_mu = names(md_mu1_draws)
+nm_ID = grep(pattern = 'r_ID',
+             x = nm_mu)
+#extract draws for individual
+md_mu1_ID_draws = md_mu1_draws[,nm_ID]
+md_mu2_ID_draws = md_mu2_draws[,nm_ID]
+#find condition names
+nm_gh = grep(pattern = ',Intercept]',
+             x = names(md_mu1_ID_draws))
+nm_gl = grep(pattern = ',BRl]',
+             x = names(md_mu1_ID_draws))
+nm_uh = grep(pattern = ',CLu]',
+             x = names(md_mu1_ID_draws))
+nm_ul = grep(pattern = ',BRl:CLu]',
+             x = names(md_mu1_ID_draws))
 
 #Sort according to name
-zmu_draws_gh = full_int_slope_zmu_condition_draws[
-                          ,gh_nms]
-zmu_draws_gl = full_int_slope_zmu_condition_draws[
-                          ,gl_nms]
-zmu_draws_uh = full_int_slope_zmu_condition_draws[
-                          ,uh_nms]
-zmu_draws_ul = full_int_slope_zmu_condition_draws[
-                          ,ul_nms]
-
-zmu_mix_gh = full_mix_zmu_condition_draws[
-                          ,gh_nms]
-zmu_mix_gl = full_mix_zmu_condition_draws[
-                          ,gl_nms]
-zmu_mix_uh = full_mix_zmu_condition_draws[
-                          ,uh_nms]
-zmu_mix_ul = full_mix_zmu_condition_draws[
-                          ,ul_nms]
-
-zmu_draws_gh = apply(X = zmu_draws_gh,
+zmu_draws1_gh = md_mu1_ID_draws[,nm_gh]
+zmu_draws1_gl = md_mu1_ID_draws[
+                          ,nm_gl]+zmu_draws_gh
+zmu_draws1_uh = md_mu1_ID_draws[
+                          ,nm_uh]+zmu_draws_gh
+zmu_draws1_ul = md_mu1_ID_draws[
+                          ,nm_ul]+zmu_draws_gh+zmu_draws_gl+zmu_draws_uh
+zmu_draws2_gh = md_mu2_ID_draws[,nm_gh]
+zmu_draws2_gl = md_mu2_ID_draws[
+                          ,nm_gl]+zmu_draws_gh
+zmu_draws2_uh = md_mu2_ID_draws[
+                          ,nm_uh]+zmu_draws_gh
+zmu_draws2_ul = md_mu2_ID_draws[
+                          ,nm_ul]+zmu_draws_gh+zmu_draws_gl+zmu_draws_uh
+#unwrap estimates
+#TODO check if this is necessary
+zmu_draws1_gh = apply(X = zmu_draws1_gh,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_draws_gl = apply(X = zmu_draws_gl,
+zmu_draws1_gl = apply(X = zmu_draws1_gl,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_draws_uh = apply(X = zmu_draws_uh,
+zmu_draws1_uh = apply(X = zmu_draws1_uh,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_draws_ul = apply(X = zmu_draws_ul,
+zmu_draws1_ul = apply(X = zmu_draws1_ul,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-
-zmu_mix_gh = apply(X = zmu_mix_gh,
+zmu_draws2_gh = apply(X = zmu_draws2_gh,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_mix_gl = apply(X = zmu_mix_gl,
+zmu_draws2_gl = apply(X = zmu_draws2_gl,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_mix_uh = apply(X = zmu_mix_uh,
+zmu_draws2_uh = apply(X = zmu_draws2_uh,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
-zmu_mix_ul = apply(X = zmu_mix_ul,
+zmu_draws2_ul = apply(X = zmu_draws2_ul,
                      MARGIN = 2,
                      FUN = unwrap_circular
 )
 
-deg_pred_gh = circular(x = deg(zmu_draws_gh[,1:dim(zmu_draws_gh)[2]] +
-                                         uw_mu_circ[,1] ),
+
+## Construct circular predictors -----------------------------------------
+
+
+deg_pred1_gh = circular(x = deg(zmu_draws1_gh + c(gh_mu1)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-deg_pred_gl = circular(x = deg(zmu_draws_gl[,1:dim(zmu_draws_gl)[2]] +
-                                         uw_mu_circ[,2]) + 
-                         deg_pred_gh,
+deg_pred1_gl = circular(x = deg(zmu_draws1_gl + c(gh_mu1)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-deg_pred_uh = circular(x = deg(zmu_draws_uh[,1:dim(zmu_draws_uh)[2]] +
-                                         uw_mu_circ[,3]) + 
-                         deg_pred_gh,
+deg_pred1_uh = circular(x = deg(zmu_draws1_uh + c(uh_mu1)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-deg_pred_ul = circular(x = deg(zmu_draws_ul[,1:dim(zmu_draws_uh)[2]] +
-                                         uw_mu_circ[,4]) + 
-                         deg(zmu_draws_uh[,1:dim(zmu_draws_uh)[2]] +
-                               uw_mu_circ[,3]) +
-                         deg(zmu_draws_gl[,1:dim(zmu_draws_gl)[2]] +
-                               uw_mu_circ[,2]) + 
-                         deg_pred_gh,
+deg_pred1_ul = circular(x = deg(zmu_draws1_ul + c(ul_mu1)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
@@ -1274,74 +1326,28 @@ deg_pred_ul = circular(x = deg(zmu_draws_ul[,1:dim(zmu_draws_uh)[2]] +
                     zero = pi/2,
                     rotation = 'clock')
 
-#bimodal
-mix_pred_gh = circular(x = deg(zmu_mix_gh[,1:dim(zmu_mix_gh)[2]] +
-                                         uw_mu_circ_mix[,1] ),
+deg_pred2_gh = circular(x = deg(zmu_draws2_gh + c(gh_mu2)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-mix_pred_gl = circular(x = deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] +
-                                         uw_mu_circ_mix[,2]) + 
-                         mix_pred_gh,
+deg_pred2_gl = circular(x = deg(zmu_draws2_gl + c(gh_mu2)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-mix_pred_uh = circular(x = deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] +
-                                         uw_mu_circ_mix[,3]) + 
-                                        mix_pred_gh,
+deg_pred2_uh = circular(x = deg(zmu_draws2_uh + c(uh_mu2)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
                     modulo = '2pi',
                     zero = pi/2,
                     rotation = 'clock')
-mix_pred_ul1 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]] +
-                                         uw_mu_circ_mix[,4]) + 
-                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] +
-                               uw_mu_circ_mix[,3]) +
-                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] +
-                               uw_mu_circ_mix[,2]) + 
-                         mix_pred_gh,
-                    type = 'angles',
-                    unit = 'degrees',
-                    template = 'geographics',
-                    modulo = '2pi',
-                    zero = pi/2,
-                    rotation = 'clock')
-mix_pred_ul2 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]] +
-                                         uw_mu_circ_mix[,4]) + 
-                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] +
-                               uw_mu_circ_mix[,3]) +
-                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] +
-                               uw_mu_circ_mix[,2]) + 
-                               deg(apply(uw_fmu2_mix, MARGIN = 1, FUN = sum)) + 
-                         mix_pred_gh,
-                    type = 'angles',
-                    unit = 'degrees',
-                    template = 'geographics',
-                    modulo = '2pi',
-                    zero = pi/2,
-                    rotation = 'clock')
-mix_m5a_ul1 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]]) + 
-                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] ) +
-                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] ) + 
-                         deg(uw_ul_mix[1]),
-                    type = 'angles',
-                    unit = 'degrees',
-                    template = 'geographics',
-                    modulo = '2pi',
-                    zero = pi/2,
-                    rotation = 'clock')
-mix_m5a_ul2 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]]) + 
-                         deg(zmu_mix_uh[,1:dim(zmu_mix_uh)[2]] ) +
-                         deg(zmu_mix_gl[,1:dim(zmu_mix_gl)[2]] ) + 
-                         deg(uw_ul_mix[2]),,
+deg_pred2_ul = circular(x = deg(zmu_draws2_ul + c(ul_mu2)),
                     type = 'angles',
                     unit = 'degrees',
                     template = 'geographics',
@@ -1354,20 +1360,18 @@ mix_m5a_ul2 = circular(x = deg(zmu_mix_ul[,1:dim(zmu_mix_uh)[2]]) +
 angle_unit = 'degrees'
 angle_rot = 'clock'
 
-# . plot circular random effects ------------------------------------------
+## plot circular random effects ------------------------------------------
 dt_dim = dim(cd_subs)
 u_id = with(cd_subs, unique(ID))
 n_indiv = length(u_id)
 par(pty = 's')#sometimes gets skipped? Needs to come first
 par(mar =rep(0,4),
-    # mfrow = rep(x = ceiling(sqrt(n_indiv)),
-    #             times = 2) )
     mfrow = c(n_indiv,
                 4) )
 for(id in u_id)
 {
   # i = which(u_id %in% '2016.07.12.14.43')
-  i = grep(x = colnames(deg_pred_gh),
+  i = grep(x = colnames(deg_pred1_gh),
            pattern = id)
   #gh
   with(subset(x = cd_subs,
@@ -1402,7 +1406,7 @@ for(id in u_id)
   shrink = 1.05,
   axes = F
   )
-  points.circular(x = circular(x = deg_pred_gh[,i],
+  points.circular(x = circular(x = deg_pred1_gh[,i],
                                type = 'angles',
                                unit = angle_unit,
                                template = 'geographics',
@@ -1413,11 +1417,23 @@ for(id in u_id)
   sep = -1e-3,
   stack = TRUE,
   bins = 360,
-  col = adjustcolor(id_cols[i], alpha.f = 1/256)
+  col = adjustcolor('darkblue', alpha.f = 1/256)
   )
-  
-  # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = deg_pred_gh[,i],
+  points.circular(x = circular(x = deg_pred2_gh[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+  ),
+  sep = -1e-3,
+  stack = TRUE,
+  bins = 360,
+  col = adjustcolor('darkred', alpha.f = 1/256)
+  )
+  #mu1 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred1_gh[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -1425,10 +1441,25 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(est_vm$kappa_Intercept +
-                                 cf_vm_k_gh[id, 'Estimate']),
+  y = Softpl_to_meanvec(est_mix$kappa1_Intercept +
+                                 cf_mix_k1_gh[id, 'Estimate']),
   length =0, 
-  lwd = 1,
+  lwd = 5*plogis(est_mix$theta1_Intercept + cf_mix_l_gh[id, 'Estimate']),
+  col = adjustcolor(id_cols[i], alpha.f = 1)
+  )
+  #mu2 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred2_gh[,i],
+                                               type = 'angles',
+                                               unit = angle_unit,
+                                               template = 'geographics',
+                                               modulo = '2pi',
+                                               zero = pi/2,
+                                               rotation = angle_rot
+  )),
+  y = Softpl_to_meanvec(est_mix$kappa2_Intercept +
+                                 cf_mix_k2_gh[id, 'Estimate']),
+  length =0, 
+  lwd = 5*plogis(-est_mix$theta1_Intercept - cf_mix_l_gh[id, 'Estimate']),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   #gl
@@ -1449,7 +1480,7 @@ for(id in u_id)
          stack = TRUE,
          bins = 360/5,
          col = 'darkgreen'
-         ) 
+         )
        }
   )
   par(new = T)
@@ -1464,7 +1495,7 @@ for(id in u_id)
   shrink = 1.05,
   axes = F
   )
-  points.circular(x = circular(x = deg_pred_gl[,i],
+  points.circular(x = circular(x = deg_pred1_gl[,i],
                                type = 'angles',
                                unit = angle_unit,
                                template = 'geographics',
@@ -1475,11 +1506,23 @@ for(id in u_id)
   sep = -1e-3,
   stack = TRUE,
   bins = 360,
-  col = adjustcolor(id_cols[i], alpha.f = 1/256)
+  col = adjustcolor('darkblue', alpha.f = 1/256)
   )
-  
-  # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = deg_pred_gl[,i],
+  points.circular(x = circular(x = deg_pred2_gl[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+  ),
+  sep = -1e-3,
+  stack = TRUE,
+  bins = 360,
+  col = adjustcolor('darkred', alpha.f = 1/256)
+  )
+  #mu1 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred1_gl[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -1487,11 +1530,27 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(
-                        est_vm$kappa_Intercept + est_vm$kappa_BRl +
-                         cf_vm_k_gl[id, 'Estimate'] ),
+  y = Softpl_to_meanvec(est_mix$kappa1_Intercept + est_mix$kappa1_BRl +
+                          cf_mix_k1_gl[id, 'Estimate']),
   length =0, 
-  lwd = 1,
+  lwd = 5*plogis(est_mix$theta1_Intercept + est_mix$theta1_BRl +
+                   cf_mix_l_gl[id, 'Estimate']),
+  col = adjustcolor(id_cols[i], alpha.f = 1)
+  )
+  #mu2 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred2_gl[,i],
+                                               type = 'angles',
+                                               unit = angle_unit,
+                                               template = 'geographics',
+                                               modulo = '2pi',
+                                               zero = pi/2,
+                                               rotation = angle_rot
+  )),
+  y = Softpl_to_meanvec(est_mix$kappa2_Intercept + est_mix$kappa2_BRl +
+                          cf_mix_k2_gl[id, 'Estimate']),
+  length =0, 
+  lwd = 5*plogis(-est_mix$theta1_Intercept -est_mix$theta1_BRl - 
+                   cf_mix_l_gl[id, 'Estimate']),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
   
@@ -1513,7 +1572,7 @@ for(id in u_id)
          stack = TRUE,
          bins = 360/5,
          col = 'magenta'
-         ) 
+         )
        }
   )
   par(new = T)
@@ -1528,7 +1587,7 @@ for(id in u_id)
   shrink = 1.05,
   axes = F
   )
-  points.circular(x = circular(x = deg_pred_uh[,i],
+  points.circular(x = circular(x = deg_pred1_uh[,i],
                                type = 'angles',
                                unit = angle_unit,
                                template = 'geographics',
@@ -1539,11 +1598,23 @@ for(id in u_id)
   sep = -1e-3,
   stack = TRUE,
   bins = 360,
-  col = adjustcolor(id_cols[i], alpha.f = 1/256)
+  col = adjustcolor('darkblue', alpha.f = 1/256)
   )
-  
-  # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = deg_pred_uh[,i],
+  points.circular(x = circular(x = deg_pred2_uh[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+  ),
+  sep = -1e-3,
+  stack = TRUE,
+  bins = 360,
+  col = adjustcolor('darkred', alpha.f = 1/256)
+  )
+  #mu1 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred1_uh[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -1551,13 +1622,29 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(est_vm$kappa_Intercept + est_vm$kappa_CLu +
-                          cf_vm_k_uh[id, 'Estimate']),
+  y = Softpl_to_meanvec(est_mix$kappa1_Intercept + est_mix$kappa1_CLu +
+                          cf_mix_k1_uh[id, 'Estimate']),
   length =0, 
-  lwd = 1,
+  lwd = 5*plogis(est_mix$theta1_Intercept + est_mix$theta1_CLu +
+                   cf_mix_l_uh[id, 'Estimate']),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
-  
+  #mu2 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred2_uh[,i],
+                                               type = 'angles',
+                                               unit = angle_unit,
+                                               template = 'geographics',
+                                               modulo = '2pi',
+                                               zero = pi/2,
+                                               rotation = angle_rot
+  )),
+  y = Softpl_to_meanvec(est_mix$kappa2_Intercept + est_mix$kappa2_CLu +
+                          cf_mix_k2_uh[id, 'Estimate']),
+  length =0, 
+  lwd = 5*plogis(-est_mix$theta1_Intercept -est_mix$theta1_CLu - 
+                   cf_mix_l_uh[id, 'Estimate']),
+  col = adjustcolor(id_cols[i], alpha.f = 1)
+  )
   #ul
   with(subset(x = cd_subs,
               subset = ID %in% id &
@@ -1576,7 +1663,7 @@ for(id in u_id)
          stack = TRUE,
          bins = 360/5,
          col = 'purple'
-         ) 
+         )
        }
   )
   par(new = T)
@@ -1591,7 +1678,7 @@ for(id in u_id)
   shrink = 1.05,
   axes = F
   )
-  points.circular(x = circular(x = deg_pred_ul[,i],
+  points.circular(x = circular(x = deg_pred1_ul[,i],
                                type = 'angles',
                                unit = angle_unit,
                                template = 'geographics',
@@ -1602,11 +1689,23 @@ for(id in u_id)
   sep = -1e-3,
   stack = TRUE,
   bins = 360,
-  col = adjustcolor(id_cols[i], alpha.f = 1/256)
+  col = adjustcolor('darkblue', alpha.f = 1/256)
   )
-  
-  # arrows.circular(x = median.circular(circular(x = deg(uw_mu_circ[,1]),
-  arrows.circular(x = median.circular(circular(x = deg_pred_ul[,i],
+  points.circular(x = circular(x = deg_pred2_ul[,i],
+                               type = 'angles',
+                               unit = angle_unit,
+                               template = 'geographics',
+                               modulo = '2pi',
+                               zero = pi/2,
+                               rotation = angle_rot
+  ),
+  sep = -1e-3,
+  stack = TRUE,
+  bins = 360,
+  col = adjustcolor('darkred', alpha.f = 1/256)
+  )
+  #mu1 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred1_ul[,i],
                                                type = 'angles',
                                                unit = angle_unit,
                                                template = 'geographics',
@@ -1614,13 +1713,31 @@ for(id in u_id)
                                                zero = pi/2,
                                                rotation = angle_rot
   )),
-  y = Softpl_to_meanvec(
-                        est_vm$kappa_Intercept + est_vm$kappa_BRl +
-                         est_vm$kappa_CLu + est_vm$kappa_BRl.CLu +
-                           cf_vm_k_ul[id, 'Estimate']
-                        ),
+  y = Softpl_to_meanvec(est_mix$kappa1_Intercept + est_mix$kappa1_BRl + 
+                          est_mix$kappa1_CLu + est_mix$kappa1_BRl.CLu +
+                          cf_mix_k1_ul[id]),
   length =0, 
-  lwd = 1,
+  lwd = 5*plogis(est_mix$theta1_Intercept + est_mix$theta1_BRl + 
+                   est_mix$theta1_CLu + est_mix$`theta1_BRl.CLu` +
+                   cf_mix_l_ul[id]),
+  col = adjustcolor(id_cols[i], alpha.f = 1)
+  )
+  #mu2 estimate
+  arrows.circular(x = median.circular(circular(x = deg_pred2_uh[,i],
+                                               type = 'angles',
+                                               unit = angle_unit,
+                                               template = 'geographics',
+                                               modulo = '2pi',
+                                               zero = pi/2,
+                                               rotation = angle_rot
+  )),
+  y = Softpl_to_meanvec(est_mix$kappa2_Intercept + est_mix$kappa2_BRl + 
+                          est_mix$kappa2_CLu + est_mix$`kappa2_BRl.CLu` +
+                          cf_mix_k2_ul[id]),
+  length =0, 
+  lwd = 5*plogis(-est_mix$theta1_Intercept - est_mix$theta1_BRl - 
+                   est_mix$theta1_CLu - est_mix$theta1_BRl.CLu -
+                   cf_mix_l_ul[id]),
   col = adjustcolor(id_cols[i], alpha.f = 1)
   )
 }
@@ -1633,35 +1750,35 @@ par(
     mar = c(4,4,4,4)
     )
 
-PCestimates(angles =  deg(uw_mu_circ[,1]),
+PCestimates(angles =  deg(uw_mu1[,1]),
       col = 'green3',
       title = 'Green Bright (Intercept)',
       titline = 2
 )
-PCestimates(angles =  deg(uw_mu_circ[,2]),
+PCestimates(angles =  deg(uw_mu1[,2]),
       col = 'darkgreen',
       title = 'Green Dim - Green Bright',
       titline = 2
 )
-PCestimates(angles =  deg(uw_mu_circ[,4]),
+PCestimates(angles =  deg(uw_mu1[,4]),
       col = 'purple',
       title = 'UV Dim - Green Bright',
       titline = 2
 )
-PCestimates(angles =  deg(uw_mu_circ[,3]),
+PCestimates(angles =  deg(uw_mu1[,3]),
       col = 'gray40',
       title = 'UV Bright - Green Bright',
       titline = 2
 )
 
-VertHist(data = unlist(gh_kappa),
+VertHist(data = unlist(gh_kappa1),
          ylab = 'kappa',
          breaks = 2e1,
          main = 'Green Bright (Intercept)',
          col = 'green3'
          )
 
-VertHist(data = unlist(gl_kappa - gh_kappa),
+VertHist(data = unlist(gl_kappa1 - gh_kappa1),
          ylab = 'Δkappa',
          breaks = 2e1,
          ylim = c(-1, 1)*8,
@@ -1670,7 +1787,7 @@ VertHist(data = unlist(gl_kappa - gh_kappa),
 abline(h = 0,
        col = 'gray')
 
-VertHist(data = unlist(ul_kappa - gh_kappa),
+VertHist(data = unlist(ul_kappa1 - gh_kappa1),
          ylab = 'Δkappa',
          breaks = 2e1,
          ylim = c(-1, 1)*8,
@@ -1679,7 +1796,7 @@ VertHist(data = unlist(ul_kappa - gh_kappa),
 abline(h = 0,
        col = 'gray')
 
-VertHist(data = unlist(uh_kappa - gh_kappa),
+VertHist(data = unlist(uh_kappa1 - gh_kappa1),
          ylab = 'Δkappa',
          breaks = 2e1,
          ylim = c(-1, 1)*8,
@@ -1688,6 +1805,7 @@ VertHist(data = unlist(uh_kappa - gh_kappa),
 abline(h = 0,
        col = 'gray')
 
+#TODO update this
 #rho version
 par(
     mfrow = c(2, 4),
@@ -2025,7 +2143,7 @@ for(id in u_id)
       cf_mix_k_ul[id, 'Estimate']
   ),
   length =0, 
-  lwd = with(full_mix_lambda_draws,
+  lwd = with(md_lambda_draws,
              {
              lw*plogis(
                median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
@@ -2048,7 +2166,7 @@ for(id in u_id)
       cf_mix_k_ul[id, 'Estimate']
   ),
   length =0, 
-  lwd = with(full_mix_lambda_draws,
+  lwd = with(md_lambda_draws,
              {
                lw*plogis(
                  -median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
@@ -2073,7 +2191,7 @@ for(id in u_id)
   #     cf_mix_k_ul[id, 'Estimate']
   # ),
   # length =0, 
-  # lwd = with(full_mix_lambda_draws,
+  # lwd = with(md_lambda_draws,
   #            {
   #            1*plogis(
   #              median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
@@ -2096,7 +2214,7 @@ for(id in u_id)
   #     cf_mix_k_ul[id, 'Estimate']
   # ),
   # length =0, 
-  # lwd = with(full_mix_lambda_draws,
+  # lwd = with(md_lambda_draws,
   #            {
   #              1*plogis(
   #                -median(get(paste0('b_logit_lambda[',which(u_id %in% id),']')) + 
