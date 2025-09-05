@@ -249,24 +249,24 @@ transformed parameters {
   r_5_theta1_3 = r_5[, 3];
   r_5_theta1_4 = r_5[, 4];
   lprior += normal_lpdf(b_mu1 | pi()/3, pi()/4);
-  lprior += normal_lpdf(Intercept_mu1 | 0, pi()/6);
+  lprior += normal_lpdf(Intercept_mu1 | 0, pi()/12);
   lprior += normal_lpdf(b_kappa1 | 0, 1);
   lprior += normal_lpdf(Intercept_kappa1 | 5, 1);
   lprior += normal_lpdf(b_mu2 | -pi()/3, pi()/4);
-  lprior += normal_lpdf(Intercept_mu2 | 0, pi()/6);
+  lprior += normal_lpdf(Intercept_mu2 | 0, pi()/12);
   lprior += normal_lpdf(b_kappa2 | 0, 1);
   lprior += normal_lpdf(Intercept_kappa2 | 5, 1);
-  lprior += normal_lpdf(b_theta1 | 0, 5);
-  lprior += normal_lpdf(Intercept_theta1 | 5, 0.5);
-  lprior += lognormal_lpdf(sd_1[1] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_1[2] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_1[3] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_1[4] | log(pi()/12), 0.7);
+  lprior += normal_lpdf(b_theta1 | 0, 10);
+  lprior += normal_lpdf(Intercept_theta1 | 10, 1);
+  lprior += lognormal_lpdf(sd_1[1] | log(pi()/15), 0.5);
+  lprior += lognormal_lpdf(sd_1[2] | log(pi()/9), 0.3);
+  lprior += lognormal_lpdf(sd_1[3] | log(pi()/9), 0.3);
+  lprior += lognormal_lpdf(sd_1[4] | log(pi()/9), 0.3);
   lprior += lkj_corr_cholesky_lpdf(L_1 | 1);
-  lprior += lognormal_lpdf(sd_2[1] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_2[2] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_2[3] | log(pi()/12), 0.7);
-  lprior += lognormal_lpdf(sd_2[4] | log(pi()/12), 0.7);
+  lprior += lognormal_lpdf(sd_2[1] | log(pi()/15), 0.5);
+  lprior += lognormal_lpdf(sd_2[2] | log(pi()/9), 0.3);
+  lprior += lognormal_lpdf(sd_2[3] | log(pi()/9), 0.3);
+  lprior += lognormal_lpdf(sd_2[4] | log(pi()/9), 0.3);
   lprior += lkj_corr_cholesky_lpdf(L_2 | 1);
   lprior += student_t_lpdf(sd_3 | 3, 0, 1)
     - 4 * student_t_lccdf(0 | 3, 0, 1);
@@ -274,8 +274,8 @@ transformed parameters {
   lprior += student_t_lpdf(sd_4 | 3, 0, 1)
     - 4 * student_t_lccdf(0 | 3, 0, 1);
   lprior += lkj_corr_cholesky_lpdf(L_4 | 1);
-  lprior += student_t_lpdf(sd_5 | 3, 0, 1)
-    - 4 * student_t_lccdf(0 | 3, 0, 1);
+  lprior += student_t_lpdf(sd_5 | 3, 0, 0.5)
+    - 4 * student_t_lccdf(0 | 3, 0, 0.5);
   lprior += lkj_corr_cholesky_lpdf(L_5 | 1);
 }
 model {
@@ -374,8 +374,8 @@ generated quantities {
   mu_circ1[1] = mod_circular(Intercept_mu1); //Intercept case
   mu_circ2[1] = mod_circular(Intercept_mu2); //Intercept case
   for (i in 1:Kc_mu1){
-  mu_circ1[i+1] = mod_circular(mu_circ1[1] + b_mu1[i]);
-  mu_circ2[i+1] = mod_circular(mu_circ2[1] + b_mu2[i]);
+  mu_circ1[i+1] = mod_circular(b_mu1[i]);
+  mu_circ2[i+1] = mod_circular(b_mu2[i]);
   }
 
   // extract upper diagonal of correlation matrix
