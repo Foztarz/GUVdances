@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 09 02
-#     MODIFIED:	James Foster              DATE: 2025 09 04
+#     MODIFIED:	James Foster              DATE: 2025 09 19
 #
 #  DESCRIPTION: Attempt to run a two-way interaction model on the GUV dances data
 #               using the circular modulo modelling method devel. by Jake Graving.
@@ -43,7 +43,7 @@ graphics.off()
 #- Left-right bimodal +
 #- Constrain mu slope SD to improve bimodality identifiability  +
 #- Try initialising at 0  +
-#- von Mises version of raneff
+#- von Mises version of raneff +
 #- Constrain zmu
 #- Think about priors for opposite means
 #- Check extraction of ul condition
@@ -1045,14 +1045,14 @@ pr_mu_mix =
   # prior(normal(pi()/3,pi()/2), class = b, nlpar = 'fmu1', coef = 'BRl:CLu') + # weak bias to right turns
   # prior(normal(-pi()/3,pi()/2), class = b, nlpar = 'fmu2', coef = 'BRl:CLu') + # weak bias to left turns
   set_prior(paste("target +=", 
-                  'unwrap_von_mises_lpdf(b_zmu1[1] | 0, log1p_exp(kappamu1))',
+                  'unwrap_von_mises_vect_lpdf(b_zmu1[1+0:9*4] | 0, log1p_exp(kappamu1))',
                   '+ normal_lpdf(b_zmu1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
   set_prior("target += normal_lpdf(kappamu1 | 3.0, 3.0)", #prior to higher values, indiv differences should be small
             check = FALSE) + 
   set_prior(paste("target +=", 
-                  'unwrap_von_mises_lpdf(b_zmu2[1] | 0, log1p_exp(kappamu1 + kappamu2))',
+                  'unwrap_von_mises_vect_lpdf(b_zmu2[1+0:9*4] | 0, log1p_exp(kappamu1 + kappamu2))',
                   '+ normal_lpdf(b_zmu2 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
