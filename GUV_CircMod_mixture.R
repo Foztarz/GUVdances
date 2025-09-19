@@ -1040,19 +1040,17 @@ pr_mu_mix =
   prior(normal(0,pi()/6), class = b, nlpar = 'fmu2') + # expect small changes in angle
   prior(normal(0,pi()/3), class = b,  nlpar = 'fmu1', coef = 'Intercept') + # anchor to 0° #TODO loosen
   # prior(normal(0,pi()/2), class = b, nlpar = 'fmu2', coef = 'Intercept') + # anchor to 0° #Needs to be tight if theta1 is high
-  prior(normal(0,pi()/2), class = b, nlpar = 'fmu1', coef = 'BRl:CLu') + # weak bias to right turns
-  prior(normal(0,pi()/2), class = b, nlpar = 'fmu2', coef = 'BRl:CLu') + # weak bias to left turns
-  # prior(normal(pi()/3,pi()/2), class = b, nlpar = 'fmu1', coef = 'BRl:CLu') + # weak bias to right turns
-  # prior(normal(-pi()/3,pi()/2), class = b, nlpar = 'fmu2', coef = 'BRl:CLu') + # weak bias to left turns
+  prior(normal(pi()/3,pi()/2), class = b, nlpar = 'fmu1', coef = 'BRl:CLu') + # weak bias to right turns
+  prior(normal(-pi()/3,pi()/2), class = b, nlpar = 'fmu2', coef = 'BRl:CLu') + # weak bias to left turns
   set_prior(paste("target +=", 
-                  'unwrap_von_mises_vect_lpdf(b_zmu1[1+0:9*4] | 0, log1p_exp(kappamu1))',
+                  'unwrap_von_mises_vect_lpdf(b_zmu1[1:10] | 0, log1p_exp(kappamu1))',
                   '+ normal_lpdf(b_zmu1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
   set_prior("target += normal_lpdf(kappamu1 | 3.0, 3.0)", #prior to higher values, indiv differences should be small
             check = FALSE) + 
   set_prior(paste("target +=", 
-                  'unwrap_von_mises_vect_lpdf(b_zmu2[1+0:9*4] | 0, log1p_exp(kappamu1 + kappamu2))',
+                  'unwrap_von_mises_vect_lpdf(b_zmu2[1:10] | 0, log1p_exp(kappamu1 + kappamu2))',
                   '+ normal_lpdf(b_zmu2 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
@@ -1102,7 +1100,7 @@ write.table(x = sc_mix,
 
 ## Run model -------------------------------------------------------------
 wup = 1000
-sam = 1000
+sam = 500
 
 #very long compile time
 system.time(
