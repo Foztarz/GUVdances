@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~07~14$
+> James Foster $2025~09~22$
 
 > **DESCRIPTION**
 >
@@ -345,7 +345,33 @@ invisible(
   })
 abline(h = c(0,1))
 ```
-
+### Plot an example individual to show effect
+For example we can look at the dance recorded on 2016.06.20 at 13:17.
+```{r, subset by 2016.06.20.13.17}
+example_subs = subset(x = cd,
+                      ID %in% '2016.06.20.13.17')
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = subset(example_subs, 
+                      subset = colour %in% 'g' & brightn %in% 'h')$bearing,
+      col = 'green',
+      shrink = 1.5,
+      title = 'Green Bright')
+PCfun(angles = subset(example_subs, 
+                      subset = colour %in% 'g' & brightn %in% 'l')$bearing,
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim')
+PCfun(angles = subset(example_subs, 
+                      subset = colour %in% 'u' & brightn %in% 'h')$bearing,
+      col = 'magenta',
+      shrink = 1.5,
+      title = 'UV Bright')
+PCfun(angles = subset(example_subs,
+                      subset = colour %in% 'u' & brightn %in% 'l')$bearing,
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim')
+```
 ### Non-parametric tests on accuracy
 
 Here non-parametric or parametric statistics could be revealing.
@@ -1432,7 +1458,31 @@ The dim UV stimulus shows no apparent patten, though a slight southwards bias.
 
 # Inspect dance angles relative to the stimulus
 
-## Mean dance angles relative to the stimulus
+```{r Plot dance angle relative to stimulus}
+par(mfrow = c(2,2), mar = c(0,0,0,0))
+PCfun(angles = subset(mean_vectors, 
+                      subset = colour %in% 'g' & brightn %in% 'h')$mu,
+      col = 'green',
+      shrink = 1.75,
+      title = 'Green Bright')
+PCfun(angles = subset(mean_vectors, 
+                      subset = colour %in% 'g' & brightn %in% 'l')$mu,
+      col = 'darkgreen',
+      shrink = 1.75,
+      title = 'Green Dim')
+PCfun(angles = subset(mean_vectors, 
+                      subset = colour %in% 'u' & brightn %in% 'h')$mu,
+      col = 'magenta',
+      shrink = 1.75,
+      title = 'UV Bright')
+PCfun(angles = subset(mean_vectors, 
+                      subset = colour %in% 'u' & brightn %in% 'l')$mu,
+      col = 'purple',
+      shrink = 1.75,
+      title = 'UV Dim')
+```
+
+## Mean dance angles relative to the stimulus (full conditions)
 
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
 We can identify phototactic orientation from the angle relative to the stimulus.
