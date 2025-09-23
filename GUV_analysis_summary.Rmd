@@ -1567,6 +1567,22 @@ PCfun(angles = subset(mean_vectors,
       title = 'UV Dim')
 ```
 
+```{r Calculate summary statistics}
+
+cd_sd = aggregate(circular(mu, units = 'degrees')~colour*brightn,
+                  FUN = sd.circular,
+                  data = mean_vectors)
+cd_rho = aggregate(circular(mu, units = 'degrees')~colour*brightn,
+                  FUN = rho.circular,
+                  data = mean_vectors)
+names(cd_sd)[3] = 'circular_sd'
+names(cd_rho)[3] = 'rho'
+cd_desc = merge(cd_sd, cd_rho)
+cd_desc = within(cd_desc, 
+                 {sd_degrees = deg(circular_sd)})
+print(cd_desc,digits = 2)                  
+```
+
 ## Mean dance angles relative to the stimulus (full conditions)
 
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
@@ -1599,6 +1615,22 @@ PCfun(angles = subset(mean_vectors_full,
 While there are some dances towards or near to the stimulus for most conditions, there is a wide spread, suggesting a factor other than phototaxis sets dance directions.
 N.B.
 for the dim stimuli where the widest spread is observed, the dances are also less accurate, which may increase variation in mean dance angle.
+
+```{r Calculate full condition summary statistics}
+
+cd_sd_full = aggregate(circular(mu, units = 'degrees')~colour*brightn,
+                  FUN = sd.circular,
+                  data = mean_vectors_full)
+cd_rho_full = aggregate(circular(mu, units = 'degrees')~colour*brightn,
+                  FUN = rho.circular,
+                  data = mean_vectors_full)
+names(cd_sd_full)[3] = 'circular_sd'
+names(cd_rho_full)[3] = 'rho'
+cd_desc_full = merge(cd_sd_full, cd_rho_full)
+cd_desc_full = within(cd_desc_full, 
+                 {sd_degrees = deg(circular_sd)})
+print(cd_desc_full,digits = 2)      
+```
 
 ## Change in mean dance angle between stimuli
 
@@ -2136,4 +2168,4 @@ print(print_lr_results,
 
 ```
 
-These tests confirm, that there is no significant difference between the two green conditions, a significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
+These tests confirm, that there is no significant difference between the two green conditions, a marginally-significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
