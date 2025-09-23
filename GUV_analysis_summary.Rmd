@@ -124,6 +124,91 @@ full_cd = subset(cd, ID %in% full_ids)
 
 ## Plot the raw dance data
 
+### Plot an example individual to show effect
+For example we can look at the dance recorded on 2016.06.20 at 13:17.
+```{r, example from 2016.06.20.13.17}
+ii = '2016.06.20.13.17'
+#set up a sequence for the axes
+xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
+par(pty = 's')
+par(mfrow = c(1,1), mar = c(0,0,0,0))
+mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
+mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
+mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
+mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
+plot(x = NULL,
+     xlim = 100*c(-1,1),
+     ylim = 100*c(-1,1),
+     pch = 19,
+     axes = FALSE,
+     xlab = '',
+     ylab = '',
+     main = ''
+     )
+abline(a = 0, b = 1, col = 'gray90')
+abline(a = 0, b = -1, col = 'gray90')
+abline(h = 0, v = 0, col = 'gray75')
+lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
+lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
+lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
+text(x = 1:3*20,
+     y = c(0,0,0),
+     labels = paste(' run', 1:3*20), 
+     cex = 0.7,
+     adj = c(1,0))
+with(subset(cd, ID %in% ii),
+     {
+lines(x = c(0, 100*sin(sun_az_rad)),
+      y = c(0, 100*cos(sun_az_rad)),
+      col = adjustcolor('orange',alpha.f = 0.5),
+      lwd = 2)
+points(x = run*sin(as.numeric(angle)),
+       y = run*cos(as.numeric(angle)),
+       bg = gray(level = 1.0,
+                 alpha =  0.4),
+       col = c('green', 'darkgreen', 'magenta', 'purple')
+              [ifelse(colour %in% 'g',
+                      yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
+                      no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
+      pch = 21,
+      lwd = 2
+     )
+     }
+)
+with(subset(cd, ID %in% ii & run %in% c(10, 20, 40)),
+     {
+text(x = run*sin(as.numeric(angle)),
+     y = run*cos(as.numeric(angle)),
+     labels = paste(' run', run), 
+     col = c('green', 'darkgreen', 'magenta', 'purple')
+            [ifelse(colour %in% 'g',
+                    yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
+                    no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
+     cex = 0.7,
+     adj = c(0,0))
+     }
+)
+
+lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
+      y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
+      col = 'green', 
+      lwd = 1)
+lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
+      y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
+      col = 'darkgreen', 
+      lwd = 1)
+lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
+      y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
+      col = 'magenta', 
+      lwd = 1)
+lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
+      y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
+      col = 'purple', 
+      lwd = 1)
+mtext(ii,side = 3,line = -2)
+```
+
+### Plot all
 Plot all 169 dances
 
 ```{r Raw dances, echo=FALSE, warning=FALSE}
