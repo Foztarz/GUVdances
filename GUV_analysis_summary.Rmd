@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~09~22$
+> James Foster $2025~10~07$
 
 > **DESCRIPTION**
 >
@@ -120,6 +120,17 @@ length(full_ids)#19 individuals
 
 #find data for full condition individuals
 full_cd = subset(cd, ID %in% full_ids)
+```
+
+## Check dance length
+
+Ensure that each variable has the correct data format for subsequent analysis.
+
+```{r Data formatting}
+mruns = aggregate(run ~ ID,
+                  data = cd,
+                  FUN = max)
+summary(mruns$run)
 ```
 
 ## Plot the raw dance data
