@@ -54,6 +54,7 @@ editor_options:
 > **TODO**
 >
 > -   move necessary functions to GUV_functions
+> -   move raw data to end
 > -   make functions for result extraction from BRMS
 
 ```{r setup, include=FALSE}
@@ -126,7 +127,7 @@ full_cd = subset(cd, ID %in% full_ids)
 
 Ensure that each variable has the correct data format for subsequent analysis.
 
-```{r Data formatting}
+```{r Number of waggle runs per dance per individual}
 mruns = aggregate(run ~ ID,
                   data = cd,
                   FUN = max)
@@ -468,6 +469,8 @@ PCfun(angles = subset(example_subs,
       shrink = 1.5,
       title = 'UV Dim')
 ```
+For this individual orientation is at a fixed angle to the light source ($0°$), but changes in consistency (green, dim), mean direction and bimodality (UV, dim) in response to changes in light source.
+
 ### Non-parametric tests on accuracy
 
 Here non-parametric or parametric statistics could be revealing.
@@ -1599,7 +1602,7 @@ print(cd_desc,digits = 2)
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
 We can identify phototactic orientation from the angle relative to the stimulus.
 
-```{r Plot dance angle relative to stimulus}
+```{r Plot full condition dances relative to stimulus}
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 PCfun(angles = subset(mean_vectors_full, 
                       subset = colour %in% 'g' & brightn %in% 'h')$mu,
