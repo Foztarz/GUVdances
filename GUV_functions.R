@@ -1233,3 +1233,86 @@ UnwrapRhats = function(uwmod,
   rh = rh[!( nrh %in% c(".chain", ".iteration", ".draw") )]
   return( round(rh,digits = digits) )
 }
+
+log_lik_unwrap_von_mises <- function(i, prep) {
+  #remove circular formatting?
+  prep$data$Y = as.numeric(prep$data$Y)
+  
+  args <- list(
+    mu = get_dpar(prep, "mu", i),
+    kappa = get_dpar(prep, "kappa", i = i)
+  )
+  
+  # ----------- log_lik helper-functions -----------
+  # compute (possibly censored) log_lik values
+  # @param dist name of a distribution for which the functions
+  #   d<dist> (pdf) and p<dist> (cdf) are available
+  # @param args additional arguments passed to pdf and cdf
+  # @param prep a brmsprep object
+  # @return vector of log_lik values
+  log_lik_censor <- function(dist, args, i, prep) {
+    pdf <- get(paste0("d", dist), mode = "function")
+    cdf <- get(paste0("p", dist), mode = "function")
+    y <- prep$data$Y[i]
+    cens <- prep$data$cens[i]
+    if (is.null(cens) || cens == 0) {
+      x <- do_call(pdf, c(y, args, log = TRUE))
+    } else if (cens == 1) {
+      x <- do_call(cdf, c(y, args, lower.tail = FALSE, log.p = TRUE))
+    } else if (cens == -1) {
+      x <- do_call(cdf, c(y, args, log.p = TRUE))
+    } else if (cens == 2) {
+      rcens <- prep$data$rcens[i]
+      x <- log(do_call(cdf, c(rcens, args)) - do_call(cdf, c(y, args)))
+    }
+    x
+  }
+  
+  # adjust log_lik in truncated models
+  # @param x vector of log_lik values
+  # @param cdf a cumulative distribution function
+  # @param args arguments passed to cdf
+  # @param i observation number
+  # @param prep a brmsprep object
+  # @return vector of log_lik values
+  log_lik_truncate <- function(x, cdf, args, i, prep) {
+    lb <- prep$data[["lb"]][i]
+    ub <- prep$data[["ub"]][i]
+    if (is.null(lb) && is.null(ub)) {
+      return(x)
+    }
+    if (!is.null(lb)) {
+      log_cdf_lb <- do_call(cdf, c(lb, args, log.p = TRUE))
+    } else {
+      log_cdf_lb <- rep(-Inf, length(x))
+    }
+    if (!is.null(ub)) {
+      log_cdf_ub <- do_call(cdf, c(ub, args, log.p = TRUE))
+    } else {
+      log_cdf_ub <- rep(0, length(x))
+    }
+    x - log_diff_exp(log_cdf_ub, log_cdf_lb)
+  }
+  
+  # weight log_lik values according to defined weights
+  # @param x vector of log_lik values
+  # @param i observation number
+  # @param prep a brmsprep object
+  # @return vector of log_lik values
+  log_lik_weight <- function(x, i, prep) {
+    weight <- prep$data$weights[i]
+    if (!is.null(weight)) {
+      x <- x * weight
+    }
+    x
+  }
+  
+  
+  out <- log_lik_censor(
+    dist = "von_mises", args = args, i = i, prep = prep
+  )
+  out <- log_lik_truncate(
+    out, cdf = pvon_mises, args = args, i = i, prep = prep
+  )
+  log_lik_weight(out, i = i, prep = prep)
+}
