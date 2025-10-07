@@ -1,4 +1,4 @@
-// generated with brms 2.22.0
+// generated with brms 2.23.0
 functions {
  /* compute correlated group-level effects
   * Args:
@@ -95,7 +95,6 @@ parameters {
   vector[K_k1] b_k1;  // regression coefficients
   vector[Kc_theta1] b_theta1;  // regression coefficients
   real Intercept_theta1;  // temporary intercept for centered predictors
-  ordered[2] ordered_Intercept;  // to identify mixtures
   vector<lower=0>[M_1] sd_1;  // group-level standard deviations
   matrix[M_1, N_1] z_1;  // standardized group-level effects
   cholesky_factor_corr[M_1] L_1;  // cholesky factor of correlation matrix
@@ -127,7 +126,8 @@ transformed parameters {
   vector[N_2] r_2_k1_2;
   vector[N_2] r_2_k1_3;
   vector[N_2] r_2_k1_4;
-  real lprior = 0;  // prior contributions to the log posterior
+  // prior contributions to the log posterior
+  real lprior = 0;
   // compute actual group-level effects
   r_1 = scale_r_cor(z_1, sd_1, L_1);
   r_1_theta1_1 = r_1[, 1];
@@ -144,11 +144,11 @@ transformed parameters {
   lprior += normal_lpdf(b_fmu1[1] | 0, pi()/3);
   lprior += normal_lpdf(b_fmu1[2] | 0, pi()/3);
   lprior += normal_lpdf(b_fmu1[3] | 0, pi()/3);
-  lprior += normal_lpdf(b_fmu1[4] | 0, pi()/2);
+  lprior += normal_lpdf(b_fmu1[4] | pi()/3, pi()/2);
   lprior += normal_lpdf(b_fmu2[1] | 0, pi()/6);
   lprior += normal_lpdf(b_fmu2[2] | 0, pi()/6);
   lprior += normal_lpdf(b_fmu2[3] | 0, pi()/6);
-  lprior += normal_lpdf(b_fmu2[4] | 0, pi()/2);
+  lprior += normal_lpdf(b_fmu2[4] | -pi()/3, pi()/2);
   lprior += normal_lpdf(b_k1[1] | 3, 3);
   lprior += normal_lpdf(b_k1[2] | 0, 3);
   lprior += normal_lpdf(b_k1[3] | 0, 3);
@@ -238,9 +238,9 @@ model {
   target += lprior;
   target += std_normal_lpdf(to_vector(z_1));
   target += std_normal_lpdf(to_vector(z_2));
-  target += unwrap_von_mises_vect_lpdf(b_zmu1[1+0:9*4] | 0, log1p_exp(kappamu1)) + normal_lpdf(b_zmu1 | 0, 2*pi());
+  target += unwrap_von_mises_vect_lpdf(b_zmu1[1:10] | 0, log1p_exp(kappamu1)) + normal_lpdf(b_zmu1 | 0, 2*pi());
   target += normal_lpdf(kappamu1 | 3.0, 3.0);
-  target += unwrap_von_mises_vect_lpdf(b_zmu2[1+0:9*4] | 0, log1p_exp(kappamu1 + kappamu2)) + normal_lpdf(b_zmu2 | 0, 2*pi());
+  target += unwrap_von_mises_vect_lpdf(b_zmu2[1:10] | 0, log1p_exp(kappamu1 + kappamu2)) + normal_lpdf(b_zmu2 | 0, 2*pi());
   target += normal_lpdf(kappamu2 | 0.0, 1.0);
 }
 generated quantities {
