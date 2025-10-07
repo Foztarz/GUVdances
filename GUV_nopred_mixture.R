@@ -38,9 +38,10 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Select only UV-dim
+#- Select only UV-dim +
 #- Simulate bimodal
-#- Subset test
+#- Subset test +
+#- Eliminate bimodality in fmu1 posterior
 #- Find priors for mu2
 #- Find priors for zmu
 #- Full dataset test
@@ -63,7 +64,11 @@ here_path = tryCatch(expr = #look in the folder containing this file: sys.frame(
 
 tryCatch(expr = #try to load functions from the folder containing this file
            {
-             source(file.path(here_path, 'GUV_functions.R',fsep = '\\'))
+             source(file = file.path(here_path,
+                                     'GUV_functions.R',
+                                     fsep = if(sys_win){'\\'}else{'/'}
+                                     )
+                    )
            },
          error = function(e)
          {#if that fails, ask the user
@@ -89,25 +94,30 @@ tryCatch(expr = #try to load functions from the folder containing this file
          }
 )
 
-
-# set path to file
-if(sys_win){#choose.files is only available on Windows
-  message('\n\nPlease select the ".csv" file\n\n')
-  Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
-  path_file = choose.files(
-    default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
-    caption = 'Please select the "colour_dance_reorg.csv" file'
-  )
-}else{
-  message('\n\nPlease select the "colour_dance_reorg.csv" file\n\n')
-  Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
-  path_file = file.choose(new=F)
+path_file = file.path(here_path, "1Data/colour_dance_reorg.csv")
+if(file.exists(path_file))
+{
+  print(path_file)
+}else
+{
+  # set path to file
+  if(sys_win){#choose.files is only available on Windows
+    message('\n\nPlease select the ".csv" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    path_file = choose.files(
+      default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
+      caption = 'Please select the "colour_dance_reorg.csv" file'
+    )
+  }else{
+    message('\n\nPlease select the "colour_dance_reorg.csv" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    path_file = file.choose(new=F)
+  }
+  #show the user the path they have selected
+  if(is.null(path_file) | !length(path_file))
+  {stop('No file selected.')}else
+  {print(path_file)}
 }
-#show the user the path they have selected
-if(is.null(path_file) | !length(path_file))
-{stop('No file selected.')}else
-{print(path_file)}
-
 # Custom family --------------------------------------------------------
 #In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
@@ -123,14 +133,6 @@ unwrap_von_mises = custom_family(
 
 
 ### Functions ------------------------------------------------------------
-
-log_lik_unwrap_von_mises  = function(i, prep) {
-  mu = brms::get_dpar(prep, "mu", i = i)
-  phi = brms::get_dpar(prep, "kappa", i = i)
-  y = prep$data$Y[i]
-  dvonmises(y, mu, kappa)
-}
-
 
 stan_unwrap_fun = stanvar(scode = "
   real unwrap_von_mises_lpdf(real y, real mu, real kappa) {
@@ -238,12 +240,14 @@ cd_subs = subset(x = cd,
                    CL %in% 'u'
 )
 
-cd_subs = within(cd_sub,
+#the model is not taking so long to fit, stick with whole dataset
+cd_subs = cd
+
+cd_subs = within(cd_subs,
                  {
                  angle = as.numeric(angle)#remove circular formatting for predictions  
                  }
                  )
-# cd_subs = cd
 
 ## Formula ---------------------------------------------------------------
 
@@ -337,8 +341,8 @@ write.table(x = sc_mix,
             row.names = FALSE)
 
 ## Run model -------------------------------------------------------------
-wup = 1000
-sam = 500
+wup = 500
+sam = 200
 
 
 ### Unimodal -------------------------------------------------------------
@@ -366,7 +370,7 @@ system.time(
 )
 
 ### Bimodal -------------------------------------------------------------
-#very long compile time
+#warning, takes nearly 15 minutes for 700 iterations!
 system.time(
   {
     
@@ -402,9 +406,9 @@ pnorm(q = lc_unimix[2,1], sd = lc_unimix[2,2],lower.tail = FALSE)
 ## Plot coefficients -----------------------------------------------------
 
 #check divergences
-# np_mix = nuts_params(full_mix)
+# nt_mix = nuts_params(np_mix)
 # bayesplot::mcmc_scatter(full_mix,
-#                       np = np_mix,
+#                       np = nt_mix,
 #                       regex_pars = c('Intercept_theta1', '^b_fmu1_Intercept')
 #                       )
 
@@ -460,7 +464,11 @@ plot(np_mix,
 ## Summarise coefficients ------------------------------------------------
 #extract the medians of all parameters
 sm_mix = summary(np_mix, robust = TRUE)
-print(sm_mix)
+print(sm_mix$fixed[c('theta1_Intercept',
+                     'fmu1_Intercept',
+                     'fmu2_Intercept',
+                     'k1_Intercept'),],
+      digits = 3)
 
 UnwrapRhats(np_mix, variable = 'fmu')
 UnwrapRhats(np_mix)
@@ -468,9 +476,9 @@ UnwrapRhats(np_mix)
 rn_sm_mix = with(sm_mix, rownames(fixed) )
 #Investigate the 
 sm_mix$spec_pars
-sm_mix$fixed[grepl(pattern = '^mu', x = rn_sm_mix ),]
-sm_mix$fixed[grepl(pattern = '^theta', x = rn_sm_mix ),]
-sm_mix$fixed[grepl(pattern = '^kappa', x = rn_sm_mix ),]
+print(sm_mix$fixed[grepl(pattern = 'mu', x = rn_sm_mix ),], digits = 3)
+print(sm_mix$fixed[grepl(pattern = 'theta', x = rn_sm_mix ),], digits = 3)
+print(sm_mix$fixed[grepl(pattern = 'k1', x = rn_sm_mix ),], digits = 3)
 
 
 
