@@ -1214,3 +1214,22 @@ ART_extract = function(mod,
   return(ct)
 }
 
+#calculate rhat for circular variables with extreme ranges
+Rhat_unwrap = function(x){rhat(unwrap_circular(x))}
+UnwrapRhats = function(uwmod,
+                       variable = '^b_zmu',
+                       regex = TRUE,
+                       digits = 5,
+                       ...)
+{
+  rh =   
+    apply(X = as_draws_df(uwmod,
+                          variable = variable, 
+                          regex = regex,
+                          ...),
+          MARGIN = 2,
+          FUN = Rhat_unwrap)
+  nrh = names(rh)
+  rh = rh[!( nrh %in% c(".chain", ".iteration", ".draw") )]
+  return( round(rh,digits = digits) )
+}
