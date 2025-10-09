@@ -1316,3 +1316,51 @@ log_lik_unwrap_von_mises <- function(i, prep) {
   )
   log_lik_weight(out, i = i, prep = prep)
 }
+
+#add contours
+Draws2Cont = function(draws,
+                      palette = 'Heat 2',
+                      nlevels = 20,
+                      x_string = 'sin(Intercept)*A1(softplus(Intercept_kappa))',
+                      y_string = 'cos(Intercept)*A1(softplus(Intercept_kappa))',
+                      alpha = 200/255,
+                      ngrid = 25, # defaults to a 25x25 grid
+                      cropc = FALSE, #crop region outside circle
+                      denstype = 'relative' # 'normalised' or 'relative' (normalised fails to plot low densities)
+)
+{
+  kdc = with(draws,
+             {
+               MASS::kde2d(x = eval(str2lang(x_string)),
+                           y = eval(str2lang(y_string)),
+                           n = ngrid)
+             }
+  )
+  if(cropc)
+  {
+    xy = with(kdc, expand.grid(x = x,y= y))#find coordinates of z variable
+    idc = with(xy, x^2+y^2 < 1.0)
+    #crop edge of circle
+    kdc = within(kdc,
+                 {z[!idc] = 0})
+  }
+  with(kdc,
+       {
+         .filled.contour(x = x,
+                         y = y,
+                         z = z,
+                         levels = (1:nlevels)*
+                           switch(EXPR = denstype,
+                                  relative = max(z/nlevels),
+                                  normalised = sum(z/nlevels),#warning, fails to plot low densities
+                                  max(z/nlevels)
+                           ),
+                         col = hcl.colors(n = nlevels,
+                                          palette = palette,
+                                          rev = TRUE,
+                                          alpha = alpha)
+         )
+       }
+  )
+}
+
