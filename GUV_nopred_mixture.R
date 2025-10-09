@@ -426,6 +426,9 @@ pnorm(q = lc_unimix[2,1], sd = lc_unimix[2,2],lower.tail = FALSE)
 #                       regex_pars = c('Intercept_theta1', '^b_fmu1_Intercept')
 #                       )
 
+if(all_plots)
+{
+
 #main effects means
 #weighting (logistic scaled)
 plot(np_mix,
@@ -474,6 +477,7 @@ plot(np_mix,
      regex = TRUE,
      ask = FALSE,
      transform = unwrap_circular_deg)
+}
 
 ## Summarise coefficients ------------------------------------------------
 #extract the medians of all parameters
