@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 10 07
-#     MODIFIED:	James Foster              DATE: 2025 10 07
+#     MODIFIED:	James Foster              DATE: 2025 10 09
 #
 #  DESCRIPTION: Attempt build a no predictors mixture model using BRMS and Stan.
 #               Modified from GUV_CircMod_mixture.R, which is currently converging poorly
@@ -41,10 +41,12 @@ graphics.off()
 #- Select only UV-dim +
 #- Simulate bimodal
 #- Subset test +
+#- Efficient plotting method  +
+#- Full dataset test  
 #- Eliminate bimodality in fmu1 posterior
-#- Find priors for mu2
-#- Find priors for zmu
-#- Full dataset test
+#- Find priors for mu2 - 
+#- Find priors for zmu - 
+#- Speed up?
 
 
 # Set up workspace --------------------------------------------------------
@@ -282,9 +284,14 @@ formula_mix = bf(#modulus may not be necessary, included in lpd function
 
 ## Priors ----------------------------------------------------------------
 
+#STRATEGY
+#_don't_ bias mu1 at all
+#force theta to pick primary (approx. 70%)
+#try loosening theta?
+
 #priors for mu
 pr_mu_uni = 
-  prior(normal(0,pi()/2), class = b,  nlpar = 'fmu1', coef = 'Intercept') + # closer to 0°
+  prior(normal(0,pi()/1), class = b,  nlpar = 'fmu1', coef = 'Intercept') + # closer to 0°
   set_prior(paste("target +=", 
                   'unwrap_von_mises_vect_lpdf(b_zmu1 | 0, log1p_exp(kappamu1))',
                   '+ normal_lpdf(b_zmu1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
@@ -294,7 +301,7 @@ pr_mu_uni =
             check = FALSE) 
 pr_mu_mix = 
   pr_mu_uni + #same as unimodal, plus priors for 2nd mean
-  prior(normal(-pi(),pi()/2), class = b, nlpar = 'fmu2', coef = 'Intercept') + # closer to 180°
+  prior(normal(-pi(),pi()/3), class = b, nlpar = 'fmu2', coef = 'Intercept') + # closer to 180°
   set_prior(paste("target +=", 
                   'unwrap_von_mises_vect_lpdf(b_zmu1 | 0, log1p_exp(kappamu1))',
                   '+ normal_lpdf(b_zmu1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
@@ -316,8 +323,10 @@ pr_kappa_uni =
 pr_kappa_mix = pr_kappa_uni  #identical
 #priors for theta (mixture weight)
 pr_theta_mix = 
-  prior(normal(1.0,0.25), class = Intercept, dpar = 'theta1') + # force to mu1 as primary #20251007 approx 30% of data are at mu2, so setting to 1.0
-  prior(student_t(3, 0, 0.5), class = sd, dpar = 'theta1') 
+  # prior(normal(1.0,0.25), class = Intercept, dpar = 'theta1') + # force to mu1 as primary #20251007 approx 30% of data are at mu2, so setting to 1.0
+  prior(normal(1.0,0.5), class = Intercept, dpar = 'theta1') + # force to mu1 as primary #20251007 approx 30% of data are at mu2, so setting to 1.0
+  prior(student_t(3, 0, 0.5), class = sd, dpar = 'theta1') #should this be so small?
+  # prior(student_t(3, 0, 3.0), class = sd, dpar = 'theta1') #should this be so small?
 
 #all unimodal priors
 pr_uni = pr_mu_uni + pr_kappa_uni
@@ -391,6 +400,11 @@ system.time(
                    backend = 'cmdstanr')
     
   }
+)
+
+save(np_mix,
+     file = file.path(dirname(path_file),
+                      'no_pred_mix.RData')
 )
 
 
@@ -473,12 +487,143 @@ print(sm_mix$fixed[c('theta1_Intercept',
 UnwrapRhats(np_mix, variable = 'fmu')
 UnwrapRhats(np_mix)
 #find the names of the fixed effects
-rn_sm_mix = with(sm_mix, rownames(fixed) )
-#Investigate the 
-sm_mix$spec_pars
-print(sm_mix$fixed[grepl(pattern = 'mu', x = rn_sm_mix ),], digits = 3)
-print(sm_mix$fixed[grepl(pattern = 'theta', x = rn_sm_mix ),], digits = 3)
-print(sm_mix$fixed[grepl(pattern = 'k1', x = rn_sm_mix ),], digits = 3)
 
+# Extract predictions -----------------------------------------------------
+draws_mix = as_draws_df(np_mix)
+pred_mix = prepare_predictions(np_mix)
 
+# for calculating marginal effects/conditional expectations
+# posterior_epred_unwrap_von_mises =   function(draws,component="all") {
+#         
+#         mu <- brms::get_dpar(draws, "mu")
+#         
+#         kappa <- brms::get_dpar(draws, "kappa")
+#         
+#         kappa = softplus(kappa)
+#         
+#   }
+# cond_mix = conditional_effects(np_mix)
 
+# Plot model predictions --------------------------------------------------
+#test on individual one
+angle_unit = 'degrees'
+angle_rot = 'clock'
+
+## plot circular random effects ------------------------------------------
+dt_dim = dim(cd_subs)
+u_id = with(cd_subs, unique(ID))
+n_indiv = length(u_id)
+par(pty = 's')#sometimes gets skipped? Needs to come first
+csq = ceiling(sqrt(n_indiv))
+par(mar =rep(0,4),
+    mfrow = c(csq,
+              csq) )
+
+# id = u_id[1]
+# par(mar =rep(0,4),
+#     mfrow = c(1,
+#               1) )
+for(id in u_id)
+{
+  # i = grep(x = colnames(deg_pred1_gh),
+  #          pattern = id)
+  #gh
+
+  mu1_name = paste0('b_zmu1_ID',id)
+  mu2_name = paste0('b_zmu2_ID',id)
+  kappa_name = paste0('r_ID__k1[',id,',Intercept]')
+  theta_name = paste0('r_ID__theta1[',id,',Intercept]')
+  
+  with(subset(x = cd_subs,
+              subset = ID %in% id &
+                CL %in% 'u'&
+                BR %in% 'l'),
+       {
+         plot.circular(x = circular(x = deg(angle),
+                                    type = 'angles',
+                                    unit = angle_unit,
+                                    # template = 'geographics',
+                                    modulo = '2pi',
+                                    zero = pi/2,
+                                    rotation = angle_rot
+         ),
+         sep = 2/dt_dim[1],
+         stack = TRUE,
+         bins = 360/5,
+         col = 'magenta'
+         ) 
+       }
+  )
+  
+  Draws2Cont(draws_mix,
+             alpha = with(draws_mix,
+                          plogis( median(b_theta1_Intercept+get(theta_name)) ) ),
+             # ngrid = 100,
+             x_string = paste0('sin(',
+                               'b_fmu1_Intercept+',
+                               'get(mu1_name)', ')*',
+                               'A1(softplus(',
+                               'b_k1_Intercept+',
+                               'get(kappa_name)',
+                               '))'),
+             y_string = paste0('cos(',
+                               'b_fmu1_Intercept+',
+                               'get(mu1_name)', ')*',
+                               'A1(softplus(',
+                               'b_k1_Intercept+',
+                               'get(kappa_name)',
+                               '))')
+  )
+  
+  with(draws_mix,
+       arrows.circular(x = median.circular(
+         circular(x = 
+                    mod_circular(b_fmu1_Intercept + get(mu1_name)),
+                  units = 'radians',
+                  rotation = 'clock',
+                  zero = pi/2)
+       )[1],
+       y = A1(softplus( median(b_k1_Intercept+get(kappa_name))) ),
+       lwd = 5*plogis( median(b_theta1_Intercept+get(theta_name)) ),
+       length = 0.1/1.25,
+       col = adjustcolor('darkred', alpha.f = 200/255))
+  )
+  Draws2Cont(draws_mix,
+             palette = 'Blues',
+             alpha = with(draws_mix,
+                          plogis( -median(b_theta1_Intercept+get(theta_name)) ) ),
+             # ngrid = 100,
+             x_string = paste0('sin(',
+                               'b_fmu1_Intercept+',
+                               'get(mu1_name)+',
+                               'b_fmu2_Intercept+',
+                               'get(mu2_name)', ')*',
+                               'A1(softplus(',
+                               'b_k1_Intercept+',
+                               'get(kappa_name)',
+                               '))'),
+             y_string = paste0('cos(',
+                               'b_fmu1_Intercept+',
+                               'get(mu1_name)+',
+                               'b_fmu2_Intercept+',
+                               'get(mu2_name)', ')*',
+                               'A1(softplus(',
+                               'b_k1_Intercept+',
+                               'get(kappa_name)',
+                               '))')
+  )
+  with(draws_mix,
+       arrows.circular(x = median.circular(
+         circular(x = 
+                    mod_circular(b_fmu1_Intercept + get(mu1_name) +
+                                   b_fmu2_Intercept + get(mu2_name)),
+                  units = 'radians',
+                  rotation = 'clock',
+                  zero = pi/2)
+       )[1],
+       y = A1(softplus(median(b_k1_Intercept+get(kappa_name)))),
+       lwd = 5*plogis( -median(b_theta1_Intercept+get(theta_name)) ),
+       length = 0.1/1.25,
+       col = adjustcolor('darkblue', alpha.f = 200/255))
+  )
+}
