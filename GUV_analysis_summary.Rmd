@@ -1197,15 +1197,20 @@ Fit a psychometric model to the data using the nonlinear formula and specified p
 
 ```{r Fit model}
 #takes less than 1 minute
+#parameters for the brms runs
+wup = 2000
+sam = 2000
+refr = 500
 system.time(
   {
     beta_fit = brm( formula = formula_beta, # using our nonlinear formula
                      data = ed, # our data
                      prior = prior_beta, # our priors 
-                     iter = 4000, # long run for 4000 iterations
+                     iter = wup+sam, # long run for 4000 iterations
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
-                     refresh = 0, # don't echo chain progress
+                     refresh = refr,
+                     silent = 0, # don't echo chain progress
                      control = list(adapt_delta = 0.95), #finer sampling
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
@@ -1597,6 +1602,22 @@ cd_desc = within(cd_desc,
 print(cd_desc,digits = 2)                  
 ```
 ## Compare Sun-Spot & Phototaxis Hypotheses
+It is likely that a plurality of dancers had visited locations in the Marburg Botanic Gardens, perhaps in the centre of the main growing area (50°48'03.3"N 8°48'24.1"E). The hive is at 50°48'22.7"N 8°48'40.8"E. That would give the following bearing:
+```{r Calculate the bearing of the Botanic Gardens}
+require(geosphere)#TODO move to functions
+# Define the coordinates
+
+hive_coords  =  c(longitude  = 8.811333,
+                 latitude = 50.806306)
+garden_coords = c(longitude  = 8.806694,
+                  latitude = 50.800917)
+garden_bearing = bearing(hive_coords, garden_coords)
+#standard bearing
+print(garden_bearing %% 360)
+
+garden_bearing_rad = rad(as.numeric(garden_bearing))
+```
+
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
 # Custom family --------------------------------------------------------
@@ -1661,7 +1682,7 @@ stanvars_unwrap = stan_unwrap_fun + kappamu_param
 #subset to just gh data
 cd_gh = subset(cd, brightn %in% 'h' & colour %in% 'g')
 
-dt_photo = cd = within(cd,
+dt_photo = within(cd,
             {
               BR = brightn
               CL = colour
@@ -1670,6 +1691,16 @@ dt_photo = cd = within(cd,
               sunangle = angle - sun_az_rad
             }
 )
+
+#TODO oops I forgot this is a huge amount of data, I'll try the full set later
+
+dt_photo = subset(dt_photo,
+                  subset = ID %in% full_ids)
+
+dt_sun = within(dt_photo,
+                {bgangle = sunangle - garden_bearing_rad}
+                )
+
 
 # Model formulae
 #model assuming mean direction at 0°, with individual biases
@@ -1693,7 +1724,16 @@ formula_nophoto = bf(
   nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
 
 formula_sunspot = bf(
-  formula = sunangle ~ mu,
+  formula = bgangle ~ mu,
+            nlf(mu ~ fmu + zmu), 
+            fmu ~ 0, # fixed effects intercept estimated
+            zmu ~ 0 + ID,
+            kappa ~ 1 + (1|ID),
+  family = unwrap_von_mises,#mod mu, kappa via the softplus
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+
+formula_nosunspot = bf(
+  formula = bgangle ~ mu,
             nlf(mu ~ fmu + zmu), 
             fmu ~ 1, # fixed effects intercept estimated
             zmu ~ 0 + ID,
@@ -1718,53 +1758,98 @@ pr_photo =
 pr_nophoto = pr_photo +
   prior(normal(0,2*pi()), class = b,  nlpar = 'fmu', coef = 'Intercept')
 
+#parameters for the brms runs
+wup = 1000
+sam = 1000
+refr = 500
+siln = 1
+#TODO for knitting set silent to 0
 
+#these are pretty slow!
 system.time(
   {
   cglm_photo = brm(formula = formula_photo,
                   data = dt_photo,
                   prior = pr_photo,
                   stanvars = stanvars_unwrap,
-                  warmup = 1000,#may be necessary 
-                  iter = 2000, #doesn't take a lot of runs
+                  warmup = wup,#may be necessary 
+                  iter = wup+sam, #doesn't take a lot of runs
                   chains = 4, # 4 chains in parallel
                   cores = 4, # on 4 CPUs
                   # control = list(adapt_delta = 0.90),
-                 refresh = 500, # echo chain progress every n iterations
-                 silent = 1, # echo some Stan messages
+                 refresh = refr, # echo chain progress every n iterations
+                 silent = siln, # echo some Stan messages
                  backend = 'cmdstanr')
   
   cglm_nophoto = brm(formula = formula_nophoto,
                   data = dt_photo,
                   prior = pr_nophoto,
                   stanvars = stanvars_unwrap,
-                  warmup = 1000,#may be necessary 
-                  iter = 2000, #doesn't take a lot of runs
+                  warmup = wup,#may be necessary 
+                  iter = wup+sam, #doesn't take a lot of runs
                   chains = 4, # 4 chains in parallel
                   cores = 4, # on 4 CPUs
                   # control = list(adapt_delta = 0.90),
-                 refresh = 500, # echo chain progress every n iterations
-                 silent = 1, # echo some Stan messages
+                 refresh = refr, # echo chain progress every n iterations
+                 silent = siln, # echo some Stan messages
                  backend = 'cmdstanr')
   
   cglm_sunspot = brm(formula = formula_sunspot,
-                  data = dt_photo,
-                  prior = pr_nophoto,#different response, same predictors
+                  data = dt_sun,
+                  prior = pr_photo,#different response, same predictors
                   stanvars = stanvars_unwrap,
-                  warmup = 1000,#may be necessary 
-                  iter = 2000, #doesn't take a lot of runs
+                  warmup = wup,#may be necessary 
+                  iter = wup+sam, #doesn't take a lot of runs
                   chains = 4, # 4 chains in parallel
                   cores = 4, # on 4 CPUs
                   # control = list(adapt_delta = 0.90),
-                 refresh = 500, # echo chain progress every n iterations
-                 silent = 1, # echo some Stan messages
+                 refresh = refr, # echo chain progress every n iterations
+                 silent = siln, # echo some Stan messages
+                 backend = 'cmdstanr')  
+  
+  cglm_nosunspot = brm(formula = formula_nosunspot,
+                  data = dt_sun,
+                  prior = pr_nophoto,#different response, same predictors
+                  stanvars = stanvars_unwrap,
+                  warmup = wup,#may be necessary 
+                  iter = wup+sam, #doesn't take a lot of runs
+                  chains = 4, # 4 chains in parallel
+                  cores = 4, # on 4 CPUs
+                  control = list(adapt_delta = 0.90),
+                 refresh = refr, # echo chain progress every n iterations
+                 silent = siln, # echo some Stan messages
                  backend = 'cmdstanr')
   }
 )
-lapply(X = list(phototaxis = cglm_photo,
+modlist = list(phototaxis = cglm_photo,
             no_phototaxis = cglm_nophoto,
-            sunspot = cglm_sunspot),
+            sunspot = cglm_sunspot,
+            no_sunspot = cglm_nosunspot)
+lapply(X = modlist,
        FUN = summary)
+#TODO add to functions
+SumUwRhats = function(x){summary(UnwrapRhats(x))}
+#TODO check what is wrong with nosunspot
+lapply(X = modlist,
+       FUN = SumUwRhats)
+
+#calculate loo
+modlist = lapply(modlist,
+       FUN = add_criterion,
+       'loo')
+#compare the phototaxis models
+with(modlist, loo_compare(phototaxis, no_phototaxis))
+#compare the sun-spot orientation models
+with(modlist, loo_compare(sunspot, no_sunspot))
+#compare LOO IC
+LooIC = function(lmod)
+{
+  loo(lmod)$estimates['looic', 'Estimate']
+}
+
+modLIC = lapply(X = modlist,
+       FUN = LooIC)
+print(sort(unlist(modLIC)), digits = 1)
 
 ```
 ## Mean dance angles relative to the stimulus (full conditions)
