@@ -1680,7 +1680,11 @@ real kappa_mu = log1p_exp(kappamu);
 stanvars_unwrap = stan_unwrap_fun + kappamu_param
 
 #subset to just gh data
-cd_gh = subset(cd, brightn %in% 'h' & colour %in% 'g')
+cd_gh = subset(cd,
+               subset = brightn %in% 'h' & 
+                         colour %in% 'g' & 
+                         !is.na(sun_az_rad) # for fair comparison only include cases where the sun azimuth is known
+               )
 
 dt_photo = within(cd,
             {
@@ -1694,8 +1698,8 @@ dt_photo = within(cd,
 
 #TODO oops I forgot this is a huge amount of data, I'll try the full set later
 
-dt_photo = subset(dt_photo,
-                  subset = ID %in% full_ids)
+# dt_photo = subset(dt_photo,
+                  # subset = ID %in% full_ids)
 
 dt_sun = within(dt_photo,
                 {bgangle = sunangle - garden_bearing_rad}
