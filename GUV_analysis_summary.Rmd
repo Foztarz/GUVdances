@@ -1620,6 +1620,7 @@ garden_bearing_rad = rad(as.numeric(garden_bearing))
 
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
+#TODO save and load models instead of running them each time
 # Custom family --------------------------------------------------------
 #In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
