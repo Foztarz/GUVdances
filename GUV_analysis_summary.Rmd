@@ -1596,11 +1596,182 @@ cd_desc = within(cd_desc,
                  {sd_degrees = deg(circular_sd)})
 print(cd_desc,digits = 2)                  
 ```
+## Compare Sun-Spot & Phototaxis Hypotheses
 
+```{r Compare Likelihood of Phototaxis and Sun-Spot}
+# Custom family --------------------------------------------------------
+#In the "unwrap" family, all variables 
+unwrap_von_mises = custom_family(
+  "unwrap_von_mises", dpars = c("mu", "kappa"),
+  links = c('identity',#brms cannot accept custom link functions, do via nl instead
+            "softplus"), 
+  lb = c(-pi, 0),
+  ub = c(pi, NA),
+  type = "real"
+)
+
+## Stan variables 
+
+
+### Functions 
+
+stan_unwrap_fun = stanvar(scode = "
+  real unwrap_von_mises_lpdf(real y, real mu, real kappa) {
+    return von_mises_lpdf(y | mod_circular(mu), kappa);
+  }
+  real unwrap_von_mises_rng(real mu, real kappa) {
+    return von_mises_rng( mod_circular(mu) , kappa);
+  }
+  real unwrap_von_mises_vect_lpdf(vector y, real mu, real kappa) {
+    real tmp = 0;
+    for(i in 1:size(y))
+    {
+    tmp = tmp + unwrap_von_mises_lpdf(y[i] | mu, kappa);
+    }
+      return tmp;
+  }
+",
+                          block = 'functions') + 
+  stanvar(scode = "
+  real mod_circular(real y) {
+    return fmod(y + pi(), 2*pi()) - pi();
+  }
+
+  real inv_mod_circular(real y) {
+    return mod_circular(y);
+  }
+",
+          block = 'functions') 
+
+### Parameters
+
+#concentration of random effects on fixed effect on mean angle
+kappamu_param = stanvar(scode = "
+real kappamu;
+                           ",
+                            block = "parameters") + 
+  stanvar(scode = "
+real kappa_mu = log1p_exp(kappamu);
+          ", 
+          block = 'genquant')
+
+
+stanvars_unwrap = stan_unwrap_fun + kappamu_param
+
+#subset to just gh data
+cd_gh = subset(cd, brightn %in% 'h' & colour %in% 'g')
+
+dt_photo = cd = within(cd,
+            {
+              BR = brightn
+              CL = colour
+              DT = date
+              RN = run
+              sunangle = angle - sun_az_rad
+            }
+)
+
+# Model formulae
+#model assuming mean direction at 0°, with individual biases
+formula_photo = bf(
+  formula = angle ~ mu,
+            nlf(mu ~ fmu + zmu), 
+            fmu ~ 0, # fixed effects intercept == 0
+            zmu ~ 0 + ID,
+            kappa ~ 1 + (1|ID),
+  family = unwrap_von_mises,#mod mu, kappa via the softplus
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+
+#model allowing any angle
+formula_nophoto = bf(
+  formula = angle ~ mu,
+            nlf(mu ~ fmu + zmu), 
+            fmu ~ 1, # fixed effects intercept estimated
+            zmu ~ 0 + ID,
+            kappa ~ 1 + (1|ID),
+  family = unwrap_von_mises,#mod mu, kappa via the softplus
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+
+formula_sunspot = bf(
+  formula = sunangle ~ mu,
+            nlf(mu ~ fmu + zmu), 
+            fmu ~ 1, # fixed effects intercept estimated
+            zmu ~ 0 + ID,
+            kappa ~ 1 + (1|ID),
+  family = unwrap_von_mises,#mod mu, kappa via the softplus
+  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+
+# Priors
+#priors for mu
+pr_photo = 
+  set_prior(paste("target +=", 
+                  'unwrap_von_mises_vect_lpdf(b_zmu | 0, log1p_exp(kappamu))',
+                  '+ normal_lpdf(b_zmu | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+  ),
+  check = FALSE) +
+  set_prior("target += normal_lpdf(kappamu | 3.0, 3.0)", #prior to higher values, indiv differences should be small
+            check = FALSE) +
+    prior(normal(3.0,3.0), class = Intercept, dpar = 'kappa') + # bias to oriented
+  prior(student_t(3, 0, 3.0), class = sd, dpar = 'kappa')  # weak bias no differences
+
+#for models with a mean we also need an extra parameter
+pr_nophoto = pr_photo +
+  prior(normal(0,2*pi()), class = b,  nlpar = 'fmu', coef = 'Intercept')
+
+
+system.time(
+  {
+  cglm_photo = brm(formula = formula_photo,
+                  data = dt_photo,
+                  prior = pr_photo,
+                  stanvars = stanvars_unwrap,
+                  warmup = 1000,#may be necessary 
+                  iter = 2000, #doesn't take a lot of runs
+                  chains = 4, # 4 chains in parallel
+                  cores = 4, # on 4 CPUs
+                  # control = list(adapt_delta = 0.90),
+                 refresh = 500, # echo chain progress every n iterations
+                 silent = 1, # echo some Stan messages
+                 backend = 'cmdstanr')
+  
+  cglm_nophoto = brm(formula = formula_nophoto,
+                  data = dt_photo,
+                  prior = pr_nophoto,
+                  stanvars = stanvars_unwrap,
+                  warmup = 1000,#may be necessary 
+                  iter = 2000, #doesn't take a lot of runs
+                  chains = 4, # 4 chains in parallel
+                  cores = 4, # on 4 CPUs
+                  # control = list(adapt_delta = 0.90),
+                 refresh = 500, # echo chain progress every n iterations
+                 silent = 1, # echo some Stan messages
+                 backend = 'cmdstanr')
+  
+  cglm_sunspot = brm(formula = formula_sunspot,
+                  data = dt_photo,
+                  prior = pr_nophoto,#different response, same predictors
+                  stanvars = stanvars_unwrap,
+                  warmup = 1000,#may be necessary 
+                  iter = 2000, #doesn't take a lot of runs
+                  chains = 4, # 4 chains in parallel
+                  cores = 4, # on 4 CPUs
+                  # control = list(adapt_delta = 0.90),
+                 refresh = 500, # echo chain progress every n iterations
+                 silent = 1, # echo some Stan messages
+                 backend = 'cmdstanr')
+  }
+)
+lapply(X = list(phototaxis = cglm_photo,
+            no_phototaxis = cglm_nophoto,
+            sunspot = cglm_sunspot),
+       FUN = summary)
+
+```
 ## Mean dance angles relative to the stimulus (full conditions)
 
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
 We can identify phototactic orientation from the angle relative to the stimulus.
+
 
 ```{r Plot full condition dances relative to stimulus}
 par(mfrow = c(2,2), mar = c(0,0,0,0))
@@ -2200,33 +2371,78 @@ with(mod_diff_lst,
                 model = uv_hl$bestmodel)
     )
 #we can also bootstrap it
-#TODO parallelise and move to functions
-lambda_uhl = replicate(n = 1e3,
-               expr = 
-                 {
-               pr = 
-                    M5B(data = circular(
-                                        rad(
-                                          sample(unlist(mu_diff_uhl),
-                                               replace = TRUE,
-                                               size = length(mu_diff_uh))
-                                          ),
-                                        template = 'none',
-                                        zero = 0),
-                        niter = 1000
-                        )$par
-          #mod the estimates to (-pi, pi)               
-          pr[c(1,3)] = mod_circular(pr[c(1,3)])
-          #check which is to the right and return its weight
-          return(
-            if(pr[1]<pr[3])
-              {1-pr[5]}else
-              {pr[5]}
-          )
-                         }
-          )
-hist(lambda_uhl, breaks = 20, xlim = c(0,1), border = NA)
-quantile(lambda_uhl,
+lambda_uhl = BootBimod(angles = unlist(mu_diff_uhl),
+                       model = with(mod_diff_lst, uv_hl$bestmodel),
+                       speedup_parallel = TRUE,
+                       calc_q = FALSE,
+                       n = 1e3) #save all for plotting
+q_uhl = quantile(lambda_uhl,
          probs = c(0,0.5,1)+c(1,0,-1)*((1-0.95)/2)
-         )
+        )
+hist(lambda_uhl,
+     breaks = 20,
+     xlim = c(0,1),
+     border = NA,
+     probability = TRUE,
+     main = 'boostrapped M5B model',
+     xlab = 'proportion (weight) to rightmost mode'
+     )
+abline(v = 0.5,
+       lty = 2,
+       col = 'black',
+       lwd = 2)
+arrows(x0 = q_uhl[1],
+       x1 = q_uhl[3],
+       y0 = 0,
+       y1 = 0,
+       length = 0.1,
+       angle = 90,
+       code = 3,
+       lwd = 3,
+       col = 'magenta'
+       )
+points(x = q_uhl[2],
+       y = 0,
+       pch = 20,
+       col = 'magenta',
+       cex = 2)
+print(q_uhl,
+      digits = 3)
+```
+
+## Angle between the means and 0°
+
+```{r Absolute angular difference}
+abs_ang_uhl = abs(unlist(mu_diff_uhl))
+dt_ang_uhl = data.frame(betaresp = abs_ang_uhl/180)
+beta_ang_uhl = brm(bf(betaresp~1,
+                      phi~1),
+                   data = dt_ang_uhl,
+                   family = Beta(link = 'logit',
+                                 link_phi = 'log'),
+                   backend = 'cmdstanr')
+beta_ang_uhl_null = brm(bf(betaresp~0,
+                      phi~1),
+                   data = dt_ang_uhl,
+                   family = Beta(link = 'logit',
+                                 link_phi = 'log'),
+                   backend = 'cmdstanr')
+summary(beta_ang_uhl)
+loo_beta_uhl = loo(beta_ang_uhl)
+loo_beta_uhl_null = loo(beta_ang_uhl_null)
+loo_compare(loo_beta_uhl, loo_beta_uhl_null)
+
+#the distribution is concave (phi>2) in 99.9% of draws
+mean(
+  exp(
+    as_draws_df(beta_ang_uhl_null,
+                dpar = 'Intercept_phi')$Intercept_phi
+    )<2) *100
+#estimate mean angular difference
+emm_ang_uhl = emmeans(beta_ang_uhl,
+                      specs = '1')
+print(
+  summary(emm_ang_uhl,
+              type = 'response')[2:4]*180,
+  digits = 1)
 ```
