@@ -1195,6 +1195,114 @@ H1label = function(tst, d0, d1, pa)
   )
 }
 
+#bootstrap weights in a bimodal model
+BootBimod = function(angles, #vector of angles fitted (used for sample size)
+                 model = 'M5A',
+                 m1 = 'right',
+                 param = 5, #weighting of primary mean
+                 n = 1e4, #number of simulations
+                 niter = 1000,
+                 calc_q = TRUE,
+                 interval = 0.95, #confidence interval to calculate
+                 speedup_parallel = TRUE
+)
+{
+    rad_angles = rad(as.numeric(angles))
+    Estfun = function(ang = rad_angles,
+                      model = model,
+                      niter = niter)
+    {  
+        pr = suppressWarnings(
+          Exec( str2expression(
+          paste0(
+            model, '(data = circular(
+                        
+                          sample(ang,
+                                 replace = TRUE,
+                                 size = length(ang)
+                        ),
+                        template = "none",
+                        zero = 0),
+                        niter = ', niter,')$par'
+          )
+        ) ) )
+    #mod the estimates to (-pi, pi)               
+    pr[c(1,3)] = mod_circular(pr[c(1,3)])
+    #find the mode of interest
+    pr[5] = switch(EXPR = m1,
+                   right =  if(pr[1]<pr[3]) # rightmost
+                               {1-pr[5]}else
+                               {pr[5]},
+                   left =  if(pr[1]>pr[3]) # leftmost
+                               {1-pr[5]}else
+                               {pr[5]},
+                   max = max(pr[5], 1-pr[5]), # largest proportion
+                   pr[5] # original
+                   )
+    #return the parameter of interest
+    return(pr[param])
+  }
+  if(speedup_parallel) #3x faster
+  {
+    
+                                        
+    cl = parallel::makePSOCKcluster(parallel::detectCores()-1)
+    parallel::clusterExport(cl = cl, 
+                            varlist = c(model,
+                                        
+                                        'circular',
+                                        'mod_circular'),
+                            envir = .GlobalEnv
+    )
+    parallel::clusterExport(cl = cl, 
+                            varlist = c('rad_angles',
+                                        'model',
+                                        'niter'),
+                            envir = environment()
+    )
+    #bootstrap the parameter
+    pr_est = 
+      parallel::parSapply(cl = cl,
+                          X = 1:n,
+                          FUN = function(i)
+                          {
+                            eval.parent(
+                              {
+                                Estfun(ang = rad_angles,
+                                       model = model,
+                                       niter = niter)
+                              }
+                            )
+                          },
+                          simplify = 'array' #return an array of simulated values
+      )
+    parallel::stopCluster(cl)
+  }else
+  {
+    pr_est = sapply(X = 1:n,
+    FUN = function(i)
+    {
+      eval.parent(
+        {
+          Estfun(ang = rad_angles,
+                 model = model,
+                 niter = niter)
+        }
+      )
+    },
+    simplify = TRUE #return an array of simulated values
+    )
+  }
+    return( if(calc_q)
+    {
+      quantile(pr_est,
+               probs = c(0,0.5,1)+c(1,0,-1)*((1-interval)/2)
+      )
+    }else
+    {pr_est}
+            )
+}
+
 
 # Extract model summaries -------------------------------------------------
 ART_extract = function(mod,
