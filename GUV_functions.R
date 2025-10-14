@@ -371,6 +371,7 @@ PCfun = function(angles,
                  col,
                  shrink = 1.5,
                  title = '',
+                 plot_rho = TRUE,
                  side = 1)
 {
   ca = circular(x = angles,
@@ -391,12 +392,15 @@ PCfun = function(angles,
   lines(x = c(0,0),
         y = c(-1,1),
         col = 'gray')
+  if(plot_rho)
+  {
   arrows.circular(x = mean.circular(ca),
                   y = rho.circular(ca),
                   zero = pi/2,
                   rotation = 'clock',
                   col = col,
                   length =0.1)
+  }
 }
 
 
