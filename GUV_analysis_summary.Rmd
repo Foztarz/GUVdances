@@ -525,7 +525,7 @@ One approach is to use the beta distribution, which is defined between (but not 
 ### Beta model for accuracy
 
 ```{r Set up priors for a Bayesian beta model}
-
+#TODO remove unnecessary priors
 ### Maximal formula with all random effects ---------------------
 #set up model formula with indiv effects on light type
 frm_bmod_maxRE = bf(mean_vector~brightn*colour + # light types affect accuracy
@@ -1200,7 +1200,7 @@ Fit a psychometric model to the data using the nonlinear formula and specified p
 #parameters for the brms runs
 wup = 2000
 sam = 2000
-refr = 500
+refr = 0
 system.time(
   {
     beta_fit = brm( formula = formula_beta, # using our nonlinear formula
@@ -1609,8 +1609,10 @@ require(geosphere)#TODO move to functions
 
 hive_coords  =  c(longitude  = 8.811333,
                  latitude = 50.806306)
-garden_coords = c(longitude  = 8.806694,
-                  latitude = 50.800917)
+# garden_coords = c(longitude  = 8.806694,
+#                   latitude = 50.800917) # flower beds
+garden_coords = c(longitude  = 8.809010,
+                  latitude = 50.802586) #centre
 garden_bearing = bearing(hive_coords, garden_coords)
 #standard bearing
 print(garden_bearing %% 360)
@@ -1621,6 +1623,7 @@ garden_bearing_rad = rad(as.numeric(garden_bearing))
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
 #TODO save and load models instead of running them each time
+load_model = FALSE
 # Custom family --------------------------------------------------------
 #In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
@@ -1687,7 +1690,7 @@ cd_gh = subset(cd,
                          !is.na(sun_az_rad) # for fair comparison only include cases where the sun azimuth is known
                )
 
-dt_photo = within(cd,
+dt_photo = within(cd_gh,
             {
               BR = brightn
               CL = colour
@@ -1700,7 +1703,7 @@ dt_photo = within(cd,
 #TODO oops I forgot this is a huge amount of data, I'll try the full set later
 
 # dt_photo = subset(dt_photo,
-                  # subset = ID %in% full_ids)
+#                   subset = ID %in% full_ids)
 
 dt_sun = within(dt_photo,
                 {bgangle = sunangle - garden_bearing_rad}
@@ -1766,12 +1769,13 @@ pr_nophoto = pr_photo +
 #parameters for the brms runs
 wup = 1000
 sam = 1000
-refr = 500
-siln = 1
-#TODO for knitting set silent to 0
+refr = 0
+siln = 0
 
-#these are pretty slow!
-system.time(
+#these are pretty slow! About 7 minutes in total
+if(load_model)
+{ load(file = '1Data/phototaxis_modlist.RData')
+}else
   {
   cglm_photo = brm(formula = formula_photo,
                   data = dt_photo,
@@ -1784,6 +1788,7 @@ system.time(
                   # control = list(adapt_delta = 0.90),
                  refresh = refr, # echo chain progress every n iterations
                  silent = siln, # echo some Stan messages
+                  save_pars = save_pars(all = TRUE), # <--- Crucial for moment matching
                  backend = 'cmdstanr')
   
   cglm_nophoto = brm(formula = formula_nophoto,
@@ -1797,6 +1802,7 @@ system.time(
                   # control = list(adapt_delta = 0.90),
                  refresh = refr, # echo chain progress every n iterations
                  silent = siln, # echo some Stan messages
+                  save_pars = save_pars(all = TRUE), # <--- Crucial for moment matching
                  backend = 'cmdstanr')
   
   cglm_sunspot = brm(formula = formula_sunspot,
@@ -1810,6 +1816,7 @@ system.time(
                   # control = list(adapt_delta = 0.90),
                  refresh = refr, # echo chain progress every n iterations
                  silent = siln, # echo some Stan messages
+                  save_pars = save_pars(all = TRUE), # <--- Crucial for moment matching
                  backend = 'cmdstanr')  
   
   cglm_nosunspot = brm(formula = formula_nosunspot,
@@ -1823,25 +1830,51 @@ system.time(
                   control = list(adapt_delta = 0.90),
                  refresh = refr, # echo chain progress every n iterations
                  silent = siln, # echo some Stan messages
+                  save_pars = save_pars(all = TRUE), # <--- Crucial for moment matching
                  backend = 'cmdstanr')
-  }
-)
+#combine into a single list
 modlist = list(phototaxis = cglm_photo,
             no_phototaxis = cglm_nophoto,
             sunspot = cglm_sunspot,
             no_sunspot = cglm_nosunspot)
-lapply(X = modlist,
+  }
+#summarise
+suppressWarnings({ #for circular models rhats may be smaller than they appear
+sm_modlist = lapply(X = modlist,
        FUN = summary)
+})
+Sm_only = function(x,
+                   type = 'fixed',
+                   var = 'kappa_Intercept')
+{
+  x[[type]][var,]
+}
+
+#average kappa
+print(lapply(X = sm_modlist, Sm_only), digits = 3 )
+#across individuals kappa
+print(lapply(X = sm_modlist, Sm_only, type = 'spec_pars', var = 'kappa_mu'), digits = 3 )
 #TODO add to functions
-SumUwRhats = function(x){summary(UnwrapRhats(x))}
+SumUwRhats = function(x, var = NULL){summary(UnwrapRhats(x, variable = var))}
+#check population means
+lapply(X = modlist[c(2,4)],
+       FUN = UnwrapRhats,
+       variable = '^b_fmu')
 #TODO check what is wrong with nosunspot
 lapply(X = modlist,
        FUN = SumUwRhats)
 
 #calculate loo
+if(!load_model)
+{
 modlist = lapply(modlist,
        FUN = add_criterion,
-       'loo')
+       'loo',
+       moment_match = TRUE)
+
+save(modlist,
+     file = '1Data/phototaxis_modlist.RData')
+}
 #compare the phototaxis models
 with(modlist, loo_compare(phototaxis, no_phototaxis))
 #compare the sun-spot orientation models
@@ -1857,6 +1890,72 @@ modLIC = lapply(X = modlist,
 print(sort(unlist(modLIC)), digits = 1)
 
 ```
+
+```{r plot sunspot hypothesis tests}
+par(mfrow = c(1,2),
+    mar = c(0,0,0,0))
+PCfun(angles = subset(mean_vectors, 
+                      subset = colour %in% 'g' &
+                                brightn %in% 'h' &
+                                !is.na(sun_az))$mu,
+      col = 'green',
+      shrink = 1.5,
+      plot_rho = FALSE,
+      title = '\nRelative to stimulus')
+with(as_draws_df(modlist$phototaxis), 
+     arrows(x0 = 0, x1 = 0,
+            y0 = 0, 
+            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept))),
+            col = 'orange',
+            lwd = 2,
+            length = 0.1
+            )
+)
+with(as_draws_df(modlist$no_phototaxis), 
+     arrows(x0 = 0,
+            x1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+              sin(median(mod_circular(b_fmu_Intercept))),
+            y0 = 0, 
+            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+              cos(median(mod_circular(b_fmu_Intercept))),
+            col = 'red',
+            lwd = 2,
+            length = 0.1
+            )
+)
+PCfun(angles = unlist(sun_diff_gh),
+      col = 'green',
+      shrink = 1.5,
+      plot_rho = FALSE,
+      title = '\nRelative to North')
+with(as_draws_df(modlist$sunspot), 
+     arrows(x0 = 0,
+            x1 = (1/1.5)*
+              A1(softplus(median(b_kappa_Intercept)))*
+              cos(garden_bearing_rad),
+            y0 = 0, 
+            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+              cos(garden_bearing_rad),
+            col = 'orange',
+            lwd = 2,
+            length = 0.1
+            )
+)
+with(as_draws_df(modlist$no_sunspot), 
+     arrows(x0 = 0,
+            x1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+              sin(median(mod_circular(b_fmu_Intercept+garden_bearing_rad))),
+            y0 = 0, 
+            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+              cos(median(mod_circular(b_fmu_Intercept+garden_bearing_rad))),
+            col = 'red',
+            lwd = 2,
+            length = 0.1
+            )
+)
+```
+
+
 ## Mean dance angles relative to the stimulus (full conditions)
 
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
