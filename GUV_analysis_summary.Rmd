@@ -137,7 +137,9 @@ summary(mruns$run)
 ## Plot the raw dance data
 
 ### Plot an example individual to show effect
+
 For example we can look at the dance recorded on 2016.06.20 at 13:17.
+
 ```{r, example from 2016.06.20.13.17}
 ii = '2016.06.20.13.17'
 #set up a sequence for the axes
@@ -221,6 +223,7 @@ mtext(ii,side = 3,line = -2)
 ```
 
 ### Plot all
+
 Plot all 169 dances
 
 ```{r Raw dances, echo=FALSE, warning=FALSE}
@@ -442,8 +445,11 @@ invisible(
   })
 abline(h = c(0,1))
 ```
+
 ### Plot an example individual to show effect
+
 For example we can look at the dance recorded on 2016.06.20 at 13:17.
+
 ```{r, subset by 2016.06.20.13.17}
 example_subs = subset(x = cd,
                       ID %in% '2016.06.20.13.17')
@@ -469,6 +475,7 @@ PCfun(angles = subset(example_subs,
       shrink = 1.5,
       title = 'UV Dim')
 ```
+
 For this individual orientation is at a fixed angle to the light source ($0°$), but changes in consistency (green, dim), mean direction and bimodality (UV, dim) in response to changes in light source.
 
 ### Non-parametric tests on accuracy
@@ -1601,8 +1608,13 @@ cd_desc = within(cd_desc,
                  {sd_degrees = deg(circular_sd)})
 print(cd_desc,digits = 2)                  
 ```
+
 ## Compare Sun-Spot & Phototaxis Hypotheses
-It is likely that a plurality of dancers had visited locations in the Marburg Botanic Gardens, perhaps in the centre of the main growing area (50°48'03.3"N 8°48'24.1"E). The hive is at 50°48'22.7"N 8°48'40.8"E. That would give the following bearing:
+
+It is likely that a plurality of dancers had visited locations in the Marburg Botanic Gardens, perhaps in the centre of the main growing area (50°48'03.3"N 8°48'24.1"E).
+The hive is at 50°48'22.7"N 8°48'40.8"E.
+That would give the following bearing:
+
 ```{r Calculate the bearing of the Botanic Gardens}
 require(geosphere)#TODO move to functions
 # Define the coordinates
@@ -1619,7 +1631,6 @@ print(garden_bearing %% 360)
 
 garden_bearing_rad = rad(as.numeric(garden_bearing))
 ```
-
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
 #TODO save and load models instead of running them each time
@@ -1955,12 +1966,10 @@ with(as_draws_df(modlist$no_sunspot),
 )
 ```
 
-
 ## Mean dance angles relative to the stimulus (full conditions)
 
 Since dances do not point to a specific geographic location, it is possible that they advertise a variety of directions relative to the sun, or are not menotactic but phototactic or uniformly oriented.
 We can identify phototactic orientation from the angle relative to the stimulus.
-
 
 ```{r Plot full condition dances relative to stimulus}
 par(mfrow = c(2,2), mar = c(0,0,0,0))
