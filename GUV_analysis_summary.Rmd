@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~10~15$
+> James Foster $2025~10~16$
 
 > **DESCRIPTION**
 >
@@ -56,6 +56,7 @@ editor_options:
 > -   move necessary functions to GUV_functions
 > -   move raw data to end
 > -   make functions for result extraction from BRMS
+> -   neaten up priors for BRMS models
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -1021,8 +1022,12 @@ loo_compare(loo_beta, loo_ele)
 
 ### Comparison with Edrich *et al.* (1979)
 
-How does this compare with previous experiments in which a light spot (x°) was presented through bandpass filters and ND filters to produce different intensities?
-In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length).
+How does this compare with previous experiments in which a light spot (2.3°) was presented through bandpass filters and ND filters to produce different intensities?
+In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length). They mention that the particular relationship with light intensity was variable, but that the relative relationships remained constant, so we may also observe the same relationship but shifted.
+
+> Unfortunately, the scatter of the dance directions as a function of light intensity proved to be unstable over long periods of time; the absolute values changed from day to day.
+> However, these changes were such that curves for adjacent wavelengths were shifted in parallel - the relative sensitivities remained constant.
+> --- Edrich et al. (1979), p154
 
 #### Plot raw data from Edrich *et al.* (1979) Fig. 2
 
@@ -1447,13 +1452,8 @@ legend(x = 'bottomright',
 
 It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light.
 In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun.
-In Kühn's data the stimuli were smaller (assuming a viewing distance of ≈200mm, an SMD with diameter 3.5mm would appear $deg(2*atan2(y = 3.5/2,x = 200)) =$ 1.0° across) than Edrich's (2.3°), which may have resulted in them being perceived as dimmer (left shift in this graph).
-Edrich $et~al.$ (1979) mention that the particular relationship with light intensity was variable.
-They also mention that the relative relationships remained constant, so we may also observe the same relationship but right shifted.
+In Kühn's data the stimuli were larger (assuming  $10°$ across) than Edrich's ($2.3°$), which may have resulted in them being perceived as dimmer (left shift in this graph).
 
-> Unfortunately, the scatter of the dance directions as a function of light intensity proved to be unstable over long periods of time; the absolute values changed from day to day.
-> However, these changes were such that curves for adjacent wavelengths were shifted in parallel - the relative sensitivities remained constant.
-> --- Edrich et al. (1979), p154
 
 # Sun compass orientation
 
@@ -1623,13 +1623,30 @@ hive_coords  =  c(longitude  = 8.811333,
                  latitude = 50.806306)
 # garden_coords = c(longitude  = 8.806694,
 #                   latitude = 50.800917) # flower beds
-garden_coords = c(longitude  = 8.809010,
-                  latitude = 50.802586) #centre
-garden_bearing = bearing(hive_coords, garden_coords)
+#centre according to google 50.802605, 8.809097
+# left according to openstreetmap 50.802721, 8.806807
+
+
+
+garden_coords = list(left = 
+                       c(longitude  = 8.806807,
+                         latitude = 50.802721),
+                     centre = 
+                       c(longitude  = 8.809097,
+                         latitude = 50.802605),
+                     right = 
+                       c(longitude  = 8.811926,
+                         latitude = 50.803182)
+                     )
+                     
+garden_bearing = sapply(garden_coords, 
+                        FUN = bearing, 
+                        p1 = hive_coords
+                        )
 #standard bearing
 print(garden_bearing %% 360)
 
-garden_bearing_rad = rad(as.numeric(garden_bearing))
+garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 ```
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
@@ -1707,7 +1724,7 @@ dt_photo = within(cd_gh,
               CL = colour
               DT = date
               RN = run
-              sunangle = angle - sun_az_rad
+              sunangle = angle + sun_az_rad
             }
 )
 
@@ -1768,7 +1785,7 @@ pr_photo =
                   '+ normal_lpdf(b_zmu | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
-  set_prior("target += normal_lpdf(kappamu | 3.0, 3.0)", #prior to higher values, indiv differences should be small
+  set_prior("target += normal_lpdf(kappamu | 1.0, 3.0)", #prior to lower values, indiv differences should be large
             check = FALSE) +
     prior(normal(3.0,3.0), class = Intercept, dpar = 'kappa') + # bias to oriented
   prior(student_t(3, 0, 3.0), class = sd, dpar = 'kappa')  # weak bias no differences
@@ -1901,8 +1918,106 @@ modLIC = lapply(X = modlist,
 print(sort(unlist(modLIC)), digits = 1)
 
 ```
+```{r ROPE hypothesis test}
+#since all models are similarly credible, what about the hypotheses?
+#check if the sector surrounding the expected direction is equally full
+
+# bayestestR::rope(x = modlist$no_phototaxis,
+#                  range = c(-1,1)*pi/4,
+#                  parameters = 'fixed_fmu',
+#                  effects = 'all',
+#                  verbose = FALSE)
+# bayestestR::rope(x = modlist$no_sunspot,
+#                  range = garden_bearing_rad+c(-1,1)*pi/4,
+#                  parameters = 'fmu_Intercept',
+#                  effects = 'all',
+#                  verbose = FALSE)
+dr_modlist = lapply(modlist,
+                    as_draws_df)
+#for each individual, calculate the likelihood of foragind in the expected region
+
+PostROPE = function(id, rope, drs, mu = 'b_fmu_Intercept')
+{
+  mu = if(!is.na(mu)){with(drs, get(mu))}else{0}
+  dr_id = with(drs,
+               {
+               mod_circular(
+                 mu +
+                  get(paste0('b_zmu_ID', id)
+                            )
+               )
+               }
+              )
+  #centre both
+  circ_rope = circular(rope, template = 'none')
+  circ_dr = circular(dr_id, template = 'none')
+  mean_rope = mean.circular(circ_rope)
+  rope_ctr = as.numeric(mod_circular(circ_rope - mean_rope))
+  dr_ctr = as.numeric(mod_circular(dr_id - mean_rope))
+  postp = mean( rope_ctr[1] < dr_id &
+                dr_id  < rope_ctr[2])
+  return(postp)
+}
+
+photo_id = unique(dt_photo$ID)
+
+#width of sector
+rope_width = abs(mod_circular(rad(diff(garden_bearing[-2])))) # 35°
+rope_photo = c(-1,1)*rope_width/2
+rope_sunspot = sort( mod_circular(rad(garden_bearing[-2] - garden_bearing[2])) )
+
+postl_nophoto  = sapply(X = photo_id,
+       FUN = PostROPE,
+       rope = rope_photo,
+       drs = dr_modlist$no_phototaxis
+       )
+postl_photo  = sapply(X = photo_id,
+       FUN = PostROPE,
+       rope = rope_photo,
+       mu = NA,
+       drs = dr_modlist$phototaxis
+       )
+
+postl_nosunspot  = sapply(X = photo_id,
+       FUN = PostROPE,
+       rope = rope_sunspot, # relative to centre as in model
+       drs = dr_modlist$no_sunspot
+       )
+postl_sunspot  = sapply(X = photo_id,
+       FUN = PostROPE,
+       rope = rope_sunspot, # relative to centre as in model
+       drs = dr_modlist$sunspot,
+       mu = NA
+       )
+
+postl_dt = data.frame(phototaxis = postl_photo,
+                      no_phototaxis = postl_nophoto,
+                     sunspot = postl_sunspot, 
+                     no_sunspot = postl_nosunspot, 
+                     contrast = postl_sunspot - 
+                                 postl_photo)
+
+stripchart(x = postl_dt,
+           vertical = TRUE,
+           method = 'jitter',
+           pch = 19,
+           ylab = 'Individual posterior likelihood',
+           main = 'comparison: likelihood in region of interest',
+           col = c('green','green3', 'orange','orange3', 'gray')
+           )
+boxplot(x = postl_dt,
+        add = TRUE,
+        col = gray(0.5, alpha = 0.2),
+        border = 'gray25',
+         pars = list(boxwex = 0.3, staplewex = 0.2, outwex = 0.1),
+        outline = FALSE
+         )
+abline(h = 0)
+```
 
 ```{r plot sunspot hypothesis tests}
+#extract draws
+
 par(mfrow = c(1,2),
     mar = c(0,0,0,0))
 PCfun(angles = subset(mean_vectors, 
@@ -1913,57 +2028,192 @@ PCfun(angles = subset(mean_vectors,
       shrink = 1.5,
       plot_rho = FALSE,
       title = '\nRelative to stimulus')
-with(as_draws_df(modlist$phototaxis), 
+with(dr_modlist$phototaxis, 
      arrows(x0 = 0, x1 = 0,
             y0 = 0, 
-            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept))),
+            y1 = #A1(softplus(median(b_kappa_Intercept)))
+              A1(softplus(median(kappamu))),
             col = 'orange',
-            lwd = 2,
+            lwd = 5,
             length = 0.1
             )
 )
+# Draws2Cont(dr_modlist$no_phototaxis,
+#            x_string = paste0('sin(',
+#                              'b_fmu_Intercept',
+#                              ')*',
+#                              'A1(softplus(',
+#                              'b_kappa_Intercept',
+#                              '))'),
+#            y_string = paste0('cos(',
+#                              'b_fmu_Intercept',
+#                              ')*',
+#                              'A1(softplus(',
+#                              'b_kappa_Intercept',
+#                              '))'),
+#            palette = 'Grays'
+# )
+
+
 with(as_draws_df(modlist$no_phototaxis), 
      arrows(x0 = 0,
-            x1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+            x1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
               sin(median(mod_circular(b_fmu_Intercept))),
             y0 = 0, 
-            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+            y1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
               cos(median(mod_circular(b_fmu_Intercept))),
-            col = 'red',
-            lwd = 2,
+            col = 'green3',
+            lwd = 5,
             length = 0.1
             )
 )
-PCfun(angles = unlist(sun_diff_gh),
+arrows(x0 = c(0,0),
+       x1 = sin(c(-1,1)*rope_width/2),
+       y0 = c(0,0),
+       y1 = cos(c(-1,1)*rope_width/2),
+       col = 'orange',
+       lty = 2,
+       length = 0,
+       lwd = 5
+       )
+for(id in unique(dt_photo$ID))
+{
+  with(as_draws_df(modlist$no_phototaxis), 
+       arrows(x0 = 0,
+              x1 = A1(softplus(median(
+                    b_kappa_Intercept + 
+                    get(paste0('r_ID__kappa[',id,',Intercept]'))
+                                              )))*
+                sin(median(mod_circular(
+                  b_fmu_Intercept +
+                                          get(paste0('b_zmu_ID', id))
+                                        ))),
+              y0 = 0, 
+              y1 = A1(softplus(median(
+                    b_kappa_Intercept +
+                    get(paste0('r_ID__kappa[',id,',Intercept]')))))*
+                cos(median(mod_circular(
+                  b_fmu_Intercept +
+                                          get(paste0('b_zmu_ID', id))
+                                        ))),
+              col = adjustcolor('green4',alpha = 0.5),
+              lwd = 0.5,
+              length = 0
+              )
+  )
+}
+legend(x = 'topleft',
+       legend = c('expected mean',
+                  'expected region',
+                  'alternative mean', 
+                  'individual biases' 
+                  ),
+       col = c('orange',
+               'orange',
+               'green3',
+               'green4'
+               ),
+       lty = c(1,3,1,1),
+       lwd = c(3,3,3,1),
+       cex = 0.5,
+       bg = NA,
+       inset = c(0, 0)
+       )
+
+
+
+PCfun(angles = with(subset(mean_vectors, 
+                      subset = colour %in% 'g' &
+                                brightn %in% 'h' &
+                                !is.na(sun_az)), 
+                    mu + sun_az),
       col = 'green',
       shrink = 1.5,
       plot_rho = FALSE,
       title = '\nRelative to North')
 with(as_draws_df(modlist$sunspot), 
      arrows(x0 = 0,
-            x1 = (1/1.5)*
-              A1(softplus(median(b_kappa_Intercept)))*
-              cos(garden_bearing_rad),
+            x1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
+              sin(garden_bearing_rad),
             y0 = 0, 
-            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
+            y1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
               cos(garden_bearing_rad),
             col = 'orange',
-            lwd = 2,
+            lwd = 5,
             length = 0.1
             )
 )
 with(as_draws_df(modlist$no_sunspot), 
      arrows(x0 = 0,
-            x1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
-              sin(median(mod_circular(b_fmu_Intercept+garden_bearing_rad))),
+            x1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
+              sin(median(mod_circular(b_fmu_Intercept+garden_bearing_rad                                         ))),
             y0 = 0, 
-            y1 = (1/1.5)*A1(softplus(median(b_kappa_Intercept)))*
-              cos(median(mod_circular(b_fmu_Intercept+garden_bearing_rad))),
-            col = 'red',
-            lwd = 2,
+            y1 = #A1(softplus(median(b_kappa_Intercept)))*
+              A1(softplus(median(kappamu)))*
+              cos(median(mod_circular(b_fmu_Intercept+garden_bearing_rad 
+                                        ))),
+            col = 'green3',
+            lwd = 5,
             length = 0.1
             )
 )
+arrows(x0 = c(0,0),
+       x1 = sin(rad(garden_bearing[-2])),
+       y0 = c(0,0),
+       y1 = cos(rad(garden_bearing[-2])),
+       col = 'orange',
+       lty = 2,
+       length = 0,
+       lwd = 5
+       )
+for(id in unique(dt_photo$ID))
+with(as_draws_df(modlist$no_sunspot), 
+     arrows(x0 = 0,
+            x1 = A1(softplus(median(
+                    b_kappa_Intercept + 
+                    get(paste0('r_ID__kappa[',id,',Intercept]')))))*
+              sin(median(mod_circular(
+                b_fmu_Intercept+
+                garden_bearing_rad +
+                                          get(paste0('b_zmu_ID', id))
+                                        ))),
+            y0 = 0, 
+            y1 = A1(softplus(median(
+                    b_kappa_Intercept + 
+                    get(paste0('r_ID__kappa[',id,',Intercept]')))))*
+              cos(median(mod_circular(
+                b_fmu_Intercept+
+                  garden_bearing_rad +
+                                          get(paste0('b_zmu_ID', id))
+                                        ))),
+            col = adjustcolor('green4',alpha = 0.5),
+            lwd = 0.5,
+            length = 0
+            )
+)
+# Draws2Cont(dr_modlist$no_sunspot,
+#            alpha = 100/255,
+#            x_string = paste0('sin(',
+#                              'b_fmu_Intercept+garden_bearing_rad',
+#                              ')*',
+#                              'A1(softplus(',
+#                              'b_kappa_Intercept',
+#                              '))'),
+#            y_string = paste0('cos(',
+#                              'b_fmu_Intercept+garden_bearing_rad',
+#                              ')*',
+#                              'A1(softplus(',
+#                              'b_kappa_Intercept',
+#                              '))'),
+#            palette = 'Grays'
+# )
+
+
 ```
 
 ## Mean dance angles relative to the stimulus (full conditions)
