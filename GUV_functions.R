@@ -424,12 +424,15 @@ SunDiff = function(id, dt, cl, br)
   with(
     subset(dt,
            ID %in% id),
+    if(all(!is.na(sun_az)))
+    {
     deg(
       mod_circular(
         rad(mu[colour %in% cl & brightn %in% br] +  
               unique(sun_az) ) # sun azimuth in degrees
       )
     )
+    }else{NULL}
   )
 }
 
