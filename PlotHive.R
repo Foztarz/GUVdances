@@ -5,7 +5,7 @@ library(leaflet)
 
 # 1. Define the coordinates
 hive_coords   = c(longitude = 8.811333, latitude = 50.806306)
-garden_coords = c(longitude  = 8.809010, latitude = 50.802586) #centre
+garden_coords = c(longitude  = 8.809097, latitude = 50.802605) #centre
 
 
 # 2. Combine the data into a data frame
@@ -39,4 +39,8 @@ leaflet(data = locations_df) %>%
     lat   = locations_df$Lat,
     color = "red",
     weight = 2
+  ) %>% addScaleBar(
+    position = c("bottomright"),
+    options = scaleBarOptions(metric = TRUE,
+                              imperial = FALSE)
   )
