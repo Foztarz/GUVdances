@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 10 07
-#     MODIFIED:	James Foster              DATE: 2025 10 09
+#     MODIFIED:	James Foster              DATE: 2025 10 17
 #
 #  DESCRIPTION: Attempt build a no predictors mixture model using BRMS and Stan.
 #               Modified from GUV_CircMod_mixture.R, which is currently converging poorly
@@ -307,7 +307,7 @@ pr_mu_mix =
                   '+ normal_lpdf(b_zmu1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
   ),
   check = FALSE) +
-  set_prior("target += normal_lpdf(kappamu1 | 3.0, 3.0)", #prior to higher values, indiv differences should be small
+  set_prior("target += normal_lpdf(kappamu1 | 3.0, 3.0)", #prior to lower values, indiv differences could be large
             check = FALSE) + 
   set_prior(paste("target +=", 
                   'unwrap_von_mises_vect_lpdf(b_zmu2 | 0, log1p_exp(kappamu1 + kappamu2))',
@@ -416,6 +416,75 @@ lc_unimix = loo_compare(loo_uni, loo_mix)
 print(lc_unimix)
 #the mixture model has higher predictive power
 pnorm(q = lc_unimix[2,1], sd = lc_unimix[2,2],lower.tail = FALSE)
+
+
+### Plot model comparison ------------------------------------------------
+lc_plot = data.frame(elpd = c(loo_uni$estimates['elpd_loo','Estimate'],
+                              loo_mix$estimates['elpd_loo','Estimate'],
+                              loo_uni$estimates['elpd_loo','Estimate'] - lc_unimix[2,'elpd_diff']),
+                     se = c(loo_uni$estimates['elpd_loo','SE'],
+                            loo_mix$estimates['elpd_loo','SE'],
+                            lc_unimix[2,'se_diff'])
+)
+
+par(mar = c(0,4,0,4),
+    mfrow = c(1,1))
+plot(x = 1:dim(lc_plot)[1],
+     y = lc_plot$elpd,
+     xlab = '',
+     ylab = 'expected log predictive density',
+     xlim = c(1,dim(lc_plot)[1]) + c(-1,1)*0.5,
+     ylim = with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}), #within 2sigma of all estimates
+     pch = 19,
+     col = c('darkred', 'darkblue', 'gray35'),
+     cex = 2,
+     axes = FALSE)
+with(lc_plot,
+     {
+       arrows(x0 = 1:dim(lc_plot)[1],
+              x1 = 1:dim(lc_plot)[1],
+              y0 = elpd - se,
+              y1 = elpd + se,
+              code = 3,
+              angle = 90,
+              length = 0.1,
+              lwd = 3,
+              col =   c('darkred', 'darkblue', 'gray35')
+       )
+     }
+)
+axis(2,
+     at = pretty(c(lc_plot$elpd,
+                   with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}))
+     )
+)
+axis(4,
+     at = with(lc_plot,
+               {
+                 seq(from = elpd[1], to = elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4, by = 100)
+               }
+     ),
+     labels = with(lc_plot,
+                   {
+                     seq(from = 0, to =  elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4 - elpd[1],  by = 100)
+                   }
+     )
+)
+abline(h = lc_plot$elpd[1],
+       col = 'gray')
+mtext(text = 'ELPD difference',
+      side = 4,
+      line = 3
+)
+mtext(side = 1,
+      line = -1,
+      at = 1:dim(lc_plot)[1],
+      text = c('unimodal\nmodel',
+               'bimodal\nmodel',
+               'difference'),
+      col = c('darkred', 'darkblue', 'gray35')
+)
+
 
 ## Plot coefficients -----------------------------------------------------
 
