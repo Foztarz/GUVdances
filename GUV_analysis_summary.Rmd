@@ -1651,7 +1651,7 @@ garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
 #TODO save and load models instead of running them each time
-load_model = FALSE
+load_model = TRUE
 # Custom family --------------------------------------------------------
 #In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
@@ -1934,7 +1934,7 @@ print(sort(unlist(modLIC)), digits = 1)
 #                  verbose = FALSE)
 dr_modlist = lapply(modlist,
                     as_draws_df)
-#for each individual, calculate the likelihood of foragind in the expected region
+#for each individual, calculate the likelihood of foraging in the expected region
 
 PostROPE = function(id, rope, drs, mu = 'b_fmu_Intercept')
 {
@@ -2014,11 +2014,14 @@ boxplot(x = postl_dt,
          )
 abline(h = 0)
 ```
+It is hard to say for the individuals whether the majority  orient towards the sector containing the Botanic Garden, or a similar sized sector containing the stimulus. What we can say is that the population average falls directly towards the Botanic Garden centre in real-world bearings, while the population average relative to the light source has a leftwards bias.
 
 ```{r plot sunspot hypothesis tests}
-#extract draws
+with(dr_modlist$no_phototaxis, paste0(mean(b_fmu_Intercept > 0)*100, '%') ) #nearly all estimates suggest a leftwards bias
+with(dr_modlist$no_sunspot, paste0(mean(b_fmu_Intercept > 0)*100, '%') ) #there is notable overlap between the high-density posterior and centre of Botanic Gardens.
 
-par(mfrow = c(1,2),
+par(pty = 's')
+par(mfrow = c(2,2),
     mar = c(0,0,0,0))
 PCfun(angles = subset(mean_vectors, 
                       subset = colour %in% 'g' &
@@ -2055,7 +2058,9 @@ with(dr_modlist$phototaxis,
 # )
 
 
-with(as_draws_df(modlist$no_phototaxis), 
+
+
+with(dr_modlist$no_phototaxis, 
      arrows(x0 = 0,
             x1 = #A1(softplus(median(b_kappa_Intercept)))*
               A1(softplus(median(kappamu)))*
@@ -2080,7 +2085,7 @@ arrows(x0 = c(0,0),
        )
 for(id in unique(dt_photo$ID))
 {
-  with(as_draws_df(modlist$no_phototaxis), 
+  with(dr_modlist$no_phototaxis, 
        arrows(x0 = 0,
               x1 = A1(softplus(median(
                     b_kappa_Intercept + 
@@ -2119,8 +2124,11 @@ legend(x = 'topleft',
        lwd = c(3,3,3,1),
        cex = 0.5,
        bg = NA,
+       bty = 'n',
        inset = c(0, 0)
        )
+
+
 
 
 
@@ -2212,6 +2220,93 @@ with(as_draws_df(modlist$no_sunspot),
 #                              '))'),
 #            palette = 'Grays'
 # )
+
+par(mar = c(0,3,0,0))
+
+with(dr_modlist$no_phototaxis,
+     {
+      VertHist(data = deg(b_fmu_Intercept), 
+         main = '\nmean angle',
+         ylab = 'model estimates',
+         ylim = c(-45, 15),
+         col = adjustcolor('green3', alpha.f = 100/255),
+         cex.axis = 0.7)
+       abline(h = 0,
+       col = 'orange',
+       lwd = 7)
+       arrows(x0 = 0, x1 = 0,
+              y0 = quantile(deg(b_fmu_Intercept), p = 0.025),
+              y1 = quantile(deg(b_fmu_Intercept), p = 1-0.025),
+              col = 'green4',
+              lwd = 5,
+              code = 3,
+              length = 0.05,
+              angle = 90)
+     }
+       )
+
+legend(x = 'bottomright',
+       legend = c('stimulus angle',
+                  '95% CI' 
+                  ),
+       col = c('orange',
+               'green4'
+               ),
+       lty = c(1,1),
+       lwd = c(3,3),
+       cex = 0.5,
+       bg = NA,
+       bty = 'n',
+       inset = c(0, 0)
+       )
+
+
+
+gb_pos = garden_bearing[2] %% 360
+
+with(dr_modlist$no_sunspot,
+     {
+      VertHist(data = deg(b_fmu_Intercept)  + gb_pos, 
+               main = '\nmean bearing',
+               ylab = 'model estimates',
+               ylim = c(-60, 60) + gb_pos,
+               col = adjustcolor('green3', alpha.f = 100/255),
+               cex.axis = 0.7)
+      abline(h = garden_bearing %% 360,
+             col = 'orange',
+             lwd = c(1,7,1),
+             lty = c(2,1,2) )
+       arrows(x0 = 0, x1 = 0,
+              y0 = quantile(deg(b_fmu_Intercept), p = 0.025) +
+                gb_pos,
+              y1 = quantile(deg(b_fmu_Intercept), p = 1-0.025) +
+                gb_pos,
+              col = 'green4',
+              lwd = 5,
+              code = 3,
+              length = 0.05,
+              angle = 90)
+     }
+       )
+
+legend(x = 'bottomright',
+       legend = c('Botanic Gardens centre',
+                  'sector',
+                  '95% CI' 
+                  ),
+       col = c('orange',
+               'orange',
+               'green4'
+               ),
+       lty = c(1,2,1),
+       lwd = c(3,0.5,3),
+       cex = 0.5,
+       bg = NA,
+       bty = 'n',
+       inset = c(0, 0)
+       )
+
+
 
 
 ```
