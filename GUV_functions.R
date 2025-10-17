@@ -1479,3 +1479,43 @@ Draws2Cont = function(draws,
   )
 }
 
+
+#histograms on a vertical axis
+#any data, but plotted as a histogram on a vertical rather than horizontal axis
+VertHist = function(data, # numerical data vector
+                    breaks = 1e2,
+                    ylab = 'data',
+                    xlab = 'density',
+                    ylim = NULL,
+                    main = '',
+                    col = 'gray',
+                    border = NA,
+                    ...)
+{
+  hst = hist(x = data, # calculate the histogram but don't plot it
+             breaks = breaks, # user defined breaks
+             plot = FALSE)
+  with(hst,
+       {
+         plot(x = NULL, #open an empty plot
+              xlim = c(0, max(density)),
+              ylim = if(is.null(ylim)){range(mids)}else{ylim},
+              xlab = xlab,
+              ylab = ylab,
+              main = main)
+         #plot each bar
+         for(i in 1:length(mids))
+         {
+           rect(xleft = 0,
+                xright = density[i],
+                ybottom = breaks[i], 
+                ytop = breaks[i + 1],
+                col = col,
+                border = border,
+                ...
+           )
+         }
+       }
+  )
+}
+
