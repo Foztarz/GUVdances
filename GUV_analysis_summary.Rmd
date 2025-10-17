@@ -2226,7 +2226,7 @@ par(mar = c(0,3,0,0))
 with(dr_modlist$no_phototaxis,
      {
       VertHist(data = deg(b_fmu_Intercept), 
-         main = '\nmean angle',
+         main = '\nPopulation mean angle',
          ylab = 'model estimates',
          ylim = c(-45, 15),
          col = adjustcolor('green3', alpha.f = 100/255),
@@ -2267,7 +2267,7 @@ gb_pos = garden_bearing[2] %% 360
 with(dr_modlist$no_sunspot,
      {
       VertHist(data = deg(b_fmu_Intercept)  + gb_pos, 
-               main = '\nmean bearing',
+               main = '\nPopulation mean bearing',
                ylab = 'model estimates',
                ylim = c(-60, 60) + gb_pos,
                col = adjustcolor('green3', alpha.f = 100/255),
@@ -2306,8 +2306,9 @@ legend(x = 'bottomright',
        inset = c(0, 0)
        )
 
-
-
+#How much to individual dance angles vary according to kappa_mu?
+with(sm_modlist$no_sunspot,
+     paste0(deg(MardiaSD(spec_pars['kappa_mu' ,'Estimate'])), '°') )
 
 ```
 
