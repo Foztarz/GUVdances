@@ -1519,3 +1519,20 @@ VertHist = function(data, # numerical data vector
   )
 }
 
+MardiaSD = function(k,
+                    method = 'analytical',
+                    n = 1e4)
+{
+  switch(method,
+         simulation = 
+           circular::sd.circular(
+             circular::rvonmises(n = n, 
+                                 mu = circular::circular(pi, # this is directly in the middle of (0,2pi)
+                                                         template = 'none'),
+                                 kappa = k)
+           ),
+         analytical = sqrt( -2* log( circular::A1(k))),
+         sqrt( -2* log( circular::A1(k)))
+  )
+}
+
