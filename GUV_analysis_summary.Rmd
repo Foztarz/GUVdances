@@ -2308,7 +2308,19 @@ legend(x = 'bottomright',
 
 #How much to individual dance angles vary according to kappa_mu?
 with(sm_modlist$no_sunspot,
-     paste0(deg(MardiaSD(spec_pars['kappa_mu' ,'Estimate'])), '°') )
+     paste0(round(deg(MardiaSD(spec_pars['kappa_mu' ,'Estimate']))), '°') )
+#Where is the population centred?
+with(dr_modlist$no_sunspot,
+     {
+     paste0(
+       round(
+       quantile(x = deg(b_fmu_Intercept), 
+                p = c(0,0.5,1)+c(1,0,-1)*(0.05/2) ) +
+                gb_pos
+                ) %% 360, # as a bearing
+       '°' )
+     }
+)
 
 ```
 
