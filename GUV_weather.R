@@ -20,9 +20,10 @@ graphics.off()
 # 
 #TODO   ---------------------------------------------
 #TODO   
-#- Read in weather data
-#- Organise weather data
-#- Plot mean vectors by weather category
+#- Read in weather data +
+#- Organise weather data  +
+#- Plot mean vectors by weather category  +
+#- Model comparison cloudy non-cloudy
 
 
 # Set up workspace --------------------------------------------------------
@@ -154,27 +155,6 @@ wd = read.table(file = weather_file,
 
 ## Add time --------------------------------------------------------------
 
-# IDtocode = function(x)
-# {
-#   tp = strsplit(x = as.character(x),
-#                 split = '\\.')[[1]]
-#   tcode = paste0(tp[1], '-', tp[2], '-', tp[3], ' ',
-#                  tp[4], ':', tp[5], ':00'
-#   )
-#   return(tcode)
-# }
-# 
-# cd = within(cd,
-#             {
-#               time = sub(pattern = '^...........',
-#                          x = ID,
-#                          replacement = '')
-#               time_code = sapply(X = ID, FUN = IDtocode)
-#               cet_time =  as.POSIXct(time_code, tz = "Europe/Berlin", format = "%Y-%m-%d %H:%M:%OS")#CET time
-#               utc_time =  as.POSIXct(cet_time, tz = "UTC")#UTC time
-#               rm(time_code); rm(time)
-#             }
-# )
 
 Time2Hour = function(x)
 {
@@ -482,4 +462,114 @@ PCfun(angles = unlist(mu_diff_gul_cloudy),
       col = 'gray25',
       shrink = 1.5,
       title = 'UV Dim - Green Dim')
+
+
+# Fit MLE models ----------------------------------------------------------
+## Organise heading changes -----
+#collect all heading differences
+pair_diffs_lst = lapply(X = list(
+  #bright vs dim green
+  g_hl_clear = mu_diff_gl_clear, 
+  #bright vs dim UV
+  uv_hl_clear = mu_diff_uhl_clear,
+  #bright green vs bright uv 
+  uvg_h_clear = mu_diff_uh_clear,
+  #dim green vs bright UV
+  uvg_l_clear = mu_diff_gul_clear,
+  #bright vs dim green
+  g_hl_cloud = mu_diff_gl_cloudy, 
+  #bright vs dim UV
+  uv_hl_cloud = mu_diff_uhl_cloudy,
+  #bright green vs bright uv 
+  uvg_h_cloud = mu_diff_uh_cloudy,
+  #dim green vs bright UV
+  uvg_l_cloud = mu_diff_gul_cloudy), 
+  FUN = unlist) 
+#Provide appropriate data format
+angle_unit = 'degrees' 
+angle_rot = 'clock'
+#make sure they are in circular format
+pair_diffs_lst = lapply(X = pair_diffs_lst,
+                        FUN = circular,
+                        units = angle_unit,
+                        rotation = angle_rot)
+# Fit maximum likelihood von Mises distributions ------
+#Distribution for same means
+ml_same_lst = lapply(X = pair_diffs_lst,
+                     mle.vonmises,
+                     bias = TRUE,
+                     mu = circular(x = 0,
+                                   units = angle_unit,
+                                   rotation = angle_rot)
+)
+#Distribution for different means
+ml_diff_lst = lapply(X = pair_diffs_lst,
+                     mle.vonmises,
+                     bias = TRUE)
+#Distribution for multiple different means
+mod_diff_lst = lapply(X = pair_diffs_lst,
+                      FUN = circ_mle,#converts circular format data to radians
+                      niter = 1e4)#some stochastic variability for green stim
+#Forced multiple different means
+bim_diff_lst = lapply(X = pair_diffs_lst,
+                      FUN = circ_mle,#converts circular format data to radians
+                      exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
+                      niter = 1e4)#some stochastic variability for green stim
+
+
+#Extract the parameters of the model with the lowest AIC
+mod_diff_par = t( sapply(X = mod_diff_lst,
+                         FUN = MD_extract) )
+bim_diff_par = t( sapply(X = bim_diff_lst,
+                         FUN = MD_extract) )
+
+# Calculate likelihood 
+#calculate all in list
+all_ll = mapply(FUN = LLcalc,
+                ml = c(ml_same_lst, ml_diff_lst), #apply to both sets of ML estimates
+                angles = pair_diffs_lst, #repeat datasets
+                au = angle_unit, #important, use the same frame of reference as the original
+                ar = angle_rot)
+
+#inspect resulting parameters
+mod_diff_results = do.call(rbind, c(ml_same_lst, ml_diff_lst))
+#add easy to parse names
+rownames(mod_diff_results) = paste( sort( #distinguish same and different mean
+  rep(x = c( 'same', 'diff'), 
+      times =  length(pair_diffs_lst) ),
+  decreasing = TRUE
+),
+rep(x = names(pair_diffs_lst),
+    times = 2) 
+)
+#display version
+rspar = mod_diff_results[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
+rspar = cbind(rspar, loglikelihood = all_ll)
+rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
+#reorder for easy comparison
+rspar = rspar[c(rbind(1:8, 1:8+8)),]#put the different directly after the same
+rspar[,3:4] = NA
+rspar = cbind(rspar, weight1 = 1.0)
+colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
+all_res = rbind(data.frame(rspar),
+                data.frame(bim_diff_par) )
+all_res = apply(all_res, MARGIN = 2, FUN = unlist)
+rownames(all_res[17:24,]) = paste('multi', rownames(bim_diff_par))
+#TODO reorganise this
+all_res = all_res[c(1:2, 9, 3:4, 10, 5:6, 11, 7:8, 12),]
+
+all_res = within(data = data.frame(all_res),
+                 {
+                   model = c('same',
+                             'diff',
+                             'multi')
+                   dataset = c(sapply(X = names(pair_diffs_lst),
+                                      FUN = rep,
+                                      times = 3) )
+                 }
+)
+# print(rspar, digits = 3)
+# print(mod_diff_par, digits = 3)
+# print(bim_diff_par, digits = 3)
+print(all_res, digits = 3)
 
