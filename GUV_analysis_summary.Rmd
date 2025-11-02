@@ -1023,7 +1023,8 @@ loo_compare(loo_beta, loo_ele)
 ### Comparison with Edrich *et al.* (1979)
 
 How does this compare with previous experiments in which a light spot (2.3°) was presented through bandpass filters and ND filters to produce different intensities?
-In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length). They mention that the particular relationship with light intensity was variable, but that the relative relationships remained constant, so we may also observe the same relationship but shifted.
+In that data, there was a clear sigmoidal relationship between intensity and accuracy (mean vector length).
+They mention that the particular relationship with light intensity was variable, but that the relative relationships remained constant, so we may also observe the same relationship but shifted.
 
 > Unfortunately, the scatter of the dance directions as a function of light intensity proved to be unstable over long periods of time; the absolute values changed from day to day.
 > However, these changes were such that curves for adjacent wavelengths were shifted in parallel - the relative sensitivities remained constant.
@@ -1452,8 +1453,7 @@ legend(x = 'bottomright',
 
 It would be difficult to explain the orientation accuracy for the high intensity ($4*10^{14}$) UV stimulus from the accuracy curve for Edrich's UV data, but it would fit well with the maximum accuracy observed for green light.
 In Edrich's study, the green light was interpreted as the sun (dances at correct angle between sun and feeder), whereas the UV light was interpreted as a patch of sky near the anti-sun.
-In Kühn's data the stimuli were larger (assuming  $10°$ across) than Edrich's ($2.3°$), which may have resulted in them being perceived as dimmer (left shift in this graph).
-
+In Kühn's data the stimuli were larger (assuming $10°$ across) than Edrich's ($2.3°$), which may have resulted in them being perceived as dimmer (left shift in this graph).
 
 # Sun compass orientation
 
@@ -1918,6 +1918,7 @@ modLIC = lapply(X = modlist,
 print(sort(unlist(modLIC)), digits = 1)
 
 ```
+
 ```{r ROPE hypothesis test}
 #since all models are similarly credible, what about the hypotheses?
 #check if the sector surrounding the expected direction is equally full
@@ -2014,7 +2015,9 @@ boxplot(x = postl_dt,
          )
 abline(h = 0)
 ```
-It is hard to say for the individuals whether the majority  orient towards the sector containing the Botanic Garden, or a similar sized sector containing the stimulus. What we can say is that the population average falls directly towards the Botanic Garden centre in real-world bearings, while the population average relative to the light source has a leftwards bias.
+
+It is hard to say for the individuals whether the majority orient towards the sector containing the Botanic Garden, or a similar sized sector containing the stimulus.
+What we can say is that the population average falls directly towards the Botanic Garden centre in real-world bearings, while the population average relative to the light source has a leftwards bias.
 
 ```{r plot sunspot hypothesis tests}
 with(dr_modlist$no_phototaxis, paste0(mean(b_fmu_Intercept > 0)*100, '%') ) #nearly all estimates suggest a leftwards bias
