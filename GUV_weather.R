@@ -241,18 +241,41 @@ cd = within(cd,
 
 
 # Inspect data ------------------------------------------------------------
-
-hist(x = cd$cloud_prop,
+with(cd,
+     {
+hist(x = cloud_prop,
      breaks = 8,
      xlab = 'Cloud cover (proportion)',
      probability = TRUE,
-     border = NA)
-boxplot(x = cd$cloud_prop,
+     border = NA,
+     ylim = c(-0.5,5))
+boxplot(x = ccloud_prop,
+        at = -0.25,
         horizontal = TRUE,
         col = adjustcolor('blue', alpha.f = 0.2),
         border = gray(0.25, 1.0),
         add = TRUE)
+     }
+)
 #about half of data is below 2/8, might be a good cut
+
+with(full_cd,
+     {
+hist(x = cloud_prop,
+     breaks = 8,
+     xlab = 'Cloud cover (proportion)',
+     probability = TRUE,
+     border = NA,
+     ylim = c(-0.5,5))
+boxplot(x = cloud_prop,
+        at = -0.25,
+        horizontal = TRUE,
+        col = adjustcolor('blue', alpha.f = 0.2),
+        border = gray(0.25, 1.0),
+        add = TRUE)
+     }
+)
+#about nearly all of data is above 2/8, half are completely overcast
 
 
 # Calculate mean vectors --------------------------------------------------
@@ -348,3 +371,115 @@ PCfun(angles = subset(mean_vectors_full,
       col = 'purple',
       shrink = 1.5,
       title = 'UV Dim')
+
+
+#  Differences in mean angle ----------------------------------------------
+mean_vectors_full_clear = subset(mean_vectors_full,
+                                 cloud_prop < 0.26)
+mean_vectors_full_cloudy = subset(mean_vectors_full,
+                                 cloud_prop > 0.26)
+
+#Clear
+#Plot changes in mean dance angle
+mu_diff_gl_clear = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_clear,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh_clear = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_clear,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul_clear = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_clear,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl_clear = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_clear,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'u',
+                     ref_br = 'h')
+mu_diff_gul_clear = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_clear,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'g',
+                     ref_br = 'h')
+
+#Cloudy
+#Plot changes in mean dance angle
+mu_diff_gl_cloudy = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_cloudy,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh_cloudy = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_cloudy,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul_cloudy = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_cloudy,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl_cloudy = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_cloudy,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'u',
+                     ref_br = 'h')
+mu_diff_gul_cloudy = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_cloudy,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'g',
+                     ref_br = 'h')
+
+par(mfrow = c(2,4), mar = c(0,0,0,0))
+PCfun(angles = unlist(mu_diff_gl_clear),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright\nClear')
+PCfun(angles = unlist(mu_diff_uhl_clear),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh_clear),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul_clear),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+PCfun(angles = unlist(mu_diff_gl_cloudy),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright\nCloudy')
+PCfun(angles = unlist(mu_diff_uhl_cloudy),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh_cloudy),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul_cloudy),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+
