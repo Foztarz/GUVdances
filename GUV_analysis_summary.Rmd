@@ -2935,7 +2935,7 @@ These tests confirm, that there is no significant difference between the two gre
 # Are the two means for UV dim equally likely
 
 ```{r Test relative weights for UV hl }
-wt_uv_hl = all_res['uv_hl', 'weight1']
+wt_uv_hl = all_res['multi uv_hl', 'weight1']
 est_no_m1 = round(length(full_ids)*wt_uv_hl)
 binom.test(x = est_no_m1, 
            n = length(full_ids),
