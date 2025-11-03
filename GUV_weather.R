@@ -40,14 +40,12 @@ here_path = tryCatch(expr = #look in the folder containing this file: sys.frame(
                        file.path(Sys.getenv('HOME'))
                      }
 )
-
+path_functions = file.path(here_path,
+                           'GUV_functions.R',
+                           fsep = if(sys_win){'\\'}else{'/'})
 path_functions = tryCatch(expr = #try to load functions from the folder containing this file
            {
-             source(file = file.path(here_path,
-                                     'GUV_functions.R',
-                                     fsep = if(sys_win){'\\'}else{'/'}
-             )
-             )
+             source(file = path_functions)
              return(file.path(here_path,
                               'GUV_functions.R',
                               fsep = if(sys_win){'\\'}else{'/'}
@@ -75,7 +73,7 @@ path_functions = tryCatch(expr = #try to load functions from the folder containi
            {stop('No file selected.')}else
            {print(path_functions)}
            source(path_functions)
-           return(path_functions)
+           return(path_functions)#overwrite with user selected
          }
 )
 
@@ -278,6 +276,8 @@ boxplot(x = cloud_prop,
 #about nearly all of data is above 2/8, half are completely overcast
 with(full_cd, quantile(cloud8, na.rm = TRUE))
 
+# cloud_threshold = 0.26
+cloud_threshold = 6.5/8
 # Calculate mean vectors --------------------------------------------------
 
 
@@ -309,8 +309,6 @@ mean_vectors_full = subset(mean_vectors,
 
 
 # Inspect mean vectors ----------------------------------------------------
-# cloud_threshold = 0.26
-cloud_threshold = 7/8
 
 
 par(pty = 's')
@@ -672,7 +670,7 @@ print_lr_results_cc[,num_col_cc] = apply(X = print_lr_results_cc[,num_col_cc],
 #Print the results
 print(print_lr_results_cc[,-6],
       digits = 3)
-View(print_lr_results_cc)
+# View(print_lr_results_cc)
 
 #save results
 write.table(x = print_lr_results_cc, 
@@ -690,10 +688,13 @@ write.table(x = print_lr_results_cc,
 all_res_null = read.table(file = file.path(dirname(path_functions),
                                            '2Results/MLE_paired_diffs.csv'),
                           sep = ',')
+mod_details_null = load(file = file.path(dirname(path_functions),
+                                  '2Results/MLEdetails_paired_diffs.RData'))
+mod_details_null = get(mod_details_null)
 print_lr_results_null = read.table(file = file.path(dirname(path_functions),'2Results/LRT_paired_diffs.csv'),
                             sep = ',')
 print(all_res_null, digits = 3)
-View(print_lr_results_null)
+# View(print_lr_results_null)
 #Select likelihoods for models:
 # Ghl same
 # Uhl multi
@@ -703,11 +704,10 @@ View(print_lr_results_null)
 rn_res_null = rownames(all_res_null)
 rn_res_cc = rownames(all_res_cc)
 
-best_null = all_res_null[c(1,#same green_hl
-                           6,#multi uv_hl
-                           7,#same uvg_h
-                           12 #multi uvg_l
-                           ),]
+best_names_null = c('same green_hl',
+                  'multi uv_hl',
+                  'same uvg_h',
+                  'multi uvg_l')
 
 best_names_cc = c("same g_hl_clear", 
                         "same g_hl_cloud",
@@ -719,32 +719,106 @@ best_names_cc = c("same g_hl_clear",
                         "multi uvg_l_cloud"
                         )
 
-best_cc= all_res_cc[best_names_cc,
-                      ]
-mod_details_best_cc= do.call(rbind,mod_details_cc)
-rownames(mod_details_best_cc) = rn_res_cc
+mod_details_dt_null= do.call(rbind,mod_details_null)
+rownames(mod_details_dt_null) = rn_res_null
 
-best_cc = mod_details_best_cc[best_names_cc,
-                                          ]
+mod_details_dt_cc= do.call(rbind,mod_details_cc)
+rownames(mod_details_dt_cc) = rn_res_cc
 
+best_null = mod_details_dt_null[best_names_null,]
+best_cc = mod_details_dt_cc[best_names_cc,]
 
+#Calculate joint likelihood and parameters (probabilities multiplied = log-likelihoods summed)
 ll_g_hl_cc = apply(best_cc[c("same g_hl_clear", 
                               "same g_hl_cloud"),
-                            c('ll', 'df')],
+                            c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
 ll_u_hl_cc = apply(best_cc[c("diff uv_hl_clear",
                               "multi uv_hl_cloud"),
-                           c('ll', 'df' )],
+                           c('ll', 'deviance','df' )],
                  FUN = sum,
                  MARGIN = 2)
 ll_uvg_h_cc = apply(best_cc[c("same uv_hl_clear",
                                "same uv_hl_cloud"),
-                            c('ll', 'df' )],
+                            c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
 ll_uvg_l_cc = apply(best_cc[c("multi uvg_l_clear",
                                  "multi uvg_l_cloud"),
-                            c('ll', 'df' )],
+                            c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
+
+#Likelihood ratio tests
+delta_g_hl_cc = ll_g_hl_cc - 
+                  best_null[best_names_null[1],c('ll','deviance', 'df' )]
+delta_u_hl_cc = ll_u_hl_cc - 
+                  best_null[best_names_null[2],c('ll','deviance', 'df' )]
+delta_uvg_h_cc = ll_uvg_h_cc - 
+                  best_null[best_names_null[3],c('ll','deviance', 'df' )]
+delta_uvg_l_cc = ll_uvg_l_cc - 
+                  best_null[best_names_null[4],c('ll','deviance', 'df' )]
+
+lrt_g_hl = with(delta_g_hl_cc, 
+                data.frame(
+                  dev_null = best_null[best_names_null[1],'deviance'],
+                  dev_cloud = ll_g_hl_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )
+    
+lrt_u_hl = with(delta_u_hl_cc, 
+                data.frame(
+                  dev_null = best_null[best_names_null[2],'deviance'],
+                  dev_cloud = ll_u_hl_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )    
+lrt_uvg_h = with(delta_uvg_h_cc, 
+                data.frame(
+                  dev_null = best_null[best_names_null[3],'deviance'],
+                  dev_cloud = ll_uvg_h_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )    
+lrt_uvg_l = with(delta_uvg_l_cc, 
+                data.frame(
+                  dev_null = best_null[best_names_null[4],'deviance'],
+                  dev_cloud = ll_uvg_l_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )
+lr_weather = rbind(lrt_g_hl, lrt_u_hl, lrt_uvg_h, lrt_uvg_l)
+rownames(lr_weather) = best_names_null
+lr_weather = within(lr_weather,
+                    {
+                      p_adjusted = p.adjust(p = p,
+                                            method = 'BH',
+                                            n = length(p))
+                    })    
+
+print_lr_weather = apply(X = lr_weather,
+                         MARGIN = 2, 
+                         FUN = round, 
+                         digits = 3)
+#Print the results
+print(print_lr_weather,
+      digits = 3)
+#In the case of comparing the two bright stimuli
+#the split by weather helps explain the small leftward turn.
+#For the other condition, the models that do not account for weather
+#better explain the data.
+#save results
+write.table(x = print_lr_results_cc, 
+            file = '2Results/LRT_paired_diffs.csv',
+            sep = ',',
+            row.names = TRUE)
