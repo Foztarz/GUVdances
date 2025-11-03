@@ -2637,7 +2637,10 @@ colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
 all_res = rbind(data.frame(rspar),
                 data.frame(bim_diff_par) )
 all_res = apply(all_res, MARGIN = 2, FUN = unlist)
-rownames(all_res[9:12,]) = paste('multi', rownames(bim_diff_par))
+rn_res = rownames(all_res)#NB in R4.5 need to make a copy of rownames
+rn_res[9:12] = paste('multi', rownames(bim_diff_par))
+rownames(all_res) = rn_res #
+#rownames(all_res[9:12,]) = paste('multi', rownames(bim_diff_par))
 all_res = all_res[c(1:2, 9, 3:4, 10, 5:6, 11, 7:8, 12),]
 
 all_res = within(data = data.frame(all_res),
@@ -2843,6 +2846,13 @@ mod_details= lapply(X = names(pair_diffs_lst),
                      ll = all_res,
                      bimod = TRUE)
 names(mod_details) = names(pair_diffs_lst)
+
+
+#save details
+write.table(x = mod_details, 
+          file = '2Results/MLEdetails_paired_diffs.csv',
+          sep = ',',
+          row.names = TRUE)
 
 #set up tests for hypotheses
 lr_tests = c('pairs_diff_zero', #is the turn different from zero?
