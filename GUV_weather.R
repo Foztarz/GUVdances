@@ -728,6 +728,27 @@ rownames(mod_details_dt_cc) = rn_res_cc
 best_null = mod_details_dt_null[best_names_null,]
 best_cc = mod_details_dt_cc[best_names_cc,]
 
+
+# Calculate joint likelihood for null and weather models
+joint_null = apply(best_null[,c('ll', 'deviance', 'df')],
+                   FUN = sum,
+                   MARGIN = 2)
+joint_cc = apply(best_cc[,c('ll', 'deviance', 'df')],
+                   FUN = sum,
+                   MARGIN = 2)
+
+delta_weather = joint_cc - joint_null
+lrt_joint_weather = with(data.frame(t(delta_weather)), 
+                 data.frame(
+                   dev_null = joint_null['deviance'],
+                   dev_cloud = joint_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                   d.f. = df, #grand mean has half the number of params
+                   chi_squared = deviance,
+                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                 )
+)
+
+
 #Calculate joint likelihood and parameters (probabilities multiplied = log-likelihoods summed)
 ll_g_hl_cc = apply(best_cc[c("same g_hl_clear", 
                               "same g_hl_cloud"),
@@ -805,7 +826,10 @@ lr_weather = within(lr_weather,
                                             method = 'BH',
                                             n = length(p))
                     })    
-
+lr_weather = rbind(within(lrt_joint_weather, {p_adjusted = NA}), lr_weather)
+rn_lr_weather = rownames(lr_weather)
+rn_lr_weather[1] = 'joint models'
+rownames(lr_weather) = rn_lr_weather
 print_lr_weather = apply(X = lr_weather,
                          MARGIN = 2, 
                          FUN = round, 
@@ -819,6 +843,7 @@ print(print_lr_weather,
 #better explain the data.
 #save results
 write.table(x = print_lr_results_cc, 
-            file = '2Results/LRT_paired_diffs.csv',
+            file = file.path(dirname(path_functions),
+                             '2Results/LRT_paired_diffs_weather.csv'),
             sep = ',',
             row.names = TRUE)
