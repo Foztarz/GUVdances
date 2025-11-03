@@ -372,6 +372,7 @@ PCfun = function(angles,
                  shrink = 1.5,
                  title = '',
                  plot_rho = TRUE,
+                 titleline = -2,
                  side = 1)
 {
   ca = circular(x = angles,
@@ -388,7 +389,7 @@ PCfun = function(angles,
                 shrink = shrink)
   mtext(text = title,
         side = side,
-        line = -2)
+        line = titleline)
   lines(x = c(0,0),
         y = c(-1,1),
         col = 'gray')
@@ -1185,19 +1186,19 @@ H1label = function(tst, d0, d1, pa)
 {
   switch(EXPR = tst,
          uniformity = if(d0 > d1 & pa <0.05) # data may be oriented, not significantly oriented, or significantly disoriented
-         {'data are significantly oriented'}else
+         {'*data are significantly oriented'}else
          {'data _are not_ significantly oriented'},
          trials_same_mean = if(d0 > d1 & pa <0.05) # trials significantly differ in mean, not significantly differ in mean, or share a significant mean
-         {'trial means differ significantly'}else
+         {'*trial means differ significantly'}else
          {'trial means _do not_ differ significantly'},
          pairs_diff_zero = if(d0 > d1 & pa <0.05) # trials significantly differ in mean, not significantly differ in mean, or share a significant mean
-         {'paired trials differ significantly'}else
-         {'paired trials _do not_ differ significantly'},
+         {'*pairs differ significantly'}else
+         {'pairs _do not_ differ significantly'},
          pairs_multi_zero = if(d0 > d1 & pa <0.05) # trials significantly differ with multiple means, not significantly differ in mean, or share a significant mean
-         {'paired trials differ significantly with multiple means'}else
-         {'paired trials _do not_ differ significantly with multiple means'},
+         {'*pairs differ significantly with multiple means'}else
+         {'pairs _do not_ differ significantly with multiple means'},
          pairs_multi_diff = if(d0 > d1 & pa <0.05) # trials significantly differ with multiple means, not significantly differ in mean, or share a significant mean
-         {'paired trials differ significantly with no single mean'}else
+         {'*pairs differ significantly with no single mean'}else
          {'paired trials _do not_ differ significantly with multiple means'}
   )
 }
