@@ -572,8 +572,10 @@ colnames(rspar_cc) = colnames(bim_diff_par_cc)[c(1:4, 6:5)]
 all_res_cc = rbind(data.frame(rspar_cc),
                 data.frame(bim_diff_par_cc) )
 all_res_cc = apply(all_res_cc, MARGIN = 2, FUN = unlist)
-rownames(all_res_cc[17:24,]) = paste('multi', rownames(bim_diff_par_cc))
-#not sure why some angles are bigger?
+rn_res_cc = rownames(all_res_cc)#NB in R4.5 need to make a copy of rownames
+rn_res_cc[17:24] = paste('multi', rownames(bim_diff_par_cc))
+rownames(all_res_cc) = rn_res_cc #
+#not sure why some angles are bigger than 360°?
 all_res_cc[,c(1,3)] = apply(all_res_cc[,c(1,3)], 
                             FUN = Mod360.180,
                             MARGIN = 2)
@@ -688,5 +690,61 @@ write.table(x = print_lr_results_cc,
 all_res_null = read.table(file = file.path(dirname(path_functions),
                                            '2Results/MLE_paired_diffs.csv'),
                           sep = ',')
-
+print_lr_results_null = read.table(file = file.path(dirname(path_functions),'2Results/LRT_paired_diffs.csv'),
+                            sep = ',')
 print(all_res_null, digits = 3)
+View(print_lr_results_null)
+#Select likelihoods for models:
+# Ghl same
+# Uhl multi
+# GUh same
+# GUl multi
+
+rn_res_null = rownames(all_res_null)
+rn_res_cc = rownames(all_res_cc)
+
+best_null = all_res_null[c(1,#same green_hl
+                           6,#multi uv_hl
+                           7,#same uvg_h
+                           12 #multi uvg_l
+                           ),]
+
+best_names_cc = c("same g_hl_clear", 
+                        "same g_hl_cloud",
+                        "diff uv_hl_clear",
+                        "multi uv_hl_cloud",
+                        "same uv_hl_clear",
+                        "same uv_hl_cloud",
+                        "multi uvg_l_clear",
+                        "multi uvg_l_cloud"
+                        )
+
+best_cc= all_res_cc[best_names_cc,
+                      ]
+mod_details_best_cc= do.call(rbind,mod_details_cc)
+rownames(mod_details_best_cc) = rn_res_cc
+
+best_cc = mod_details_best_cc[best_names_cc,
+                                          ]
+
+
+ll_g_hl_cc = apply(best_cc[c("same g_hl_clear", 
+                              "same g_hl_cloud"),
+                            c('ll', 'df')],
+                   FUN = sum,
+                   MARGIN = 2)
+ll_u_hl_cc = apply(best_cc[c("diff uv_hl_clear",
+                              "multi uv_hl_cloud"),
+                           c('ll', 'df' )],
+                 FUN = sum,
+                 MARGIN = 2)
+ll_uvg_h_cc = apply(best_cc[c("same uv_hl_clear",
+                               "same uv_hl_cloud"),
+                            c('ll', 'df' )],
+                  FUN = sum,
+                  MARGIN = 2)
+ll_uvg_l_cc = apply(best_cc[c("multi uvg_l_clear",
+                                 "multi uvg_l_cloud"),
+                            c('ll', 'df' )],
+                  FUN = sum,
+                  MARGIN = 2)
