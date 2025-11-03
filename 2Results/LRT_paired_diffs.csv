@@ -1,0 +1,13 @@
+"d.f.","chi_squared","p_adjusted","test","comparison","result","mu1","mu2"
+"green_hl diff zero",1,3.312,0.081,"diff zero","green_hl","pairs _do not_ differ significantly",0,NA
+"green_hl multi diff",3,6.723,0.081,"multi diff","green_hl","pairs _do not_ differ significantly with multiple means",17.5,NA
+"green_hl multi zero",4,10.035,0.081,"multi zero","green_hl","pairs _do not_ differ significantly with multiple means",350.9,56.7
+"uv_hl diff zero",1,5.815,0.016,"diff zero","uv_hl","*pairs differ significantly",0,NA
+"uv_hl multi diff",3,20.21,0,"multi diff","uv_hl","*pairs differ significantly with no single mean",78.8,NA
+"uv_hl multi zero",4,26.026,0,"multi zero","uv_hl","*pairs differ significantly with multiple means",99.9,310.8
+"uvg_h diff zero",1,5.044,0.074,"diff zero","uvg_h","pairs _do not_ differ significantly",0,NA
+"uvg_h multi diff",3,5.789,0.183,"multi diff","uvg_h","pairs _do not_ differ significantly with multiple means",-13.1,NA
+"uvg_h multi zero",4,0.746,0.946,"multi zero","uvg_h","pairs _do not_ differ significantly with multiple means",173.9,353.9
+"uvg_l diff zero",1,4.983,0.026,"diff zero","uvg_l","*pairs differ significantly",0,NA
+"uvg_l multi diff",3,12.274,0.01,"multi diff","uvg_l","*pairs differ significantly with no single mean",58.4,NA
+"uvg_l multi zero",4,17.257,0.005,"multi zero","uvg_l","*pairs differ significantly with multiple means",312.7,89.3
