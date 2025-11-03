@@ -1802,7 +1802,7 @@ siln = 0
 
 #these are pretty slow! About 7 minutes in total
 if(load_model)
-{ load(file = '1Data/phototaxis_modlist.RData')
+{ load(file = '2Results/phototaxis_modlist.RData')
 }else
   {
   cglm_photo = brm(formula = formula_photo,
@@ -1901,7 +1901,7 @@ modlist = lapply(modlist,
        moment_match = TRUE)
 
 save(modlist,
-     file = '1Data/phototaxis_modlist.RData')
+     file = '2Results/phototaxis_modlist.RData')
 }
 #compare the phototaxis models
 with(modlist, loo_compare(phototaxis, no_phototaxis))
@@ -2654,6 +2654,11 @@ all_res = within(data = data.frame(all_res),
 # print(mod_diff_par, digits = 3)
 # print(bim_diff_par, digits = 3)
 print(all_res, digits = 3)
+#save results
+write.table(x = all_res, 
+          file = '2Results/MLE_paired_diffs.csv',
+          sep = ',',
+          row.names = TRUE)
 
 ```
 
@@ -2910,6 +2915,11 @@ print_lr_results[,num_col] = apply(X = print_lr_results[,num_col],
 print(print_lr_results[,-6],
       digits = 3)
 
+#save results
+write.table(x = print_lr_results, 
+          file = '2Results/LRT_paired_diffs.csv',
+          sep = ',',
+          row.names = TRUE)
 ```
 
 These tests confirm, that there is no significant difference between the two green conditions, a marginally-significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
