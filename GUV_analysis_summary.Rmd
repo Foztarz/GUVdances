@@ -2849,10 +2849,8 @@ names(mod_details) = names(pair_diffs_lst)
 
 
 #save details
-write.table(x = mod_details, 
-          file = '2Results/MLEdetails_paired_diffs.csv',
-          sep = ',',
-          row.names = TRUE)
+save(x = mod_details, 
+          file = '2Results/MLEdetails_paired_diffs.RData')
 
 #set up tests for hypotheses
 lr_tests = c('pairs_diff_zero', #is the turn different from zero?
