@@ -95,12 +95,12 @@ length(u_id)#169 beedances
 
 # Plot all dances in one figure -------------------------------------------
 cx = 0.3
-
+rlim= 80
 
 
 #set up a sequence for the axes
 xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
-par(mfrow = c(22, 8),
+par(mfrow = c(22/2, 8),
 # par(mfrow = c(8, 22), # landscape version
     mar = c(0,0,0,0))
 par(pty = 's')
@@ -126,7 +126,8 @@ legend(x = 'center',
                'darkgreen',
                'magenta',
                'purple',
-               'darkred'),
+               adjustcolor('darkred', alpha.f = 0.25)
+               ),
        pch = c(21,21,21,21,NA),
        lty = c(NA, NA, NA, NA, 1),
        lwd = c(2,2,2,2,3),
@@ -141,8 +142,8 @@ for(ii in u_id)
   mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
   mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
   plot(x = NULL,
-       xlim = 100*c(-1,1),
-       ylim = 100*c(-1,1),
+       xlim = rlim*c(-1,1),
+       ylim = rlim*c(-1,1),
        pch = 19,
        axes = FALSE,
        xlab = '',
@@ -156,16 +157,16 @@ for(ii in u_id)
   lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
   lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
   lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
-  lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
-  text(x = 1:4*20,
-       y = c(0,0,0,0),
-       labels = paste(' run', 1:4*20), 
-       cex = 0.35*cx,
-       adj = c(0,1))
+  # lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
+  # text(x = 1:4*20,
+  #      y = c(0,0,0,0),
+  #      labels = paste(' run', 1:4*20), 
+  #      cex = 0.35*cx,
+  #      adj = c(0,1))
   with(subset(cd, ID %in% ii),
        {
-         lines(x = c(0, 100*sin(-sun_az_rad)),
-               y = c(0, 100*cos(-sun_az_rad)),
+         lines(x = c(0, rlim*sin(-sun_az_rad)),
+               y = c(0, rlim*cos(-sun_az_rad)),
                col = adjustcolor('darkred',alpha.f = 0.5),
                lwd = 2*cx)
          points(x = run*sin(as.numeric(angle)),
@@ -183,20 +184,20 @@ for(ii in u_id)
          )
        }
   )
-  lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
-        y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
+  lines(x = c(0,rlim*sin(mnv_gh['mu'])*mnv_gh['rho']), 
+        y = c(0,rlim*cos(mnv_gh['mu'])*mnv_gh['rho']), 
         col = 'green', 
         lwd = 1*cx)
-  lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
-        y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
+  lines(x = c(0,rlim*sin(mnv_gl['mu'])*mnv_gl['rho']), 
+        y = c(0,rlim*cos(mnv_gl['mu'])*mnv_gl['rho']), 
         col = 'darkgreen', 
         lwd = 1*cx)
-  lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
-        y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
+  lines(x = c(0,rlim*sin(mnv_uh['mu'])*mnv_uh['rho']), 
+        y = c(0,rlim*cos(mnv_uh['mu'])*mnv_uh['rho']), 
         col = 'magenta', 
         lwd = 1*cx)
-  lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
-        y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
+  lines(x = c(0,rlim*sin(mnv_ul['mu'])*mnv_ul['rho']), 
+        y = c(0,rlim*cos(mnv_ul['mu'])*mnv_ul['rho']), 
         col = 'purple', 
         lwd = 1*cx)
   mtext(ii,side = 1,line = -1, cex = cx)
