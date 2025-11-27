@@ -92,6 +92,7 @@ cd = within(cd,
 )
 u_id = with(cd, unique(ID)) # unique beedances
 length(u_id)#169 beedances
+u_id = sort(u_id)
 
 # Plot all dances in one figure -------------------------------------------
 cx = 0.3
