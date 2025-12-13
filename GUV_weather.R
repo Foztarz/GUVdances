@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 11 02
-#     MODIFIED:	James Foster              DATE: 2025 11 02
+#     MODIFIED:	James Foster              DATE: 2025 12 13
 #
 #  DESCRIPTION: Sort data by weather based on weather reports near Marbug
 #               
@@ -23,6 +23,7 @@ graphics.off()
 #- Read in weather data +
 #- Organise weather data  +
 #- Plot mean vectors by weather category  +
+#- Import Neu-Ulrichstein data
 #- Model comparison cloudy non-cloudy
 
 
@@ -77,6 +78,7 @@ path_functions = tryCatch(expr = #try to load functions from the folder containi
          }
 )
 
+###  Find Gießen data ----------------------------------------------------------
 path_file = file.path(dirname(path_functions), "1Data/colour_dance_reorg.csv")
 if(file.exists(path_file))
 {
@@ -110,10 +112,10 @@ if(file.exists(weather_file))
 {
   # set path to file
   if(sys_win){#choose.files is only available on Windows
-    message('\n\nPlease select the ".csv" file\n\n')
+    message('\n\nPlease select the ".txt" file\n\n')
     Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
     weather_file = choose.files(
-      default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
+      default = file.path(here_path, "*.txt"),#For some reason this is not possible in the "root" user
       caption = 'Please select the "Gießen_Cloud_19490101_20241231_01639.txt" file'
     )
   }else{
@@ -125,6 +127,33 @@ if(file.exists(weather_file))
   if(is.null(weather_file) | !length(weather_file))
   {stop('No file selected.')}else
   {print(weather_file)}
+}
+
+###  Find Gießen data ----------------------------------------------------------
+
+weather_nu = file.path(dirname(path_file), "Weather-Neu-Ulrichstein_wetter-online.de.csv")
+if(file.exists(weather_nu))
+{
+  print(weather_nu)
+}else
+{
+  # set path to file
+  if(sys_win){#choose.files is only available on Windows
+    message('\n\nPlease select the ".csv" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    weather_nu = choose.files(
+      default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
+      caption = 'Please select the "Weather-Neu-Ulrichstein_wetter-online.de.csv" file'
+    )
+  }else{
+    message('\n\nPlease select the "Weather-Neu-Ulrichstein_wetter-online.de.txt" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    weather_nu = file.choose(new=F)
+  }
+  #show the user the path they have selected
+  if(is.null(weather_nu) | !length(weather_nu))
+  {stop('No file selected.')}else
+  {print(weather_nu)}
 }
 
 # Read in the data and format ---------------------------------------------
@@ -164,7 +193,11 @@ length(full_ids)#19 individuals
 #select the reorganised data
 wd = read.table(file = weather_file, 
                 header = T, 
-                sep  = ';')
+                sep  = ';')#select the reorganised data
+
+nd = read.table(file = weather_nu, 
+                header = T, 
+                sep  = ',')
 
 ## Add time --------------------------------------------------------------
 
@@ -194,6 +227,21 @@ daterange = sapply(X = daterange,
 wd = subset(wd,
             MESS_DATUM > (daterange[1] -1) &
             MESS_DATUM < (daterange[2] +1)
+            )
+
+
+## Add ID ----------------------------------------------------------------
+
+nd = within(nd,
+            {
+              Time = sub(Time,
+                         pattern = ':',
+                         replacement = '.')
+              ID = ifelse(is.na(Time),
+                          yes = paste0(Date, '.__.__'),
+                          no = paste0(Date, '.', Time)
+                          )
+            }
             )
 
 
@@ -232,11 +280,46 @@ cd = within(cd,
             }
 )
 
+cd = within(cd,
+            {
+              nu_obs = ifelse(ID %in% nd$ID,
+                              yes = nd$Wetter,
+                              no = NA)
+            }
+            )
+
+cd = within(cd,
+            {
+              nu_lev = sapply(nu_obs,
+                              FUN = switch,
+                              `blauer Himmel` = 1,
+                              `leicht wolkig` = 2,
+                              `bewölkt` = 3,
+                              `NA` = NA
+                              )
+            }
+            )
+
 
 #find data for full condition individuals
 full_cd = subset(cd, ID %in% full_ids)
 
 # Inspect data ------------------------------------------------------------
+#The two sites report very different weather!
+with(cd,
+     stripchart(nu_lev~cloud_prop,
+                vertical = TRUE,
+                method = 'stack',
+                offset = 0.015,
+          xlab = 'Gießen cloud data (0-8/8)',
+          ylab = 'Neu-Ulrichstein cloud data (1-3)',
+          col = gray(0, alpha = 0.02),
+          pch = 1)
+     )
+
+
+## Gießen data -----------------------------------------------------------
+
 with(cd,
      {
 hist(x = cloud_prop,
@@ -278,10 +361,55 @@ with(full_cd, quantile(cloud8, na.rm = TRUE))
 
 # cloud_threshold = 0.26
 cloud_threshold = 6.5/8
+
+
+## Neu-Ulrichstein data --------------------------------------------------
+
+
+with(cd,
+     {
+       hist(x = nu_lev,
+            breaks = 8,
+            xlab = 'Cloud cover (1-3)',
+            main = 'Cloud cover for all dances',
+            probability = TRUE,
+            border = NA,
+            ylim = c(-0.5,5))
+       boxplot(x = nu_lev,
+               at = -0.25,
+               horizontal = TRUE,
+               col = adjustcolor('blue', alpha.f = 0.2),
+               border = gray(0.25, 1.0),
+               add = TRUE)
+     }
+)
+#about half of data is below 3, might be a good cut
+
+with(full_cd,
+     {
+       hist(x = nu_lev,
+            breaks = 8,
+            xlab = 'Cloud cover (1-3)',
+            main = 'Cloud cover for full-condition dances',
+            probability = TRUE,
+            border = NA,
+            ylim = c(-0.5,5))
+       boxplot(x = nu_lev,
+               at = -0.25,
+               horizontal = TRUE,
+               col = adjustcolor('blue', alpha.f = 0.2),
+               border = gray(0.25, 1.0),
+               add = TRUE)
+     }
+)
+#about equal propotions in each
+with(full_cd, quantile(nu_lev, na.rm = TRUE))
+
+
 # Calculate mean vectors --------------------------------------------------
 
 
-mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad+cloud_prop, # N.B. Including sun azimuth drops some cases without a time stamp
+mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad+cloud_prop + nu_obs, # N.B. Including sun azimuth drops some cases without a time stamp
                          data = cd,
                          FUN = rho.circular
 )
