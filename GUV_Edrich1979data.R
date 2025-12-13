@@ -1478,6 +1478,32 @@ with Kühn, 2017',
      }
 )
 
+#plot total prediction intervals
+with(subset(pred_data_beta, colour == '0green'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('green', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data_beta, colour == 'UV'), 
+     {
+       polygon(x = c(sort(log10_intensity), rev(sort(log10_intensity))), 
+               y = c(lower__[order(log10_intensity)],
+                     rev(upper__[order(log10_intensity)])
+               ), 
+               col = adjustcolor('magenta', alpha.f = 25/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+
 #plot the median prediction lines
 with(g_curve, 
      lines(x = xxl,

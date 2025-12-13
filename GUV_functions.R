@@ -254,6 +254,14 @@ MLE_est = function(x)
   
 }
 
+Rayleigh_p = function(x)
+{
+  with(rayleigh.test(circular(x,
+                             template = 'none')),
+       c(p = p.value))
+  
+}
+
 MuDiff = function(id, dt, cl, br, ref_cl = 'g', ref_br = 'h')
 {
   with(

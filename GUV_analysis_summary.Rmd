@@ -348,6 +348,11 @@ mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
                           data = cd,
                           FUN = MLE_est
 )
+#Rayleigh tests
+rayleigh_tests = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
+                          data = cd,
+                          FUN = Rayleigh_p
+                          )
 #add to the summary table and 
 #calculate inverse softplus kappa
 mean_vectors = within(mean_vectors,
@@ -360,6 +365,30 @@ mean_vectors = within(mean_vectors,
 #find the full condition individuals
 mean_vectors_full = subset(mean_vectors,
                            subset = ID %in% full_ids)
+rayleigh_tests_full = subset(rayleigh_tests,
+                           subset = ID %in% full_ids)
+#check how many dances would count as "oriented"
+#all dances
+with(rayleigh_tests,
+     round(mean(angle <0.05) *100,digits = 2)
+     )
+
+#all dances with balanced data
+with(rayleigh_tests_full,
+     round(mean(angle <0.05) *100,digits = 2)
+     )
+
+#bright green (sun spot) dances
+with(subset(rayleigh_tests,
+            subset = brightn %in% 'h' & colour %in% 'g'),
+     round(mean(angle <0.05) *100,digits = 2)
+     )
+
+#bright green (sun spot) dances with balanced data
+with(subset(rayleigh_tests_full,
+            subset = brightn %in% 'h' & colour %in% 'g'),
+     round(mean(angle <0.05) *100,digits = 2)
+     )
 ```
 
 ### Effect of brightness on mean vector length
@@ -700,6 +729,30 @@ contr_mu = with(data.frame(draws_mu),
                   )
                 }
                 )
+#On the original scale
+contr_rho = with(data.frame(draws_mu),
+                {
+                  data.frame(
+                    #bright green -> dim green = low brightness effect
+                    gh_gl = plogis(b_Intercept + b_brightnl) -
+                              plogis(b_Intercept), 
+                    #bright UV -> dim UV = dim + UVdim - UV effect
+                    uvh_uvl = plogis(b_Intercept + b_brightnl + `b_brightnl.colouru`) - 
+                              plogis(b_Intercept + b_colouru), 
+                    #bright green -> bright UV = UV effect
+                    gh_uvh = plogis(b_Intercept + b_colouru) -
+                              plogis(b_Intercept), 
+                    #bright green -> dim UV = UV + dim + UVdim
+                    gh_uvl = plogis(b_Intercept + b_brightnl + 
+                                      b_colouru + `b_brightnl.colouru`)- 
+                              plogis(b_Intercept), 
+                    #dim green -> dim UV = UV effect + UVdim - dim effect
+                    gl_uvl = plogis(b_Intercept + b_colouru +
+                                      `b_brightnl.colouru`) - 
+                              plogis(b_Intercept + b_brightnl)
+                  )
+                }
+                )
 
 contr_phi = with(data.frame(draws_phi),
                 {
@@ -724,6 +777,11 @@ quant_all = apply(X = contr_all,
                   probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
                   )
 quant_mu = apply(X = contr_mu,
+                  MARGIN = 2,
+                  FUN = quantile,
+                  probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
+                  )
+quant_rho = apply(X = contr_rho,
                   MARGIN = 2,
                   FUN = quantile,
                   probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
@@ -828,7 +886,10 @@ empirical.p = function(x, tails = 2){ifelse(test = median(x)>0,
 
 p_beta_mu = apply(X = contr_mu, MARGIN = 2, FUN = empirical.p, tails = 2)
 p_beta_phi = apply(X = contr_phi, MARGIN = 2, FUN = empirical.p, tails = 2)
-beta_all_res = data.frame(mu_lower = quant_mu[1,],
+beta_all_res = data.frame(rho_lower = quant_rho[1,],
+                          rho_median = quant_rho[2,],
+                          rho_upper = quant_rho[3,],
+                          mu_lower = quant_mu[1,],
                           mu_median = quant_mu[2,],
                           mu_upper = quant_mu[3,],
                           p_mu = p_beta_mu,
