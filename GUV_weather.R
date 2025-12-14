@@ -1286,8 +1286,17 @@ write.table(x = print_lr_results_cc_nu,
 
 # Compare with null models excluding weather ------------------------------
 
+#Null 
+all_res_null = read.table(file = file.path(dirname(path_functions), '/2Results',
+                                    'MLE_paired_diffs.csv'),
+                          sep = ',',
+                          header = TRUE)
 
-## DWD Gießen ------------------------------------------------------------
+mod_details_null= lapply(X = with(all_res_null, unique(dataset)),
+                          FUN = CollectDetails,
+                          ll = all_res_null,
+                          bimod = TRUE)
+names(mod_details_null) = with(all_res_null, unique(dataset))
 
 print(all_res_null, digits = 3)
 # View(print_lr_results_null)
@@ -1297,23 +1306,39 @@ print(all_res_null, digits = 3)
 # GUh same
 # GUl multi
 
+
 rn_res_null = rownames(all_res_null)
 rn_res_cc = rownames(all_res_cc)
+rn_res_cc_nu = rownames(all_res_cc_nu)
 
 best_names_null = c('same green_hl',
-                  'multi uv_hl',
-                  'same uvg_h',
-                  'multi uvg_l')
+                    'multi uv_hl',
+                    'same uvg_h',
+                    'multi uvg_l')
 
 best_names_cc = c("same g_hl_clear", 
-                        "same g_hl_cloud",
-                        "diff uv_hl_clear",
-                        "multi uv_hl_cloud",
-                        "same uv_hl_clear",
-                        "same uv_hl_cloud",
-                        "multi uvg_l_clear",
-                        "multi uvg_l_cloud"
-                        )
+                  "same g_hl_cloud",
+                  "diff uv_hl_clear",
+                  "multi uv_hl_cloud",
+                  "same uvg_h_clear",
+                  "same uvg_h_cloud",
+                  "multi uvg_l_clear",
+                  "multi uvg_l_cloud"
+)
+
+best_names_cc_nu = c("same g_hl_clear", 
+                  "same g_hl_part",
+                  "multi g_hl_cloud",
+                  "multi uv_hl_clear",
+                  "same uv_hl_part",
+                  "multi uv_hl_cloud",
+                  "diff uvg_h_clear",
+                  "same uvg_h_part",
+                  "same uvg_h_cloud",
+                  "same uvg_l_clear",
+                  "diff uvg_l_part",
+                  "multi uvg_l_cloud"
+)
 
 mod_details_dt_null= do.call(rbind,mod_details_null)
 rownames(mod_details_dt_null) = rn_res_null
@@ -1321,14 +1346,22 @@ rownames(mod_details_dt_null) = rn_res_null
 mod_details_dt_cc= do.call(rbind,mod_details_cc)
 rownames(mod_details_dt_cc) = rn_res_cc
 
+mod_details_dt_cc_nu= do.call(rbind,mod_details_cc_nu)
+rownames(mod_details_dt_cc_nu) = rn_res_cc_nu
+
 best_null = mod_details_dt_null[best_names_null,]
 best_cc = mod_details_dt_cc[best_names_cc,]
+best_cc_nu = mod_details_dt_cc_nu[best_names_cc_nu,]
 
 
-# Calculate joint likelihood for null and weather models
+# Calculate joint likelihood for null models
+# Calculate joint likelihood for null models
 joint_null = apply(best_null[,c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
+
+## DWD Gießen ------------------------------------------------------------
+
 joint_cc = apply(best_cc[,c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
@@ -1356,8 +1389,8 @@ ll_u_hl_cc = apply(best_cc[c("diff uv_hl_clear",
                            c('ll', 'deviance','df' )],
                  FUN = sum,
                  MARGIN = 2)
-ll_uvg_h_cc = apply(best_cc[c("same uv_hl_clear",
-                               "same uv_hl_cloud"),
+ll_uvg_h_cc = apply(best_cc[c("same uvg_h_clear",
+                               "same uvg_h_cloud"),
                             c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
@@ -1440,61 +1473,23 @@ print(print_lr_weather,
 #save results
 write.table(x = print_lr_results_cc, 
             file = file.path(dirname(path_functions),
-                             '2Results/LRT_paired_diffs_weather.csv'),
+                             '2Results/LRT_joint_Gweather.csv'),
             sep = ',',
             row.names = TRUE)
 
-## DWD Gießen ------------------------------------------------------------
-
-print(all_res_null, digits = 3)
-# View(print_lr_results_null)
-#Select likelihoods for models:
-# Ghl same
-# Uhl multi
-# GUh same
-# GUl multi
-
-rn_res_null = rownames(all_res_null)
-rn_res_cc = rownames(all_res_cc)
-
-best_names_null_nu = c('same green_hl',
-                  'multi uv_hl',
-                  'same uvg_h',
-                  'multi uvg_l')
-
-best_names_cc = c("same g_hl_clear", 
-                        "same g_hl_cloud",
-                        "diff uv_hl_clear",
-                        "multi uv_hl_cloud",
-                        "same uv_hl_clear",
-                        "same uv_hl_cloud",
-                        "multi uvg_l_clear",
-                        "multi uvg_l_cloud"
-                        )
-
-mod_details_dt_null= do.call(rbind,mod_details_null)
-rownames(mod_details_dt_null) = rn_res_null
-
-mod_details_dt_cc= do.call(rbind,mod_details_cc)
-rownames(mod_details_dt_cc) = rn_res_cc
-
-best_null = mod_details_dt_null[best_names_null,]
-best_cc = mod_details_dt_cc[best_names_cc,]
+## Wetter-online NU ------------------------------------------------------------
 
 
-# Calculate joint likelihood for null and weather models
-joint_null = apply(best_null[,c('ll', 'deviance', 'df')],
-                   FUN = sum,
-                   MARGIN = 2)
-joint_cc = apply(best_cc[,c('ll', 'deviance', 'df')],
+# Calculate joint likelihood for weather models
+joint_cc_nu = apply(best_cc_nu[,c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
 
-delta_weather = joint_cc - joint_null
-lrt_joint_weather = with(data.frame(t(delta_weather)), 
+delta_weather_nu = joint_cc_nu - joint_null
+lrt_joint_weather_nu = with(data.frame(t(delta_weather_nu)), 
                  data.frame(
                    dev_null = joint_null['deviance'],
-                   dev_cloud = joint_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                   dev_cloud = joint_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
                    d.f. = df, #grand mean has half the number of params
                    chi_squared = deviance,
                    p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
@@ -1502,101 +1497,107 @@ lrt_joint_weather = with(data.frame(t(delta_weather)),
 )
 
 
+
+
 #Calculate joint likelihood and parameters (probabilities multiplied = log-likelihoods summed)
-ll_g_hl_cc = apply(best_cc[c("same g_hl_clear", 
-                              "same g_hl_cloud"),
+ll_g_hl_cc_nu = apply(best_cc_nu[c("same g_hl_clear", 
+                                "same g_hl_part", 
+                              "multi g_hl_cloud"),
                             c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
-ll_u_hl_cc = apply(best_cc[c("diff uv_hl_clear",
+ll_u_hl_cc_nu = apply(best_cc_nu[c("multi uv_hl_clear",
+                              "same uv_hl_part",
                               "multi uv_hl_cloud"),
                            c('ll', 'deviance','df' )],
                  FUN = sum,
                  MARGIN = 2)
-ll_uvg_h_cc = apply(best_cc[c("same uv_hl_clear",
-                               "same uv_hl_cloud"),
+ll_uvg_h_cc_nu = apply(best_cc_nu[c("diff uvg_h_clear",
+                               "same uvg_h_part",
+                               "same uvg_h_cloud"),
                             c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
-ll_uvg_l_cc = apply(best_cc[c("multi uvg_l_clear",
+ll_uvg_l_cc_nu = apply(best_cc_nu[c("same uvg_l_clear",
+                                 "diff uvg_l_cloud",
                                  "multi uvg_l_cloud"),
                             c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
 
 #Likelihood ratio tests
-delta_g_hl_cc = ll_g_hl_cc - 
+delta_g_hl_cc_nu = ll_g_hl_cc_nu - 
                   best_null[best_names_null[1],c('ll','deviance', 'df' )]
-delta_u_hl_cc = ll_u_hl_cc - 
+delta_u_hl_cc_nu = ll_u_hl_cc_nu - 
                   best_null[best_names_null[2],c('ll','deviance', 'df' )]
-delta_uvg_h_cc = ll_uvg_h_cc - 
+delta_uvg_h_cc_nu = ll_uvg_h_cc_nu - 
                   best_null[best_names_null[3],c('ll','deviance', 'df' )]
-delta_uvg_l_cc = ll_uvg_l_cc - 
+delta_uvg_l_cc_nu = ll_uvg_l_cc_nu - 
                   best_null[best_names_null[4],c('ll','deviance', 'df' )]
 
-lrt_g_hl = with(delta_g_hl_cc, 
+lrt_g_hl_nu = with(delta_g_hl_cc_nu, 
                 data.frame(
                   dev_null = best_null[best_names_null[1],'deviance'],
-                  dev_cloud = ll_g_hl_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  dev_cloud = ll_g_hl_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
                   d.f. = df, #grand mean has half the number of params
                   chi_squared = deviance,
                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
                 )
               )
     
-lrt_u_hl = with(delta_u_hl_cc, 
+lrt_u_hl_nu = with(delta_u_hl_cc_nu, 
                 data.frame(
                   dev_null = best_null[best_names_null[2],'deviance'],
-                  dev_cloud = ll_u_hl_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  dev_cloud = ll_u_hl_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
                   d.f. = df, #grand mean has half the number of params
                   chi_squared = deviance,
                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
                 )
               )    
-lrt_uvg_h = with(delta_uvg_h_cc, 
+lrt_uvg_h_nu = with(delta_uvg_h_cc_nu, 
                 data.frame(
                   dev_null = best_null[best_names_null[3],'deviance'],
-                  dev_cloud = ll_uvg_h_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  dev_cloud = ll_uvg_h_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
                   d.f. = df, #grand mean has half the number of params
                   chi_squared = deviance,
                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
                 )
               )    
-lrt_uvg_l = with(delta_uvg_l_cc, 
+lrt_uvg_l_nu = with(delta_uvg_l_cc_nu, 
                 data.frame(
                   dev_null = best_null[best_names_null[4],'deviance'],
-                  dev_cloud = ll_uvg_l_cc['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  dev_cloud = ll_uvg_l_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
                   d.f. = df, #grand mean has half the number of params
                   chi_squared = deviance,
                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
                 )
               )
-lr_weather = rbind(lrt_g_hl, lrt_u_hl, lrt_uvg_h, lrt_uvg_l)
-rownames(lr_weather) = best_names_null
-lr_weather = within(lr_weather,
+lr_weather_nu = rbind(lrt_g_hl_nu, lrt_u_hl_nu, lrt_uvg_h_nu, lrt_uvg_l_nu)
+rownames(lr_weather_nu) = best_names_null
+lr_weather_nu = within(lr_weather_nu,
                     {
                       p_adjusted = p.adjust(p = p,
                                             method = 'BH',
                                             n = length(p))
                     })    
-lr_weather = rbind(within(lrt_joint_weather, {p_adjusted = NA}), lr_weather)
-rn_lr_weather = rownames(lr_weather)
-rn_lr_weather[1] = 'joint models'
-rownames(lr_weather) = rn_lr_weather
-print_lr_weather = apply(X = lr_weather,
+lr_weather_nu = rbind(within(lrt_joint_weather_nu, {p_adjusted = NA}), lr_weather_nu)
+rn_lr_weather_nu = rownames(lr_weather_nu)
+rn_lr_weather_nu[1] = 'joint models'
+rownames(lr_weather_nu) = rn_lr_weather_nu
+print_lr_weather_nu = apply(X = lr_weather_nu,
                          MARGIN = 2, 
                          FUN = round, 
                          digits = 3)
 #Print the results
-print(print_lr_weather,
+print(print_lr_weather_nu,
       digits = 3)
 #In the case of comparing the two bright stimuli
 #the split by weather helps explain the small leftward turn.
 #For the other condition, the models that do not account for weather
 #better explain the data.
 #save results
-write.table(x = print_lr_results_cc, 
+write.table(x = print_lr_results_cc_nu, 
             file = file.path(dirname(path_functions),
-                             '2Results/LRT_paired_diffs_weather.csv'),
+                             '2Results/LRT_joint_NUweather.csv'),
             sep = ',',
             row.names = TRUE)
