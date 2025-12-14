@@ -1519,7 +1519,7 @@ ll_uvg_h_cc_nu = apply(best_cc_nu[c("diff uvg_h_clear",
                   FUN = sum,
                   MARGIN = 2)
 ll_uvg_l_cc_nu = apply(best_cc_nu[c("same uvg_l_clear",
-                                 "diff uvg_l_cloud",
+                                 "diff uvg_l_part",
                                  "multi uvg_l_cloud"),
                             c('ll','deviance', 'df' )],
                   FUN = sum,
