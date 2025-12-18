@@ -661,9 +661,10 @@ md_beta = brm(formula = frm_bmod_maxRE,
                  prior = priors_bmod_mxRE,
                  data = within(mean_vectors_full,
                                {
-                               mean_vector = ifelse(mean_vector == 1.0,
-                                                    yes = 1.0 - 1e-3,
-                                                    no = mean_vector)
+                               # mean_vector = ifelse(mean_vector == 1.0,
+                               #                      yes = 1.0 - 1e-3,
+                               #                      no = mean_vector)
+                               mean_vector = (mean_vector * (length(mean_vector) - 1) + 0.5) / length(mean_vector)
                                }
                                ),
                  family = Beta(link = 'logit',
@@ -1007,9 +1008,11 @@ md_ele = brm(formula = frm_elemod_maxRE,
                  prior = priors_elemod_mxRE,
                  data = within(mean_vectors_full,
                                {
-                               mean_vector = ifelse(mean_vector == 1.0,
-                                                    yes = 1.0 - 1e-3,
-                                                    no = mean_vector)
+                               # mean_vector = ifelse(mean_vector == 1.0,
+                               #                      yes = 1.0 - 1e-3,
+                               #                      no = mean_vector)
+                               mean_vector = (mean_vector * (length(mean_vector) - 1) + 0.5) / length(mean_vector)
+                               
                                }
                                ),
                  family = Beta(link = 'logit',
