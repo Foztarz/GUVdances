@@ -19,7 +19,7 @@ editor_options:
 
 > **MODIFIED**
 >
-> James Foster $2025~10~16$
+> James Foster $2025~12~18$
 
 > **DESCRIPTION**
 >
@@ -1711,8 +1711,8 @@ garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 ```
 
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
-#TODO save and load models instead of running them each time
-load_model = TRUE
+#save and load models instead of running them each time
+load_model = FALSE
 # Custom family --------------------------------------------------------
 #In the "unwrap" family, all variables 
 unwrap_von_mises = custom_family(
@@ -1789,11 +1789,6 @@ dt_photo = within(cd_gh,
             }
 )
 
-#TODO oops I forgot this is a huge amount of data, I'll try the full set later
-
-# dt_photo = subset(dt_photo,
-#                   subset = ID %in% full_ids)
-
 dt_sun = within(dt_photo,
                 {bgangle = sunangle - garden_bearing_rad}
                 )
@@ -1803,57 +1798,59 @@ dt_sun = within(dt_photo,
 #model assuming mean direction at 0°, with individual biases
 formula_photo = bf(
   formula = angle ~ mu,
-            nlf(mu ~ fmu + zmu), 
-            fmu ~ 0, # fixed effects intercept == 0
-            zmu ~ 0 + ID,
+            nlf(mu ~ mu0 + mui), 
+            mu0 ~ 0, # fixed effects intercept == 0
+            mui ~ 0 + ID,
             kappa ~ 1 + (1|ID),
   family = unwrap_von_mises,#mod mu, kappa via the softplus
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
 #model allowing any angle
 formula_nophoto = bf(
   formula = angle ~ mu,
-            nlf(mu ~ fmu + zmu), 
-            fmu ~ 1, # fixed effects intercept estimated
-            zmu ~ 0 + ID,
+            nlf(mu ~ mu0 + mui), 
+            mu0 ~ 1, # fixed effects intercept estimated
+            mui ~ 0 + ID,
             kappa ~ 1 + (1|ID),
   family = unwrap_von_mises,#mod mu, kappa via the softplus
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
 formula_sunspot = bf(
   formula = bgangle ~ mu,
-            nlf(mu ~ fmu + zmu), 
-            fmu ~ 0, # fixed effects intercept estimated
-            zmu ~ 0 + ID,
+            nlf(mu ~ mu0 + mui), 
+            mu0 ~ 0, # fixed effects intercept estimated
+            mui ~ 0 + ID,
             kappa ~ 1 + (1|ID),
   family = unwrap_von_mises,#mod mu, kappa via the softplus
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
 formula_nosunspot = bf(
   formula = bgangle ~ mu,
-            nlf(mu ~ fmu + zmu), 
-            fmu ~ 1, # fixed effects intercept estimated
-            zmu ~ 0 + ID,
+            nlf(mu ~ mu0 + mui), 
+            mu0 ~ 1, # fixed effects intercept estimated
+            mui ~ 0 + ID,
             kappa ~ 1 + (1|ID),
   family = unwrap_von_mises,#mod mu, kappa via the softplus
-  nl = TRUE)#to accept user-defined extra parameters (zmu) we need to treat the formula as nonlinear
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
 # Priors
 #priors for mu
 pr_photo = 
   set_prior(paste("target +=", 
-                  'unwrap_von_mises_vect_lpdf(b_zmu | 0, log1p_exp(kappamu))',
-                  '+ normal_lpdf(b_zmu | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+                  'unwrap_von_mises_vect_lpdf(b_mui | 0, log1p_exp(kappamu))',
+                  '+ normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle # not necessary with shrinkage prior
   ),
   check = FALSE) +
-  set_prior("target += normal_lpdf(kappamu | 1.0, 3.0)", #prior to lower values, indiv differences should be large
+  # set_prior("target += normal_lpdf(kappamu | 1.0, 3.0)", #prior to lower values, indiv differences should be large
+  set_prior("target += lognormal_lpdf(log1p_exp(kappamu) | log(15), 0.6)", #shrinkage prior differences should be large
             check = FALSE) +
     prior(normal(3.0,3.0), class = Intercept, dpar = 'kappa') + # bias to oriented
   prior(student_t(3, 0, 3.0), class = sd, dpar = 'kappa')  # weak bias no differences
 
 #for models with a mean we also need an extra parameter
 pr_nophoto = pr_photo +
-  prior(normal(0,2*pi()), class = b,  nlpar = 'fmu', coef = 'Intercept')
+  # prior(normal(0,2*pi()), class = b,  nlpar = 'mu0', coef = 'Intercept')
+  prior(unwrap_von_mises(0,1e-16), class = b,  nlpar = 'mu0', coef = 'Intercept')
 
 #parameters for the brms runs
 wup = 1000
@@ -1948,7 +1945,7 @@ SumUwRhats = function(x, var = NULL){summary(UnwrapRhats(x, variable = var))}
 #check population means
 lapply(X = modlist[c(2,4)],
        FUN = UnwrapRhats,
-       variable = '^b_fmu')
+       variable = '^b_mu0')
 #TODO check what is wrong with nosunspot
 lapply(X = modlist,
        FUN = SumUwRhats)
@@ -1986,26 +1983,26 @@ print(sort(unlist(modLIC)), digits = 1)
 
 # bayestestR::rope(x = modlist$no_phototaxis,
 #                  range = c(-1,1)*pi/4,
-#                  parameters = 'fixed_fmu',
+#                  parameters = 'fixed_mu0',
 #                  effects = 'all',
 #                  verbose = FALSE)
 # bayestestR::rope(x = modlist$no_sunspot,
 #                  range = c(-1,1)*pi/4,
-#                  parameters = 'fmu_Intercept',
+#                  parameters = 'mu0_Intercept',
 #                  effects = 'all',
 #                  verbose = FALSE)
 dr_modlist = lapply(modlist,
                     as_draws_df)
 #for each individual, calculate the likelihood of foraging in the expected region
 
-PostROPE = function(id, rope, drs, mu = 'b_fmu_Intercept')
+PostROPE = function(id, rope, drs, mu = 'b_mu0_Intercept')
 {
   mu = if(!is.na(mu)){with(drs, get(mu))}else{0}
   dr_id = with(drs,
                {
                mod_circular(
                  mu +
-                  get(paste0('b_zmu_ID', id)
+                  get(paste0('b_mui_ID', id)
                             )
                )
                }
@@ -2081,8 +2078,8 @@ It is hard to say for the individuals whether the majority orient towards the se
 What we can say is that the population average falls directly towards the Botanic Garden centre in real-world bearings, while the population average relative to the light source has a leftwards bias.
 
 ```{r plot sunspot hypothesis tests}
-with(dr_modlist$no_phototaxis, paste0(mean(b_fmu_Intercept > 0)*100, '%') ) #nearly all estimates suggest a leftwards bias
-with(dr_modlist$no_sunspot, paste0(mean(b_fmu_Intercept > 0)*100, '%') ) #there is notable overlap between the high-density posterior and centre of Botanic Gardens.
+with(dr_modlist$no_phototaxis, paste0(mean(b_mu0_Intercept > 0)*100, '%') ) #nearly all estimates suggest a leftwards bias
+with(dr_modlist$no_sunspot, paste0(mean(b_mu0_Intercept > 0)*100, '%') ) #there is notable overlap between the high-density posterior and centre of Botanic Gardens.
 
 par(pty = 's')
 par(mfrow = c(2,2),
@@ -2094,7 +2091,7 @@ PCfun(angles = subset(mean_vectors,
       col = 'green',
       shrink = 1.5,
       plot_rho = FALSE,
-      title = '\nRelative to stimulus')
+      title = '\n\n\n\nRelative to stimulus')
 with(dr_modlist$phototaxis, 
      arrows(x0 = 0, x1 = 0,
             y0 = 0, 
@@ -2107,13 +2104,13 @@ with(dr_modlist$phototaxis,
 )
 # Draws2Cont(dr_modlist$no_phototaxis,
 #            x_string = paste0('sin(',
-#                              'b_fmu_Intercept',
+#                              'b_mu0_Intercept',
 #                              ')*',
 #                              'A1(softplus(',
 #                              'b_kappa_Intercept',
 #                              '))'),
 #            y_string = paste0('cos(',
-#                              'b_fmu_Intercept',
+#                              'b_mu0_Intercept',
 #                              ')*',
 #                              'A1(softplus(',
 #                              'b_kappa_Intercept',
@@ -2128,11 +2125,11 @@ with(dr_modlist$no_phototaxis,
      arrows(x0 = 0,
             x1 = #A1(softplus(median(b_kappa_Intercept)))*
               A1(softplus(median(kappamu)))*
-              sin(median(mod_circular(b_fmu_Intercept))),
+              sin(median(mod_circular(b_mu0_Intercept))),
             y0 = 0, 
             y1 = #A1(softplus(median(b_kappa_Intercept)))*
               A1(softplus(median(kappamu)))*
-              cos(median(mod_circular(b_fmu_Intercept))),
+              cos(median(mod_circular(b_mu0_Intercept))),
             col = 'green3',
             lwd = 5,
             length = 0.1
@@ -2156,16 +2153,16 @@ for(id in unique(dt_photo$ID))
                     get(paste0('r_ID__kappa[',id,',Intercept]'))
                                               )))*
                 sin(median(mod_circular(
-                  b_fmu_Intercept +
-                                          get(paste0('b_zmu_ID', id))
+                  b_mu0_Intercept +
+                                          get(paste0('b_mui_ID', id))
                                         ))),
               y0 = 0, 
               y1 = A1(softplus(median(
                     b_kappa_Intercept +
                     get(paste0('r_ID__kappa[',id,',Intercept]')))))*
                 cos(median(mod_circular(
-                  b_fmu_Intercept +
-                                          get(paste0('b_zmu_ID', id))
+                  b_mu0_Intercept +
+                                          get(paste0('b_mui_ID', id))
                                         ))),
               col = adjustcolor('green4',alpha = 0.5),
               lwd = 0.5,
@@ -2204,7 +2201,7 @@ PCfun(angles = with(subset(mean_vectors,
       col = 'green',
       shrink = 1.5,
       plot_rho = FALSE,
-      title = '\nRelative to North')
+      title = '\n\n\n\nRelative to North')
 with(as_draws_df(modlist$sunspot), 
      arrows(x0 = 0,
             x1 = #A1(softplus(median(b_kappa_Intercept)))*
@@ -2223,11 +2220,11 @@ with(as_draws_df(modlist$no_sunspot),
      arrows(x0 = 0,
             x1 = #A1(softplus(median(b_kappa_Intercept)))*
               A1(softplus(median(kappamu)))*
-              sin(median(mod_circular(b_fmu_Intercept+garden_bearing_rad                                         ))),
+              sin(median(mod_circular(b_mu0_Intercept+garden_bearing_rad                                         ))),
             y0 = 0, 
             y1 = #A1(softplus(median(b_kappa_Intercept)))*
               A1(softplus(median(kappamu)))*
-              cos(median(mod_circular(b_fmu_Intercept+garden_bearing_rad 
+              cos(median(mod_circular(b_mu0_Intercept+garden_bearing_rad 
                                         ))),
             col = 'green3',
             lwd = 5,
@@ -2250,18 +2247,18 @@ with(as_draws_df(modlist$no_sunspot),
                     b_kappa_Intercept + 
                     get(paste0('r_ID__kappa[',id,',Intercept]')))))*
               sin(median(mod_circular(
-                b_fmu_Intercept+
+                b_mu0_Intercept+
                 garden_bearing_rad +
-                                          get(paste0('b_zmu_ID', id))
+                                          get(paste0('b_mui_ID', id))
                                         ))),
             y0 = 0, 
             y1 = A1(softplus(median(
                     b_kappa_Intercept + 
                     get(paste0('r_ID__kappa[',id,',Intercept]')))))*
               cos(median(mod_circular(
-                b_fmu_Intercept+
+                b_mu0_Intercept+
                   garden_bearing_rad +
-                                          get(paste0('b_zmu_ID', id))
+                                          get(paste0('b_mui_ID', id))
                                         ))),
             col = adjustcolor('green4',alpha = 0.5),
             lwd = 0.5,
@@ -2271,13 +2268,13 @@ with(as_draws_df(modlist$no_sunspot),
 # Draws2Cont(dr_modlist$no_sunspot,
 #            alpha = 100/255,
 #            x_string = paste0('sin(',
-#                              'b_fmu_Intercept+garden_bearing_rad',
+#                              'b_mu0_Intercept+garden_bearing_rad',
 #                              ')*',
 #                              'A1(softplus(',
 #                              'b_kappa_Intercept',
 #                              '))'),
 #            y_string = paste0('cos(',
-#                              'b_fmu_Intercept+garden_bearing_rad',
+#                              'b_mu0_Intercept+garden_bearing_rad',
 #                              ')*',
 #                              'A1(softplus(',
 #                              'b_kappa_Intercept',
@@ -2289,18 +2286,18 @@ par(mar = c(0,3,0,0))
 
 with(dr_modlist$no_phototaxis,
      {
-      VertHist(data = deg(b_fmu_Intercept), 
+      VertHist(data = deg(mod_circular(b_mu0_Intercept)),
          main = '\nPopulation mean angle',
          ylab = 'model estimates',
-         ylim = c(-45, 15),
+         ylim = c(-15, 45),
          col = adjustcolor('green3', alpha.f = 100/255),
          cex.axis = 0.7)
        abline(h = 0,
        col = 'orange',
        lwd = 7)
        arrows(x0 = 0, x1 = 0,
-              y0 = quantile(deg(b_fmu_Intercept), p = 0.025),
-              y1 = quantile(deg(b_fmu_Intercept), p = 1-0.025),
+              y0 = quantile(deg(mod_circular(b_mu0_Intercept)), p = 0.025),
+              y1 = quantile(deg(mod_circular(b_mu0_Intercept)), p = 1-0.025),
               col = 'green4',
               lwd = 5,
               code = 3,
@@ -2330,10 +2327,10 @@ gb_pos = garden_bearing[2] %% 360
 
 with(dr_modlist$no_sunspot,
      {
-      VertHist(data = deg(b_fmu_Intercept)  + gb_pos, 
+      VertHist(data = deg(mod_circular(b_mu0_Intercept))  + gb_pos, 
                main = '\nPopulation mean bearing',
                ylab = 'model estimates',
-               ylim = c(-60, 60) + gb_pos,
+               ylim = c(-30, 90) + gb_pos,
                col = adjustcolor('green3', alpha.f = 100/255),
                cex.axis = 0.7)
       abline(h = garden_bearing %% 360,
@@ -2341,9 +2338,9 @@ with(dr_modlist$no_sunspot,
              lwd = c(1,7,1),
              lty = c(2,1,2) )
        arrows(x0 = 0, x1 = 0,
-              y0 = quantile(deg(b_fmu_Intercept), p = 0.025) +
+              y0 = quantile(deg(mod_circular(b_mu0_Intercept)), p = 0.025) +
                 gb_pos,
-              y1 = quantile(deg(b_fmu_Intercept), p = 1-0.025) +
+              y1 = quantile(deg(mod_circular(b_mu0_Intercept)), p = 1-0.025) +
                 gb_pos,
               col = 'green4',
               lwd = 5,
@@ -2378,7 +2375,7 @@ with(dr_modlist$no_sunspot,
      {
      paste0(
        round(
-       quantile(x = deg(b_fmu_Intercept), 
+       quantile(x = deg(b_mu0_Intercept), 
                 p = c(0,0.5,1)+c(1,0,-1)*(0.05/2) ) +
                 gb_pos
                 ) %% 360, # as a bearing

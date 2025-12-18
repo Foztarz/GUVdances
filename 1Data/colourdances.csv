@@ -1,4 +1,4 @@
-bee,light_type,bearing,run,date
+bee,light_type,measured_angle,run,date
 2016.05.31.14.24,ul,270,1,2016.05.31
 2016.05.31.14.24,ul,5,2,2016.05.31
 2016.05.31.14.24,ul,20,3,2016.05.31

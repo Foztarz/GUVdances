@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 13
-#     MODIFIED:	James Foster              DATE: 2025 07 18
+#     MODIFIED:	James Foster              DATE: 2025 12 18
 #
 #  DESCRIPTION: Reorganise data and print out to csv
 #               
@@ -91,6 +91,14 @@ cd = read.table(file = path_file,
                 sep  = ',')
 View(cd)
 
+#measured_angle is anticlockwise, convert to clockwise for comparison with sun azimuth
+cd = within(cd,
+            {bearing = (-measured_angle %% 360)})
+#check relationship
+par(pty = 's')
+with(cd, plot(measured_angle, bearing))
+
+#format other variables
 cd = within(cd,
             {
               ID = as.factor(bee) # beedance identifier as a factor
