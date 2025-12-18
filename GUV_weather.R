@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 11 02
-#     MODIFIED:	James Foster              DATE: 2025 11 02
+#     MODIFIED:	James Foster              DATE: 2025 12 13
 #
 #  DESCRIPTION: Sort data by weather based on weather reports near Marbug
 #               
@@ -23,6 +23,7 @@ graphics.off()
 #- Read in weather data +
 #- Organise weather data  +
 #- Plot mean vectors by weather category  +
+#- Import Neu-Ulrichstein data
 #- Model comparison cloudy non-cloudy
 
 
@@ -77,6 +78,7 @@ path_functions = tryCatch(expr = #try to load functions from the folder containi
          }
 )
 
+###  Find Gießen data ----------------------------------------------------------
 path_file = file.path(dirname(path_functions), "1Data/colour_dance_reorg.csv")
 if(file.exists(path_file))
 {
@@ -110,10 +112,10 @@ if(file.exists(weather_file))
 {
   # set path to file
   if(sys_win){#choose.files is only available on Windows
-    message('\n\nPlease select the ".csv" file\n\n')
+    message('\n\nPlease select the ".txt" file\n\n')
     Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
     weather_file = choose.files(
-      default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
+      default = file.path(here_path, "*.txt"),#For some reason this is not possible in the "root" user
       caption = 'Please select the "Gießen_Cloud_19490101_20241231_01639.txt" file'
     )
   }else{
@@ -125,6 +127,33 @@ if(file.exists(weather_file))
   if(is.null(weather_file) | !length(weather_file))
   {stop('No file selected.')}else
   {print(weather_file)}
+}
+
+###  Find Gießen data ----------------------------------------------------------
+
+weather_nu = file.path(dirname(path_file), "Weather-Neu-Ulrichstein_wetter-online.de.csv")
+if(file.exists(weather_nu))
+{
+  print(weather_nu)
+}else
+{
+  # set path to file
+  if(sys_win){#choose.files is only available on Windows
+    message('\n\nPlease select the ".csv" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    weather_nu = choose.files(
+      default = file.path(here_path, "*.csv"),#For some reason this is not possible in the "root" user
+      caption = 'Please select the "Weather-Neu-Ulrichstein_wetter-online.de.csv" file'
+    )
+  }else{
+    message('\n\nPlease select the "Weather-Neu-Ulrichstein_wetter-online.de.txt" file\n\n')
+    Sys.sleep(0.5)#goes too fast for the user to see the message on some computers
+    weather_nu = file.choose(new=F)
+  }
+  #show the user the path they have selected
+  if(is.null(weather_nu) | !length(weather_nu))
+  {stop('No file selected.')}else
+  {print(weather_nu)}
 }
 
 # Read in the data and format ---------------------------------------------
@@ -164,7 +193,11 @@ length(full_ids)#19 individuals
 #select the reorganised data
 wd = read.table(file = weather_file, 
                 header = T, 
-                sep  = ';')
+                sep  = ';')#select the reorganised data
+
+nd = read.table(file = weather_nu, 
+                header = T, 
+                sep  = ',')
 
 ## Add time --------------------------------------------------------------
 
@@ -194,6 +227,21 @@ daterange = sapply(X = daterange,
 wd = subset(wd,
             MESS_DATUM > (daterange[1] -1) &
             MESS_DATUM < (daterange[2] +1)
+            )
+
+
+## Add ID ----------------------------------------------------------------
+
+nd = within(nd,
+            {
+              Time = sub(Time,
+                         pattern = ':',
+                         replacement = '.')
+              ID = ifelse(is.na(Time),
+                          yes = paste0(Date, '.__.__'),
+                          no = paste0(Date, '.', Time)
+                          )
+            }
             )
 
 
@@ -232,11 +280,46 @@ cd = within(cd,
             }
 )
 
+cd = within(cd,
+            {
+              nu_obs = ifelse(ID %in% nd$ID,
+                              yes = nd$Wetter,
+                              no = NA)
+            }
+            )
+
+cd = within(cd,
+            {
+              nu_lev = sapply(nu_obs,
+                              FUN = switch,
+                              `blauer Himmel` = 1,
+                              `leicht wolkig` = 2,
+                              `bewölkt` = 3,
+                              `NA` = NA
+                              )
+            }
+            )
+
 
 #find data for full condition individuals
 full_cd = subset(cd, ID %in% full_ids)
 
 # Inspect data ------------------------------------------------------------
+#The two sites report very different weather!
+with(cd,
+     stripchart(nu_lev~cloud_prop,
+                vertical = TRUE,
+                method = 'stack',
+                offset = 0.015,
+          xlab = 'Gießen cloud data (0-8/8)',
+          ylab = 'Neu-Ulrichstein cloud data (1-3)',
+          col = gray(0, alpha = 0.02),
+          pch = 1)
+     )
+
+
+## Gießen data -----------------------------------------------------------
+
 with(cd,
      {
 hist(x = cloud_prop,
@@ -278,10 +361,55 @@ with(full_cd, quantile(cloud8, na.rm = TRUE))
 
 # cloud_threshold = 0.26
 cloud_threshold = 6.5/8
+
+
+## Neu-Ulrichstein data --------------------------------------------------
+
+
+with(cd,
+     {
+       hist(x = nu_lev,
+            breaks = 8,
+            xlab = 'Cloud cover (1-3)',
+            main = 'Cloud cover for all dances',
+            probability = TRUE,
+            border = NA,
+            ylim = c(-0.5,5))
+       boxplot(x = nu_lev,
+               at = -0.25,
+               horizontal = TRUE,
+               col = adjustcolor('blue', alpha.f = 0.2),
+               border = gray(0.25, 1.0),
+               add = TRUE)
+     }
+)
+#about half of data is below 3, might be a good cut
+
+with(full_cd,
+     {
+       hist(x = nu_lev,
+            breaks = 8,
+            xlab = 'Cloud cover (1-3)',
+            main = 'Cloud cover for full-condition dances',
+            probability = TRUE,
+            border = NA,
+            ylim = c(-0.5,5))
+       boxplot(x = nu_lev,
+               at = -0.25,
+               horizontal = TRUE,
+               col = adjustcolor('blue', alpha.f = 0.2),
+               border = gray(0.25, 1.0),
+               add = TRUE)
+     }
+)
+#about equal propotions in each
+with(full_cd, quantile(nu_lev, na.rm = TRUE))
+
+
 # Calculate mean vectors --------------------------------------------------
 
 
-mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad+cloud_prop, # N.B. Including sun azimuth drops some cases without a time stamp
+mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad+cloud_prop + nu_lev, # N.B. Including sun azimuth drops some cases without a time stamp
                          data = cd,
                          FUN = rho.circular
 )
@@ -290,7 +418,7 @@ mean_vectors = within(mean_vectors,
                       {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
 )
 #add kappa
-mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el+cloud_prop,
+mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el+cloud_prop + nu_lev,
                           data = cd,
                           FUN = MLE_est
 )
@@ -311,6 +439,7 @@ mean_vectors_full = subset(mean_vectors,
 # Inspect mean vectors ----------------------------------------------------
 
 
+## By DWD Gießen data ----------------------------------------------------
 par(pty = 's')
 par(mfrow = c(2,4), mar = c(0,0,0,0))
 PCfun(angles = subset(mean_vectors_full, 
@@ -365,13 +494,104 @@ PCfun(angles = subset(mean_vectors_full,
       shrink = 1.5,
       title = 'UV Dim')
 
+## By Wetter-online Neu-Ulrichstein data ---------------------------------------
+par(pty = 's')
+par(mfrow = c(3,4), mar = c(0,0,0,0))
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'h'&
+                        nu_lev ==1)$mu,
+      col = 'green',
+      shrink = 1.5,
+      title = 'Green Bright\nClear',
+      titleline = -0.5)
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'l'&
+                        nu_lev ==1)$mu,
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'h'&
+                        nu_lev ==1)$mu,
+      col = 'magenta',
+      shrink = 1.5,
+      title = 'UV Bright')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'l'&
+                        nu_lev ==1)$mu,
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim')
+
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'h'&
+                        nu_lev ==2)$mu,
+      col = 'green',
+      shrink = 1.5,
+      title = 'Green Bright\nLight cloud',
+      titleline = -0.5)
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'l'&
+                        nu_lev ==2)$mu,
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'h'&
+                        nu_lev ==2)$mu,
+      col = 'magenta',
+      shrink = 1.5,
+      title = 'UV Bright')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'l'&
+                        nu_lev ==2)$mu,
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim')
+
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'h'&
+                        nu_lev ==3)$mu,
+      col = 'green',
+      shrink = 1.5,
+      title = 'Green Bright\nOvercast',
+      titleline = -0.5)
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'g' & brightn %in% 'l'&
+                        nu_lev ==3)$mu,
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'h'&
+                        nu_lev ==3)$mu,
+      col = 'magenta',
+      shrink = 1.5,
+      title = 'UV Bright')
+PCfun(angles = subset(mean_vectors_full, 
+                      subset = colour %in% 'u' & brightn %in% 'l'&
+                        nu_lev ==3)$mu,
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim')
+
 
 #  Differences in mean angle ----------------------------------------------
+#DWD Gießen
 mean_vectors_full_clear = subset(mean_vectors_full,
                                  cloud_prop < cloud_threshold)
 mean_vectors_full_cloudy = subset(mean_vectors_full,
                                  cloud_prop > cloud_threshold)
+#Wetter-online Neu-Ulrichstein
+mean_vectors_full_bh = subset(mean_vectors_full, #blauer Himmel
+                                 nu_lev == 1)
+mean_vectors_full_lw = subset(mean_vectors_full, #leicht wolkig
+                                 nu_lev == 2)
+mean_vectors_full_bw = subset(mean_vectors_full, #bewölkt
+                                 nu_lev == 3)
 
+
+## DWD Gießen ------------------------------------------------------------
 #Clear
 #Plot changes in mean dance angle
 mu_diff_gl_clear = sapply(X = full_ids,
@@ -479,9 +699,173 @@ PCfun(angles = unlist(mu_diff_gul_cloudy),
       shrink = 1.5,
       title = 'UV Dim - Green Dim')
 
+## Wetter-online Neu-Ulrichstein -----------------------------------------------
+#Clear
+#Plot changes in mean dance angle
+mu_diff_gl_bh = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bh,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh_bh = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bh,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul_bh = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bh,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl_bh = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_bh,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'u',
+                     ref_br = 'h')
+mu_diff_gul_bh = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_bh,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'g',
+                     ref_br = 'h')
+
+#Partly Cloudy
+#Plot changes in mean dance angle
+mu_diff_gl_lw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_lw,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh_lw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_lw,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul_lw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_lw,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl_lw = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_lw,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'u',
+                     ref_br = 'h')
+mu_diff_gul_lw = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_lw,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'g',
+                     ref_br = 'h')
+
+#Overcast
+#Plot changes in mean dance angle
+mu_diff_gl_bw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bw,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh_bw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bw,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul_bw = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors_full_bw,
+                    cl = 'u',
+                    br = 'l')
+
+
+#Other contrasts
+mu_diff_uhl_bw = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_bw,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'u',
+                     ref_br = 'h')
+mu_diff_gul_bw = sapply(X = full_ids,
+                     FUN = MuDiff,
+                     dt = mean_vectors_full_bw,
+                     cl = 'u',
+                     br = 'l',
+                     ref_cl = 'g',
+                     ref_br = 'h')
+
+par(pty = 's')
+par(mfrow = c(3,4), mar = c(0,0,0,0))
+PCfun(angles = unlist(mu_diff_gl_bh),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright\nClear',
+      titleline = -0.5)
+PCfun(angles = unlist(mu_diff_uhl_bh),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh_bh),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul_bh),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+PCfun(angles = unlist(mu_diff_gl_lw),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright\nPartly Cloudy',
+      titleline = -0.5)
+PCfun(angles = unlist(mu_diff_uhl_lw),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh_lw),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul_lw),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+PCfun(angles = unlist(mu_diff_gl_bw),
+      col = 'darkgreen',
+      shrink = 1.5,
+      title = 'Green Dim - Green Bright\nOvercast',
+      titleline = -0.5)
+PCfun(angles = unlist(mu_diff_uhl_bw),
+      col = 'purple',
+      shrink = 1.5,
+      title = 'UV Dim - UV Bright')
+PCfun(angles = unlist(mu_diff_uh_bw),
+      col = 'gray40',
+      shrink = 1.5,
+      title = 'UV Bright - Green Bright')
+PCfun(angles = unlist(mu_diff_gul_bw),
+      col = 'gray25',
+      shrink = 1.5,
+      title = 'UV Dim - Green Dim')
+
 
 # Fit MLE models ----------------------------------------------------------
-## Organise heading changes -----
+
+
+## DWD Gießen data -------------------------------------------------------
+
+### Organise heading changes -----
 #collect all heading differences
 pair_diffs_lst_cc = lapply(X = list(
   #bright vs dim green
@@ -509,7 +893,7 @@ pair_diffs_lst_cc = lapply(X = pair_diffs_lst_cc,
                         FUN = circular,
                         units = angle_unit,
                         rotation = angle_rot)
-# Fit maximum likelihood von Mises distributions ------
+### Fit maximum likelihood von Mises distributions ------
 #Distribution for same means
 ml_same_lst_cc = lapply(X = pair_diffs_lst_cc,
                      mle.vonmises,
@@ -597,7 +981,7 @@ all_res_cc = within(data = data.frame(all_res_cc),
 print(all_res_cc, digits = 3)
 
 
-# Likelihood ratio tests for each condition-weather set -------------------
+### Likelihood ratio tests for each condition-weather set -------------------
 # Perform LR tests
 mod_details_cc= lapply(X = names(pair_diffs_lst_cc),
                     FUN = CollectDetails,
@@ -611,29 +995,245 @@ lr_tests_cc = c('pairs_diff_zero', #is the turn different from zero?
              'pairs_multi_zero' #are the two directions different from zero?
 )#multiple tests
 
+
 #Perform collect likelihood ratio tests for each hypothesis
 all_lr_results_lst_cc = lapply(X =mod_details_cc,
-                            FUN = LR_calc_lst,
-                            tst = lr_tests_cc)
+                               FUN = LR_calc_lst,
+                               tst = lr_tests_cc)
 all_lr_results_cc = do.call(what = rbind,
-                         args = all_lr_results_lst_cc
+                            args = all_lr_results_lst_cc
 )
 all_lr_results_cc = within(data.frame(all_lr_results_cc),
+                           {
+                             comparison = c( sapply(X = names(mod_details_cc), 
+                                                    FUN = rep,
+                                                    times = length(lr_tests_cc)
+                             ) )
+                             test = rep(lr_tests_cc, 
+                                        times = length(names(mod_details_cc))
+                             ) 
+                           }
+)
+
+#add labels to interpret each test according to p value and sign of comparison
+all_lr_results_cc = within(all_lr_results_cc,
+                           {
+                             result = mapply(tst = lr_tests_cc,
+                                             d0 = unlist(dev0),
+                                             d1 = unlist(dev1),
+                                             pa = p_adjusted,
+                                             FUN = H1label
+                             )
+                           }
+)
+print_lr_results_cc = all_lr_results_cc
+print_lr_results_cc = within(print_lr_results_cc,
+                             {
+                               rm(dev0,dev1, p)
+                               test = sub(sub(sub(test, 
+                                                  pattern = '_', 
+                                                  replacement = ' '),
+                                              pattern = '_', 
+                                              replacement = ' '),
+                                          pattern = 'pairs ',
+                                          replacement = '')
+                               mu1 = round(all_res_cc$mu1, 1)
+                             }
+)
+print_lr_results_cc = within(print_lr_results_cc,
+                             {mu2 = round(all_res_cc$mu2, 1)}
+)
+rownames(print_lr_results_cc) = with(print_lr_results_cc, paste(comparison, test))#better to keep them for the html
+#Round numeric columns
+# print_lr_results = apply(print_lr_results, MARGIN = 2, FUN = unlist)
+num_col_cc = sapply(X = print_lr_results_cc, 
+                    FUN = is.numeric)
+print_lr_results_cc[,num_col_cc] = apply(X = print_lr_results_cc[,num_col_cc],
+                                         MARGIN = 2, 
+                                         FUN = round, 
+                                         digits = 3)
+#Print the results
+print(print_lr_results_cc[,-6],
+      digits = 3)
+# View(print_lr_results_cc)
+
+#save results
+write.table(x = print_lr_results_cc, 
+            file = '2Results/LRT_paired_diffs_Gweather.csv',
+            sep = ',',
+            row.names = TRUE)
+##Conclusions:
+## Under neither set of weather conditions do the green or bright stimuli
+## differ significantly.
+## The UV stimuli differ significantly, with a single mean for clear skies
+## and two means for cloudy skies.
+## The dim stimuli differ significantly for the cloudy but not the clear conditions.
+
+## Wetter-online Neu-Ulrichstein data ------------------------------------------
+
+### Organise heading changes -----
+#collect all heading differences
+pair_diffs_lst_cc_nu = lapply(X = list(
+  #bright vs dim green
+  g_hl_clear = mu_diff_gl_bh, 
+  #bright vs dim UV
+  uv_hl_clear = mu_diff_uhl_bh,
+  #bright green vs bright uv 
+  uvg_h_clear = mu_diff_uh_bh,
+  #dim green vs bright UV
+  uvg_l_clear = mu_diff_gul_bh,
+  #bright vs dim green
+  g_hl_part = mu_diff_gl_lw, 
+  #bright vs dim UV
+  uv_hl_part = mu_diff_uhl_lw,
+  #bright green vs bright uv 
+  uvg_h_part = mu_diff_uh_lw,
+  #dim green vs bright UV
+  uvg_l_part = mu_diff_gul_lw,
+  #bright vs dim green
+  g_hl_cloud = mu_diff_gl_bw, 
+  #bright vs dim UV
+  uv_hl_cloud = mu_diff_uhl_bw,
+  #bright green vs bright uv 
+  uvg_h_cloud = mu_diff_uh_bw,
+  #dim green vs bright UV
+  uvg_l_cloud = mu_diff_gul_bw
+  ), 
+  FUN = unlist) 
+#Provide appropriate data format
+angle_unit = 'degrees' 
+angle_rot = 'clock'
+#make sure they are in circular format
+pair_diffs_lst_cc_nu = lapply(X = pair_diffs_lst_cc_nu,
+                        FUN = circular,
+                        units = angle_unit,
+                        rotation = angle_rot)
+### Fit maximum likelihood von Mises distributions ------
+#Distribution for same means
+ml_same_lst_cc_nu = lapply(X = pair_diffs_lst_cc_nu,
+                     mle.vonmises,
+                     bias = TRUE,
+                     mu = circular(x = 0,
+                                   units = angle_unit,
+                                   rotation = angle_rot)
+)
+#Distribution for different means
+ml_diff_lst_cc_nu = lapply(X = pair_diffs_lst_cc_nu,
+                     mle.vonmises,
+                     bias = TRUE)
+#Distribution for multiple different means
+mod_diff_lst_cc_nu = lapply(X = pair_diffs_lst_cc_nu,
+                      FUN = circ_mle,#converts circular format data to radians
+                      niter = 1e4)#some stochastic variability for green stim
+#Forced multiple different means
+bim_diff_lst_cc_nu = lapply(X = pair_diffs_lst_cc_nu,
+                      FUN = circ_mle,#converts circular format data to radians
+                      exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
+                      niter = 1e4)#some stochastic variability for green stim
+
+
+#Extract the parameters of the model with the lowest AIC
+mod_diff_par_cc_nu = t( sapply(X = mod_diff_lst_cc_nu,
+                         FUN = MD_extract) )
+bim_diff_par_cc_nu = t( sapply(X = bim_diff_lst_cc_nu,
+                         FUN = MD_extract) )
+
+# Calculate likelihood 
+#calculate all in list
+all_ll_cc_nu = mapply(FUN = LLcalc,
+                ml = c(ml_same_lst_cc_nu, ml_diff_lst_cc_nu), #apply to both sets of ML estimates
+                angles = pair_diffs_lst_cc_nu, #repeat datasets
+                au = angle_unit, #important, use the same frame of reference as the original
+                ar = angle_rot)
+
+#inspect resulting parameters
+mod_diff_results_cc_nu = do.call(rbind, c(ml_same_lst_cc_nu, ml_diff_lst_cc_nu))
+#add easy to parse names
+rownames(mod_diff_results_cc_nu) = paste( sort( #distinguish same and different mean
+  rep(x = c( 'same', 'diff'), 
+      times =  length(pair_diffs_lst_cc_nu) ),
+  decreasing = TRUE
+),
+rep(x = names(pair_diffs_lst_cc_nu),
+    times = 2) 
+)
+#display version
+rspar_cc_nu = mod_diff_results_cc_nu[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
+rspar_cc_nu = cbind(rspar_cc_nu, loglikelihood = all_ll_cc_nu)
+rspar_cc_nu = apply(X = rspar_cc_nu, MARGIN = 2, FUN = unlist)
+#reorder for easy comparison
+rspar_cc_nu = rspar_cc_nu[c(rbind(1:12, 1:12+12)),]#put the different directly after the same
+rspar_cc_nu[,3:4] = NA
+rspar_cc_nu = cbind(rspar_cc_nu, weight1 = 1.0)
+colnames(rspar_cc_nu) = colnames(bim_diff_par_cc_nu)[c(1:4, 6:5)]
+all_res_cc_nu = rbind(data.frame(rspar_cc_nu),
+                data.frame(bim_diff_par_cc_nu) )
+all_res_cc_nu = apply(all_res_cc_nu, MARGIN = 2, FUN = unlist)
+rn_res_cc_nu = rownames(all_res_cc_nu)#NB in R4.5 need to make a copy of rownames
+rn_res_cc_nu[25:36] = paste('multi', rownames(bim_diff_par_cc_nu))
+rownames(all_res_cc_nu) = rn_res_cc_nu #
+#Easier range to interpret
+all_res_cc_nu[,c(1,3)] = apply(all_res_cc_nu[,c(1,3)], 
+                            FUN = Mod360.180,
+                            MARGIN = 2)
+all_res_cc_nu = all_res_cc_nu[c(1:2, 25, 3:4, 26, 5:6, 27, 7:8, 28,
+                          9:10, 29, 11:12, 30, 13:14, 31, 15:16, 32,
+                          17:18, 33, 19:20, 34, 21:22, 35, 23:24, 36
+                          ),]
+
+all_res_cc_nu = within(data = data.frame(all_res_cc_nu),
+                 {
+                   model = c('same',
+                             'diff',
+                             'multi')
+                   dataset = c(sapply(X = names(pair_diffs_lst_cc_nu),
+                                      FUN = rep,
+                                      times = 3) )
+                 }
+)
+# print(rspar, digits = 3)
+# print(mod_diff_par, digits = 3)
+# print(bim_diff_par, digits = 3)
+print(all_res_cc_nu, digits = 3)
+
+
+### Likelihood ratio tests for each condition-weather set -------------------
+# Perform LR tests
+mod_details_cc_nu= lapply(X = names(pair_diffs_lst_cc_nu),
+                    FUN = CollectDetails,
+                    ll = all_res_cc_nu,
+                    bimod = TRUE)
+names(mod_details_cc_nu) = names(pair_diffs_lst_cc_nu)
+
+#set up tests for hypotheses
+lr_tests_cc_nu = c('pairs_diff_zero', #is the turn different from zero?
+             'pairs_multi_diff', #is the turn in one or two directions?
+             'pairs_multi_zero' #are the two directions different from zero?
+)#multiple tests
+
+#Perform collect likelihood ratio tests for each hypothesis
+all_lr_results_lst_cc_nu = lapply(X =mod_details_cc_nu,
+                            FUN = LR_calc_lst,
+                            tst = lr_tests_cc_nu)
+all_lr_results_cc_nu = do.call(what = rbind,
+                         args = all_lr_results_lst_cc_nu
+)
+all_lr_results_cc_nu = within(data.frame(all_lr_results_cc_nu),
                         {
-                          comparison = c( sapply(X = names(mod_details_cc), 
+                          comparison = c( sapply(X = names(mod_details_cc_nu), 
                                                  FUN = rep,
-                                                 times = length(lr_tests_cc)
+                                                 times = length(lr_tests_cc_nu)
                           ) )
-                          test = rep(lr_tests_cc, 
-                                     times = length(names(mod_details_cc))
+                          test = rep(lr_tests_cc_nu, 
+                                     times = length(names(mod_details_cc_nu))
                           ) 
                         }
 )
 
 #add labels to interpret each test according to p value and sign of comparison
-all_lr_results_cc = within(all_lr_results_cc,
+all_lr_results_cc_nu = within(all_lr_results_cc_nu,
                         {
-                          result = mapply(tst = lr_tests_cc,
+                          result = mapply(tst = lr_tests_cc_nu,
                                           d0 = unlist(dev0),
                                           d1 = unlist(dev1),
                                           pa = p_adjusted,
@@ -641,8 +1241,8 @@ all_lr_results_cc = within(all_lr_results_cc,
                           )
                         }
 )
-print_lr_results_cc = all_lr_results_cc
-print_lr_results_cc = within(print_lr_results_cc,
+print_lr_results_cc_nu = all_lr_results_cc_nu
+print_lr_results_cc_nu = within(print_lr_results_cc_nu,
                           {
                             rm(dev0,dev1, p)
                             test = sub(sub(sub(test, 
@@ -652,29 +1252,29 @@ print_lr_results_cc = within(print_lr_results_cc,
                                            replacement = ' '),
                                        pattern = 'pairs ',
                                        replacement = '')
-                            mu1 = round(all_res_cc$mu1, 1)
+                            mu1 = round(all_res_cc_nu$mu1, 1)
                           }
 )
-print_lr_results_cc = within(print_lr_results_cc,
-                          {mu2 = round(all_res_cc$mu2, 1)}
+print_lr_results_cc_nu = within(print_lr_results_cc_nu,
+                          {mu2 = round(all_res_cc_nu$mu2, 1)}
 )
-rownames(print_lr_results_cc) = with(print_lr_results_cc, paste(comparison, test))#better to keep them for the html
+rownames(print_lr_results_cc_nu) = with(print_lr_results_cc_nu, paste(comparison, test))#better to keep them for the html
 #Round numeric columns
 # print_lr_results = apply(print_lr_results, MARGIN = 2, FUN = unlist)
-num_col_cc = sapply(X = print_lr_results_cc, 
+num_col_cc_nu = sapply(X = print_lr_results_cc_nu, 
                  FUN = is.numeric)
-print_lr_results_cc[,num_col_cc] = apply(X = print_lr_results_cc[,num_col_cc],
+print_lr_results_cc_nu[,num_col_cc_nu] = apply(X = print_lr_results_cc_nu[,num_col_cc_nu],
                                    MARGIN = 2, 
                                    FUN = round, 
                                    digits = 3)
 #Print the results
-print(print_lr_results_cc[,-6],
+print(print_lr_results_cc_nu[,-6],
       digits = 3)
 # View(print_lr_results_cc)
 
 #save results
-write.table(x = print_lr_results_cc, 
-            file = '2Results/LRT_paired_diffs.csv',
+write.table(x = print_lr_results_cc_nu, 
+            file = '2Results/LRT_paired_diffs_NUweather.csv',
             sep = ',',
             row.names = TRUE)
 ##Conclusions:
@@ -685,14 +1285,19 @@ write.table(x = print_lr_results_cc,
 ## The dim stimuli differ significantly for the cloudy but not the clear conditions.
 
 # Compare with null models excluding weather ------------------------------
-all_res_null = read.table(file = file.path(dirname(path_functions),
-                                           '2Results/MLE_paired_diffs.csv'),
-                          sep = ',')
-mod_details_null = load(file = file.path(dirname(path_functions),
-                                  '2Results/MLEdetails_paired_diffs.RData'))
-mod_details_null = get(mod_details_null)
-print_lr_results_null = read.table(file = file.path(dirname(path_functions),'2Results/LRT_paired_diffs.csv'),
-                            sep = ',')
+
+#Null 
+all_res_null = read.table(file = file.path(dirname(path_functions), '/2Results',
+                                    'MLE_paired_diffs.csv'),
+                          sep = ',',
+                          header = TRUE)
+
+mod_details_null= lapply(X = with(all_res_null, unique(dataset)),
+                          FUN = CollectDetails,
+                          ll = all_res_null,
+                          bimod = TRUE)
+names(mod_details_null) = with(all_res_null, unique(dataset))
+
 print(all_res_null, digits = 3)
 # View(print_lr_results_null)
 #Select likelihoods for models:
@@ -701,23 +1306,39 @@ print(all_res_null, digits = 3)
 # GUh same
 # GUl multi
 
+
 rn_res_null = rownames(all_res_null)
 rn_res_cc = rownames(all_res_cc)
+rn_res_cc_nu = rownames(all_res_cc_nu)
 
 best_names_null = c('same green_hl',
-                  'multi uv_hl',
-                  'same uvg_h',
-                  'multi uvg_l')
+                    'multi uv_hl',
+                    'same uvg_h',
+                    'multi uvg_l')
 
 best_names_cc = c("same g_hl_clear", 
-                        "same g_hl_cloud",
-                        "diff uv_hl_clear",
-                        "multi uv_hl_cloud",
-                        "same uv_hl_clear",
-                        "same uv_hl_cloud",
-                        "multi uvg_l_clear",
-                        "multi uvg_l_cloud"
-                        )
+                  "same g_hl_cloud",
+                  "diff uv_hl_clear",
+                  "multi uv_hl_cloud",
+                  "same uvg_h_clear",
+                  "same uvg_h_cloud",
+                  "multi uvg_l_clear",
+                  "multi uvg_l_cloud"
+)
+
+best_names_cc_nu = c("same g_hl_clear", 
+                  "same g_hl_part",
+                  "multi g_hl_cloud",
+                  "multi uv_hl_clear",
+                  "same uv_hl_part",
+                  "multi uv_hl_cloud",
+                  "diff uvg_h_clear",
+                  "same uvg_h_part",
+                  "same uvg_h_cloud",
+                  "same uvg_l_clear",
+                  "diff uvg_l_part",
+                  "multi uvg_l_cloud"
+)
 
 mod_details_dt_null= do.call(rbind,mod_details_null)
 rownames(mod_details_dt_null) = rn_res_null
@@ -725,14 +1346,22 @@ rownames(mod_details_dt_null) = rn_res_null
 mod_details_dt_cc= do.call(rbind,mod_details_cc)
 rownames(mod_details_dt_cc) = rn_res_cc
 
+mod_details_dt_cc_nu= do.call(rbind,mod_details_cc_nu)
+rownames(mod_details_dt_cc_nu) = rn_res_cc_nu
+
 best_null = mod_details_dt_null[best_names_null,]
 best_cc = mod_details_dt_cc[best_names_cc,]
+best_cc_nu = mod_details_dt_cc_nu[best_names_cc_nu,]
 
 
-# Calculate joint likelihood for null and weather models
+# Calculate joint likelihood for null models
+# Calculate joint likelihood for null models
 joint_null = apply(best_null[,c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
+
+## DWD Gießen ------------------------------------------------------------
+
 joint_cc = apply(best_cc[,c('ll', 'deviance', 'df')],
                    FUN = sum,
                    MARGIN = 2)
@@ -760,8 +1389,8 @@ ll_u_hl_cc = apply(best_cc[c("diff uv_hl_clear",
                            c('ll', 'deviance','df' )],
                  FUN = sum,
                  MARGIN = 2)
-ll_uvg_h_cc = apply(best_cc[c("same uv_hl_clear",
-                               "same uv_hl_cloud"),
+ll_uvg_h_cc = apply(best_cc[c("same uvg_h_clear",
+                               "same uvg_h_cloud"),
                             c('ll','deviance', 'df' )],
                   FUN = sum,
                   MARGIN = 2)
@@ -844,6 +1473,131 @@ print(print_lr_weather,
 #save results
 write.table(x = print_lr_results_cc, 
             file = file.path(dirname(path_functions),
-                             '2Results/LRT_paired_diffs_weather.csv'),
+                             '2Results/LRT_joint_Gweather.csv'),
+            sep = ',',
+            row.names = TRUE)
+
+## Wetter-online NU ------------------------------------------------------------
+
+
+# Calculate joint likelihood for weather models
+joint_cc_nu = apply(best_cc_nu[,c('ll', 'deviance', 'df')],
+                   FUN = sum,
+                   MARGIN = 2)
+
+delta_weather_nu = joint_cc_nu - joint_null
+lrt_joint_weather_nu = with(data.frame(t(delta_weather_nu)), 
+                 data.frame(
+                   dev_null = joint_null['deviance'],
+                   dev_cloud = joint_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                   d.f. = df, #grand mean has half the number of params
+                   chi_squared = deviance,
+                   p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                 )
+)
+
+
+
+
+#Calculate joint likelihood and parameters (probabilities multiplied = log-likelihoods summed)
+ll_g_hl_cc_nu = apply(best_cc_nu[c("same g_hl_clear", 
+                                "same g_hl_part", 
+                              "multi g_hl_cloud"),
+                            c('ll', 'deviance', 'df')],
+                   FUN = sum,
+                   MARGIN = 2)
+ll_u_hl_cc_nu = apply(best_cc_nu[c("multi uv_hl_clear",
+                              "same uv_hl_part",
+                              "multi uv_hl_cloud"),
+                           c('ll', 'deviance','df' )],
+                 FUN = sum,
+                 MARGIN = 2)
+ll_uvg_h_cc_nu = apply(best_cc_nu[c("diff uvg_h_clear",
+                               "same uvg_h_part",
+                               "same uvg_h_cloud"),
+                            c('ll','deviance', 'df' )],
+                  FUN = sum,
+                  MARGIN = 2)
+ll_uvg_l_cc_nu = apply(best_cc_nu[c("same uvg_l_clear",
+                                 "diff uvg_l_part",
+                                 "multi uvg_l_cloud"),
+                            c('ll','deviance', 'df' )],
+                  FUN = sum,
+                  MARGIN = 2)
+
+#Likelihood ratio tests
+delta_g_hl_cc_nu = ll_g_hl_cc_nu - 
+                  best_null[best_names_null[1],c('ll','deviance', 'df' )]
+delta_u_hl_cc_nu = ll_u_hl_cc_nu - 
+                  best_null[best_names_null[2],c('ll','deviance', 'df' )]
+delta_uvg_h_cc_nu = ll_uvg_h_cc_nu - 
+                  best_null[best_names_null[3],c('ll','deviance', 'df' )]
+delta_uvg_l_cc_nu = ll_uvg_l_cc_nu - 
+                  best_null[best_names_null[4],c('ll','deviance', 'df' )]
+
+lrt_g_hl_nu = with(delta_g_hl_cc_nu, 
+                data.frame(
+                  dev_null = best_null[best_names_null[1],'deviance'],
+                  dev_cloud = ll_g_hl_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )
+    
+lrt_u_hl_nu = with(delta_u_hl_cc_nu, 
+                data.frame(
+                  dev_null = best_null[best_names_null[2],'deviance'],
+                  dev_cloud = ll_u_hl_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )    
+lrt_uvg_h_nu = with(delta_uvg_h_cc_nu, 
+                data.frame(
+                  dev_null = best_null[best_names_null[3],'deviance'],
+                  dev_cloud = ll_uvg_h_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )    
+lrt_uvg_l_nu = with(delta_uvg_l_cc_nu, 
+                data.frame(
+                  dev_null = best_null[best_names_null[4],'deviance'],
+                  dev_cloud = ll_uvg_l_cc_nu['deviance'], #within trial obs. share a mean, expect lower deviance with more params
+                  d.f. = df, #grand mean has half the number of params
+                  chi_squared = deviance,
+                  p = pchisq(q= abs(deviance), df = df, lower.tail = FALSE)
+                )
+              )
+lr_weather_nu = rbind(lrt_g_hl_nu, lrt_u_hl_nu, lrt_uvg_h_nu, lrt_uvg_l_nu)
+rownames(lr_weather_nu) = best_names_null
+lr_weather_nu = within(lr_weather_nu,
+                    {
+                      p_adjusted = p.adjust(p = p,
+                                            method = 'BH',
+                                            n = length(p))
+                    })    
+lr_weather_nu = rbind(within(lrt_joint_weather_nu, {p_adjusted = NA}), lr_weather_nu)
+rn_lr_weather_nu = rownames(lr_weather_nu)
+rn_lr_weather_nu[1] = 'joint models'
+rownames(lr_weather_nu) = rn_lr_weather_nu
+print_lr_weather_nu = apply(X = lr_weather_nu,
+                         MARGIN = 2, 
+                         FUN = round, 
+                         digits = 3)
+#Print the results
+print(print_lr_weather_nu,
+      digits = 3)
+#In the case of comparing the two bright stimuli
+#the split by weather helps explain the small leftward turn.
+#For the other condition, the models that do not account for weather
+#better explain the data.
+#save results
+write.table(x = print_lr_results_cc_nu, 
+            file = file.path(dirname(path_functions),
+                             '2Results/LRT_joint_NUweather.csv'),
             sep = ',',
             row.names = TRUE)

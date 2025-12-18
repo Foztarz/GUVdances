@@ -1,0 +1,25 @@
+"d.f.","chi_squared","p_adjusted","test","comparison","result","mu1","mu2"
+"g_hl_clear diff zero",1,3.456,0.063,"diff zero","g_hl_clear","pairs _do not_ differ significantly",0,NA
+"g_hl_clear multi diff",3,8.096,0.063,"multi diff","g_hl_clear","pairs _do not_ differ significantly with multiple means",24.6,NA
+"g_hl_clear multi zero",4,11.552,0.063,"multi zero","g_hl_clear","pairs _do not_ differ significantly with multiple means",-10,81.4
+"uv_hl_clear diff zero",1,33.54,0,"diff zero","uv_hl_clear","*pairs differ significantly",0,NA
+"uv_hl_clear multi diff",3,3.917,0.271,"multi diff","uv_hl_clear","pairs _do not_ differ significantly with multiple means",100.7,NA
+"uv_hl_clear multi zero",4,29.624,0,"multi zero","uv_hl_clear","*pairs differ significantly with multiple means",107.1,62.2
+"uvg_h_clear diff zero",1,7.945,0.014,"diff zero","uvg_h_clear","*pairs differ significantly",0,NA
+"uvg_h_clear multi diff",3,5.397,0.217,"multi diff","uvg_h_clear","pairs _do not_ differ significantly with multiple means",-26.5,NA
+"uvg_h_clear multi zero",4,2.548,0.636,"multi zero","uvg_h_clear","pairs _do not_ differ significantly with multiple means",-84,1.2
+"uvg_l_clear diff zero",1,25.008,0,"diff zero","uvg_l_clear","*pairs differ significantly",0,NA
+"uvg_l_clear multi diff",3,2.011,0.57,"multi diff","uvg_l_clear","pairs _do not_ differ significantly with multiple means",75.6,NA
+"uvg_l_clear multi zero",4,27.019,0,"multi zero","uvg_l_clear","*pairs differ significantly with multiple means",90,-3.3
+"g_hl_cloud diff zero",1,0,0.985,"diff zero","g_hl_cloud","pairs _do not_ differ significantly",0,NA
+"g_hl_cloud multi diff",3,2.998,0.837,"multi diff","g_hl_cloud","pairs _do not_ differ significantly with multiple means",-0.3,NA
+"g_hl_cloud multi zero",4,2.997,0.837,"multi zero","g_hl_cloud","pairs _do not_ differ significantly with multiple means",-12,168
+"uv_hl_cloud diff zero",1,0.011,0.917,"diff zero","uv_hl_cloud","pairs _do not_ differ significantly",0,NA
+"uv_hl_cloud multi diff",3,23.37,0,"multi diff","uv_hl_cloud","*pairs differ significantly with no single mean",-2,NA
+"uv_hl_cloud multi zero",4,23.381,0,"multi zero","uv_hl_cloud","*pairs differ significantly with multiple means",-47.5,76.9
+"uvg_h_cloud diff zero",1,3.577,0.059,"diff zero","uvg_h_cloud","pairs _do not_ differ significantly",0,NA
+"uvg_h_cloud multi diff",3,18.709,0.001,"multi diff","uvg_h_cloud","pairs _do not_ differ significantly with multiple means",-5.6,NA
+"uvg_h_cloud multi zero",4,15.132,0.007,"multi zero","uvg_h_cloud","pairs _do not_ differ significantly with multiple means",172.6,-7.5
+"uvg_l_cloud diff zero",1,0.013,0.91,"diff zero","uvg_l_cloud","pairs _do not_ differ significantly",0,NA
+"uvg_l_cloud multi diff",3,21.365,0,"multi diff","uvg_l_cloud","*pairs differ significantly with no single mean",-2.4,NA
+"uvg_l_cloud multi zero",4,21.378,0,"multi zero","uvg_l_cloud","*pairs differ significantly with multiple means",72.1,-56.7
