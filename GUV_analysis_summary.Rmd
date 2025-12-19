@@ -1690,18 +1690,35 @@ hive_coords  =  c(longitude  = 8.811333,
 #centre according to google 50.802605, 8.809097
 # left according to openstreetmap 50.802721, 8.806807
 
+#the 150m circle intersecting with the nearest corner
+#West corner 50.805644, 8.809640
+#Nearest corner 50.805565, 8.810290
+#Near South edge w/in 150m 50.805258, 8.810424
 
-
+#nearer
 garden_coords = list(left = 
-                       c(longitude  = 8.806807,
-                         latitude = 50.802721),
+                       c(longitude  = 8.809640,
+                         latitude = 50.805644),
                      centre = 
-                       c(longitude  = 8.809097,
-                         latitude = 50.802605),
+                       c(longitude  = 8.810290,
+                         latitude = 50.805565),
                      right = 
-                       c(longitude  = 8.811926,
-                         latitude = 50.803182)
+                       c(longitude  = 8.810424,
+                         latitude = 50.805258)
                      )
+
+
+#original
+# garden_coords = list(left = 
+#                        c(longitude  = 8.806807,
+#                          latitude = 50.802721),
+#                      centre = 
+#                        c(longitude  = 8.809097,
+#                          latitude = 50.802605),
+#                      right = 
+#                        c(longitude  = 8.811926,
+#                          latitude = 50.803182)
+#                      )
                      
 garden_bearing = sapply(garden_coords, 
                         FUN = bearing, 
@@ -1709,6 +1726,9 @@ garden_bearing = sapply(garden_coords,
                         )
 #standard bearing
 print(garden_bearing %% 360)
+
+#let's make this equivalent to the phototaxis hypothesis
+# garden_bearing[c(1,3)] = garden_bearing[2] + c(-1,1)*30/2#now both are a 30° arc
 
 garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 ```
@@ -1980,6 +2000,8 @@ print(sort(unlist(modLIC)), digits = 1)
 
 ```
 
+### Hypothesis test
+
 ```{r ROPE hypothesis test}
 #since all models are similarly credible, what about the hypotheses?
 #check if the sector surrounding the expected direction is equally full
@@ -2079,6 +2101,8 @@ abline(h = 0)
 
 It is hard to say for the individuals whether the majority orient towards the sector containing the Botanic Garden, or a similar sized sector containing the stimulus.
 What we can say is that the population average falls directly towards the Botanic Garden centre in real-world bearings, while the population average relative to the light source has a leftwards bias.
+
+### Plot of sun compass versus phototaxis
 
 ```{r plot sunspot hypothesis tests}
 with(dr_modlist$no_phototaxis, paste0(mean(b_mu0_Intercept > 0)*100, '%') ) #nearly all estimates suggest a leftwards bias
@@ -2292,7 +2316,7 @@ with(dr_modlist$no_phototaxis,
       VertHist(data = deg(mod_circular(b_mu0_Intercept)),
          main = '\nPopulation mean angle',
          ylab = 'model estimates',
-         ylim = c(-15, 45),
+         ylim = c(-30, 90),
          col = adjustcolor('green3', alpha.f = 100/255),
          cex.axis = 0.7)
        abline(h = 0,
