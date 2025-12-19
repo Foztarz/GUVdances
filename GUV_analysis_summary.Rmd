@@ -6,20 +6,14 @@ output:
   prettydoc::html_pretty:
     theme: cayman
     highlight: github
+    toc: true
+    fig_caption: true
 editor_options: 
   markdown: 
     wrap: sentence
 ---
 
 ## Details
-
-> **AUTHOR**
->
-> James Foster $2025~06~05$
-
-> **MODIFIED**
->
-> James Foster $2025~12~18$
 
 > **DESCRIPTION**
 >
@@ -792,27 +786,25 @@ quant_phi = apply(X = contr_phi,
                   FUN = quantile,
                   probs = c(0,0.5,1)+c(1,0,-1)*(0.05)/2
                   )
-stripchart(x = round(contr_mu,2),
-           at = 1:dim(contr_mu)[2],
-           group.names = gsub(pattern = '_',
+par(mfrow = c(1, length(contr_mu)))
+for(ct in 1:length(contr_mu) )
+{
+  VertHist(data = contr_mu[,ct],
+           main = gsub(pattern = '_',
                               replacement = ' → ',
-                              x = names(contr_mu)),
-           main = 'Beta GLMM - Effects on Mean Accuracy',
-           ylab = 'logit mean change in accuracy',
-           vertical  = TRUE,
-           method = 'stack',
-           offset =  0.05,
+                              x = names(contr_mu)[ct]),
+           axes = FALSE,
+           col = gray(0.75),
            ylim = c(-1, 1)*4,
-           pch = 20,
-           col = gray(0, alpha = 4/2e3),
-           cex.axis = 1.0,
-           las = 3
+           ylab = if(ct ==1){'logit mean change in accuracy'}else{''}
            )
-abline(h = 0,
+  axis(2)
+  
+  abline(h = 0,
        lty = 2)
-with(data.frame(t(quant_mu)),
+with(data.frame(t(quant_mu[,ct])),
      {
-      arrows(x0 = 1:dim(quant_mu)[2],
+      arrows(x0 = 0,#dim(quant_mu[,ct])[2],
              y0 = X2.5.,
              y1 = X97.5.,
              length = 0, 
@@ -821,11 +813,31 @@ with(data.frame(t(quant_mu)),
              col = adjustcolor(c('darkgreen',
                             'purple',
                             'gray40',
+                            'green',
                             'gray25'
-                            ), alpha = 0.7)
+                            ), alpha = 0.7)[ct],
+             lend = 'butt'
              )
      }
 )
+}
+# stripchart(x = round(contr_mu,2),
+#            at = 1:dim(contr_mu)[2],
+#            group.names = gsub(pattern = '_',
+#                               replacement = ' → ',
+#                               x = names(contr_mu)),
+#            main = 'Beta GLMM - Effects on Mean Accuracy',
+#            ylab = 'logit mean change in accuracy',
+#            vertical  = TRUE,
+#            method = 'stack',
+#            offset =  0.05,
+#            ylim = c(-1, 1)*4,
+#            pch = 20,
+#            col = gray(0, alpha = 4/2e3),
+#            cex.axis = 1.0,
+#            las = 3
+#            )
+
 legend(x = 'topleft',
        legend = c('estimates',
                   '95% credible interval'),
@@ -835,27 +847,43 @@ legend(x = 'topleft',
        col = c('gray', 'black'),
        cex = 0.7
        )
-stripchart(x = round(contr_phi,2),
-           at = 1:dim(contr_phi)[2],
-           group.names = sub(pattern = '_',
+
+
+# stripchart(x = round(contr_phi,2),
+#            at = 1:dim(contr_phi)[2],
+#            group.names = sub(pattern = '_',
+#                               replacement = ' → ',
+#                               x = names(contr_phi)),
+#            main = 'Effects on Accuracy Precision',
+#            ylab = 'log change in accuracy precision',
+#            vertical  = TRUE,
+#            method = 'stack',
+#            offset =  0.05,
+#            ylim = c(-1, 1)*6,
+#            pch = 20,
+#            col = gray(0, alpha = 4/2e3),
+#            cex.axis = 1.0,
+#            las = 3
+#            )
+par(mfrow = c(1, length(contr_phi)))
+for(ct in 1:length(contr_phi) )
+{
+  VertHist(data = contr_phi[,ct],
+           main = gsub(pattern = '_',
                               replacement = ' → ',
-                              x = names(contr_phi)),
-           main = 'Effects on Accuracy Precision',
-           ylab = 'log change in accuracy precision',
-           vertical  = TRUE,
-           method = 'stack',
-           offset =  0.05,
+                              x = names(contr_phi)[ct]),
+           axes = FALSE,
+           col = gray(0.75),
            ylim = c(-1, 1)*6,
-           pch = 20,
-           col = gray(0, alpha = 4/2e3),
-           cex.axis = 1.0,
-           las = 3
+           ylab = if(ct ==1){'log change in accuracy precision'}else{''}
            )
-abline(h = 0,
+  axis(2)
+  
+  abline(h = 0,
        lty = 2)
-with(data.frame(t(quant_phi)),
+with(data.frame(t(quant_phi[,ct])),
      {
-      arrows(x0 = 1:dim(quant_phi)[2],
+      arrows(x0 = 0,#dim(quant_mu[,ct])[2],
              y0 = X2.5.,
              y1 = X97.5.,
              length = 0, 
@@ -864,11 +892,32 @@ with(data.frame(t(quant_phi)),
              col = adjustcolor(c('darkgreen',
                             'purple',
                             'gray40',
+                            'green',
                             'gray25'
-                            ), alpha = 0.7)
+                            ), alpha = 0.7)[ct],
+             lend = 'butt'
              )
      }
 )
+}
+# abline(h = 0,
+#        lty = 2)
+# with(data.frame(t(quant_phi)),
+#      {
+#       arrows(x0 = 1:dim(quant_phi)[2],
+#              y0 = X2.5.,
+#              y1 = X97.5.,
+#              length = 0, 
+#              angle = 90,
+#              lwd = 5,
+#              col = adjustcolor(c('darkgreen',
+#                             'purple',
+#                             'gray40',
+#                             'gray25'
+#                             ), alpha = 0.7)
+#              )
+#      }
+# )
 #can also calculate these with emmeans
 em_beta = emmeans(object = md_beta,
                   specs = ~brightn*colour)

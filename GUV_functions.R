@@ -1499,6 +1499,7 @@ VertHist = function(data, # numerical data vector
                     main = '',
                     col = 'gray',
                     border = NA,
+                    axes = TRUE,
                     ...)
 {
   hst = hist(x = data, # calculate the histogram but don't plot it
@@ -1511,7 +1512,8 @@ VertHist = function(data, # numerical data vector
               ylim = if(is.null(ylim)){range(mids)}else{ylim},
               xlab = xlab,
               ylab = ylab,
-              main = main)
+              main = main,
+              axes = axes)
          #plot each bar
          for(i in 1:length(mids))
          {
