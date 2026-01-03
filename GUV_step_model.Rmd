@@ -113,6 +113,19 @@ Make sure that the `circular`, `cmdstanr` and `brms` are installed, and
 source('GUV_functions.R')
 ```
 
+Set up some colours for plotting.
+
+```{r Set up plot colours}
+col_kappa = '#1E78B5'#colour for kappa parameter
+col_rho = '#F08024' #colour for mean vector length
+col_sd = '#E74A29' #colour for SD and mean angle
+col_sd2 = '#E57461' #colour for other SD heuristics
+col_pdf = adjustcolor(col = '#21A885', # colour for probability density
+                      alpha.f = 0.7)
+col_obs = '#3E1F51' #colour for control observations
+col_treat = '#006400' # colour for treatment observations
+```
+
 # Prepare data
 
 Then load the data that will be used.
@@ -239,6 +252,57 @@ unwrap_von_mises = custom_family(
 
 ```
 
+
+```{r Set up plotting functions for circular estimates}
+
+#add contours
+Draws2Cont = function(draws,
+                      palette = 'Heat 2',
+                      nlevels = 20,
+                      x_string = 'sin(Intercept)*A1(softplus(Intercept_kappa))',
+                      y_string = 'cos(Intercept)*A1(softplus(Intercept_kappa))',
+                      alpha = 200/255,
+                      ngrid = 25, # defaults to a 25x25 grid
+                      cropc = FALSE, #crop region outside circle
+                      denstype = 'relative' # 'normalised' or 'relative' (normalised fails to plot low densities)
+)
+{
+  kdc = with(draws,
+             {
+               MASS::kde2d(x = eval(str2lang(x_string)),
+                           y = eval(str2lang(y_string)),
+                           n = ngrid)
+             }
+  )
+  if(cropc)
+  {
+    xy = with(kdc, expand.grid(x = x,y= y))#find coordinates of z variable
+    idc = with(xy, x^2+y^2 < 1.0)
+    #crop edge of circle
+    kdc = within(kdc,
+                 {z[!idc] = 0})
+  }
+  with(kdc,
+       {
+         .filled.contour(x = x,
+                         y = y,
+                         z = z,
+                         levels = (1:nlevels)*
+                           switch(EXPR = denstype,
+                                  relative = max(z/nlevels),
+                                  normalised = sum(z/nlevels),#warning, fails to plot low densities
+                                  max(z/nlevels)
+                           ),
+                         col = hcl.colors(n = nlevels,
+                                          palette = palette,
+                                          rev = TRUE,
+                                          alpha = alpha)
+         )
+       }
+  )
+}
+```
+
 # Model for UV Bright
 
 Find data for the 'UV bright' condition.
@@ -246,7 +310,8 @@ Find data for the 'UV bright' condition.
 cd_uvh = subset(cd,
                colour %in% 'u' &
                  brightn %in% 'h')
-length(with(cd_uvh, unique(ID)))#nearly all
+id_uvh = with(cd_uvh, unique(ID))
+length(id_uvh)#nearly all
 ```
 
 
@@ -258,7 +323,7 @@ In this model each individual dance may have a different preferred direction $\m
 concentration, which is implied by the linear formula $\kappa \sim 1 + (1|ID)$.
 ```{r UV bright formula}
 
-formula_uni = bf(#modulus may not be necessary, included in lpd function
+formula_uvh = bf(#modulus may not be necessary, included in lpd function
   formula = angle ~ mu,
   nlf(mu ~ mu0 + mui), 
   mu0 ~ 1, # all conditions
@@ -277,19 +342,23 @@ in the Stan code above (in inverse-softplus space: $\kappa_\mu = \log(1 + \exp(\
 ```{r UV bright priors}
 
 #priors for mu
-pr_mu_uni = prior('normal(0,3*pi()/2)', class = 'b', nlpar = 'mu0') +
+pr_mu_uvh = prior('normal(0,3*pi()/2)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(15), 0.6)", #expect high concentration (low variation) 
+            set_prior(paste("target +=", 
+                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            ),
+            check = FALSE) +
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
 #priors for kappa
-pr_kappa_uni = 
+pr_kappa_uvh = 
                   prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
                   prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'kappa')
   
 #all unimodal priors
-pr_uni = pr_mu_uni + pr_kappa_uni
+pr_uvh = pr_mu_uvh + pr_kappa_uvh
 ```
 
 ## Run the model for UV bright
@@ -299,9 +368,9 @@ pr_uni = pr_mu_uni + pr_kappa_uni
 system.time(
   {
     
-    np_uni = brm(formula = formula_uni,
+    model_uvh = brm(formula = formula_uvh,
                    data = cd_uvh,
-                   prior = pr_uni,
+                   prior = pr_uvh,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
                       stan_softkappamu,
@@ -313,5 +382,169 @@ system.time(
     
   }
 )
+save(file = '2Results/UV_high_model.RData',
+     model_uvh)#save for future reference
 
+```
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect UV bright model}
+load(file = '2Results/UV_high_model.RData')
+#population kappa and its standard deviation
+plot(model_uvh,
+      ask = FALSE,
+      variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population directional bias
+plot(model_uvh,
+      ask = FALSE,
+      variable = 'mu0',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+#inidividual but they overlap when unwrapped
+plot(x = model_uvh,
+     variable = 'mui',
+     regex = TRUE,
+     ask = FALSE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+
+```
+
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the UV bright model}
+
+sm_uvh = summary(model_uvh,
+                 variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+                regex = TRUE)
+print(sm_uvh, digits = 2)
+#mu0 and mui look bad, but good after unwrapping
+UnwrapRhats(model_uvh,
+            variable = '^b_mu0')
+summary(UnwrapRhats(model_uvh,
+            variable = '^b_mui') )
+```
+
+The estimates of $\kappa_\mu$ here have a slight positive bias, due to a combination of low sample size and our prior to higher values.
+The model nonetheless recovers good estimates of $\mu_0$ and $\mu_i$.
+Importantly, this also allows us to estimate population $\kappa$, that is the concentration of the average individual, which needs to be distinguished from individual differences and the concentration across individuals.
+
+
+## Extract predictions for the UV high model
+
+Since this model's estimates provide context for the 'UV dim' data, most importantly 
+the directional bias for each individual dance, we need to extract the estimates 
+for each individual before attempting the next model.
+
+
+```{r Plot the high correlation individuals model}
+mu_id_uvh = rep(NA, length(id_uvh))
+kappa_id_uvh = rep(NA, length(id_uvh))
+
+draws_uvh = as_draws_df(model_uvh)
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+for(i in 1:length(id_uvh) )
+{
+  mu_name = paste0('b_mui_ID',id_uvh[i])
+  kappa_name = paste0('r_ID__kappa[',id_uvh[i],',Intercept]')
+  with(subset(cd_uvh, ID %in% id_uvh[i]),
+  {PCfun(angles = bearing,
+         col = col_obs)}
+  )
+  Draws2Cont(draws_uvh,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))'
+             )
+  mu_id_uvh[i] = with(draws_uvh,
+                      {
+                        median.circular(
+                             circular(x = 
+                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                                                    units = 'radians',
+                                                    rotation = 'clock',
+                                                    zero = pi/2)
+                                           )[1]
+                      })
+  kappa_id_uvh[i] = with(draws_uvh,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  arrows.circular(x = circular(x = mu_id_uvh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uvh[i]),
+                 lwd = 2,
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_sd, alpha.f = 200/255))
+}
+#Add the population of biases
+OpenCplot()
+Draws2Cont(draws = draws_uvh,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(softplus(kappa_mu))',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(softplus(kappa_mu))'
+           )
+
+with(draws_uvh,
+     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2)
+     )[1],
+     y = A1(softplus(median(kappa_mu))),
+     lwd = 2,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255))
+)
+
+with(draws_uvh, paste0(mean(softplus(Intercept_kappa) > kappa_id_uvh)*100, '%') ) #partial pooling allows accurate estimate
+
+with(draws_uvh,
+     VertHist(data = softplus(Intercept_kappa), 
+              main = '\npopulation kappa',
+              ylim = c(0, 30),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+with(draws_uvh,
+     VertHist(data = kappa_mu, 
+              main = '\npopulation kappamu',
+              ylim = c(0, 5),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5)
+```
+
+
+# Model for bimodal change
+
+Subtract estimated mean for 'UV bright' dances from dance angles for 'UV dim'.
+
+```{r Calculate change data}
+cd_change = within(cd_uv,
+                   {
+                   change_angle = mapply(FUN = function(id, ang)
+                                   {
+                                   ii = which(id_uvh %in% id)
+                                   return( mod_circular(ang - mu_id_uvh[ii]) )
+                                 },
+                                 id = ID,
+                                 ang = angle
+                                 )
+                   }
+)
 ```
