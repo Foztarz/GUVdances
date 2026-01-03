@@ -1,0 +1,130 @@
+---
+title: "GUV_step_model"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    fig_caption: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Details
+
+**DESCRIPTION**
+
+A step-by-step approach to building an appropriate model for bimodality in dance data for
+the 'UV dim' stimulus.
+
+**INPUTS**
+
+`GUV_functions.R`
+
+**OUTPUTS**
+
+Models and plotted estimates.
+
+**REFERENCES**
+
+**Experimental approach**
+
+
+Edrich W, Neumeyer C & von Helversen, O.
+(1979) “Anti-sun orientation” of bees with regard to a field of ultraviolet light.
+*J. Comp. Physiol.* 134, 151–157.
+
+Rossel, S. & Wehner, R.
+(1984). Celestial orientation in bees: the use of spectral cues.
+*J. Comp. Physiol. A* 155, 605–613.
+
+**modelling methods**
+
+Sayin S, Couzin-Fuchs E, Petelski I, Günzel Y, Salahshour M, Lee CY, Graving JM, Li L, Deussen O, Sword GA, et al. (2025) The behavioral mechanisms governing collective motion in swarming locusts.
+*Science* 387(6737):995–791
+
+Gabry J, Češnovar R, Johnson A (2022).
+cmdstanr: R Interface to 'CmdStan'.
+<https://mc-stan.org/cmdstanr/>
+
+Bürkner, P.-C.
+(2018).
+Advanced Bayesian Multilevel Modeling with the R Package brms.
+*The R Journal* 10, 395–411.
+
+Carpenter, B., Gelman, A., Hoffman, M. D., Lee, D., Goodrich, B., Betancourt, M., Brubaker, M., Guo, J., Li, P. and Riddell, A.
+(2017).
+Stan: A Probabilistic Programming Language.
+*Journal of Statistical Software* 76 doi: 10.18637/jss.v076.i01
+
+Vehtari, A., Gelman, A., and Gabry, J.
+(2017) Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC.
+*Statistics and Computing* 27(5), 1413–1432.
+<doi:10.1007/s11222-016-9696-4>.
+
+Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A.
+(2021).
+Implicitly adaptive importance sampling.
+*Statistics and Computing* 31, 16.
+<doi:10.1007/s11222-020-09982-2>.
+
+# Motivation
+
+## Identifiability
+
+During estimation, the two modes of a bimodal model may be indistinguishable,
+and even interchangeable, which produces problems with identifiability. 
+Parameter estimation relies on stability of estimates, which can be undermined if
+an estimate for one parameter 'switches places' with an estimate for another,
+as can occur when different chains or iterations identify opposite modes as
+the 'primary mode'. The shape of the probability density function for a bimodal 
+distribution also depends on the combination of concentration ($\kappa$) and 
+proportion (in `brms` $\theta$) at each mode. This introduces an additional 
+challenge for identifiability, since low probability of observations near a mode
+may result from that mode having low concentration or a small proportion of the 
+data, or both.
+
+## Bimodality of differences and dances
+
+In this dataset, dances during the 'UV dim' condition are typically separated
+from those under the 'UV bright' condition by $\pm90°$. For most dances a single
+primary mode can be found can be found to the left or right of the mean for the 
+'UV bright' condition, with approximately equal frequency. For some dances, two 
+modes occur to both the right and left of the 'UV bright' mode, with varying 
+proportions of the data around either.
+
+## Reducing uncertainty
+
+Taken in isolation, the data for the 'UV dim' condition have relatively low 
+concentration, and vary greatly in orientation as a function of sun azimuth (known)
+and advertised location (not known). The direction of the advertised location can 
+be estimated from the 'UV bright' condition, for which concentration was high, so
+this information can be used to reduce uncertainty about advertised direction.
+Since dances by the same individual should generally have similar properties, a
+reasonable assumption would be that the concentration parameter $\kappa$ should
+be similar between the mode of the 'UV bright' dance and the 'UV dim' dance, after
+accounting for any population-level effect of decreased brightness. Since leftwards
+and rightwards turns appear interchangeable (at least equally likely) it is also
+possible that the two modes for our bimodal turns, and bimodal dances, should have
+similar concentration.
+
+## Step-by-step strategy
+
+Ideally, the parameters associated with 
+
+# Set up workspace
+
+Before generating these examples, we need to load the appropriate functions.
+Make sure that the `circular`, `cmdstanr` and `brms` are installed, and (on Windows) that you have installed the latest version of [Rtools](https://cran.r-project.org/bin/windows/Rtools/).
+
+```{r Load functions and packages}
+source('GUV_functions.R')
+```
+
