@@ -2,7 +2,7 @@
 graphics.off()
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2024 08 13
-#     MODIFIED:	James Foster              DATE: 2025 12 18
+#     MODIFIED:	James Foster              DATE: 2026 01 03
 #
 #  DESCRIPTION: Reorganise data and print out to csv
 #               
@@ -11,6 +11,8 @@ graphics.off()
 #      OUTPUTS: csv
 #
 #	   CHANGES: - added sun elevation
+#	            - convert anticlockwise to clockwise
+#	            - correct time codes with underscore
 #
 #   REFERENCES: Natalie Cooper & Pen-Yuan Hsing, 2017 
 #               A Guide to Reproducible Code in Ecology and Evolution
@@ -151,7 +153,10 @@ IDtocode = function(x)
   tp = strsplit(x = as.character(x),
                     split = '\\.')[[1]]
   tcode = paste0(tp[1], '-', tp[2], '-', tp[3], ' ',
-                 tp[4], ':', tp[5], ':00'
+                 tp[4], ':', 
+                 sub(pattern = '\\_.*', replacement = '',
+                     x = tp[5]), #some of these have an extra _1 or _2
+                 ':00'
                  )
   return(tcode)
 }
