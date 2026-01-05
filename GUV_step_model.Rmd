@@ -576,12 +576,21 @@ cd_change = within(cd_uv,
                                  )
                    }
 )
+#select only the UV dim data
+cd_change = subset(cd_change,
+               colour %in% 'u' &
+                 brightn %in% 'l'
+                   )
 ```
 
 ## Inspect data
 
-Somewhat contrary to expectations, many individuals have their primary mean close
- to 0°, that is no change. 
+While the size of the change varies greatly across individuals, many have their 
+near $\pm 90°$, that is a quarter turn to left or right. This is clearest for the
+ group of 19 dances that included all stimuli, but more broadly discernable across 
+ the rest of the dataset.
+In addition, a subset of individuals exhibit (axial) bimodality, with a secondary 
+mean approximately 180° from the primary mean.
 
 ```{r Plot the estimated change data}
 id_uv = with(cd_uv, unique(ID))
@@ -656,12 +665,13 @@ formula, $\kappa_1$ and $\kappa_2$ are both set deterministically by the paramet
  `k1`, so both can take the same prior.
 In a bimodal model, $\mu_1$ and $\mu_2$ can become indistinguishable, so we also 
 need tighter priors for `mu0` and `mub` to ensure that their estimates do not 
-switch places.
+switch places. Since there appear to be more individuals with a leftwards turn 
+we a negative prior for `mu0` and a positive one for `mub`.
 
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(0, pi()/3)', class = 'b', nlpar = 'mu0') +
+pr_mu_change = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
                 prior('normal(pi(), pi()/3)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
@@ -787,6 +797,7 @@ for each individual before attempting the next model.
 
 ```{r Plot the UV bright model}
 mu1_id_change = rep(NA, length(id_uv))
+mu2_id_change = rep(NA, length(id_uv))
 kappa_id_change = rep(NA, length(id_uv))
 
 draws_change = as_draws_df(model_change)
@@ -797,7 +808,7 @@ par(mar = c(0,0,0,0),
 for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
-  kappa_name = paste0('r_ID__kappa[',id_uv[i],',Intercept]')
+  kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = bearing,
@@ -807,9 +818,9 @@ for(i in 1:length(id_uv) )
   )
   Draws2Cont(draws_change,
              x_string = 'sin(b_mu0_Intercept + get(mu_name))*
-                         A1(softplus(Intercept_k1+get(kappa_name)))',
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name))*
-                         A1(softplus(Intercept_k1+get(kappa_name)))',
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
              )
   mu1_id_change[i] = with(draws_change,
@@ -837,9 +848,9 @@ for(i in 1:length(id_uv) )
                         # )
                       })
   kappa_id_change[i] = with(draws_change,
-                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+                         {softplus(median(b_k1_Intercept+get(kappa_name)))} )
   
-  arrows.circular(x = circular(x = mu_id_change[i],
+  arrows.circular(x = circular(x = mu1_id_change[i],
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
@@ -851,7 +862,7 @@ for(i in 1:length(id_uv) )
 #Add the population of biases
 dev.new()
 par(mfrow = c(1,3))
-PCfun(angles = deg(mu_id_change),
+PCfun(angles = deg(mu1_id_change),
       col = col_rho,
       plot_rho = FALSE)
 Draws2Cont(draws = draws_change,
@@ -875,7 +886,7 @@ with(draws_change,
 
 
 with(draws_change,
-     VertHist(data = softplus(Intercept_kappa), 
+     VertHist(data = softplus(b_k1_Intercept), 
               main = '\npopulation kappa',
               ylim = c(0, 30),
               col = adjustcolor(col_kappa, alpha.f = 100/255),
@@ -886,10 +897,10 @@ axis(2, at = 0:5*5)
 with(draws_change,
      VertHist(data = kappa_mu, 
               main = '\npopulation kappamu',
-              ylim = c(0, 5),
+              ylim = c(0, 5*5),
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
 axis(1)
-axis(2, at = 0:5)
+axis(2, at = 0:5*5)
 ```
