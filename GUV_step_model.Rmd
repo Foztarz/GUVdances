@@ -999,8 +999,7 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 500, #
-                   # iter = 1000, # longer sampling to efficiently sample mu0
+ 
                    silent = 2, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
