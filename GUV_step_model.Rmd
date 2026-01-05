@@ -362,6 +362,10 @@ pr_uvh = pr_mu_uvh + pr_kappa_uvh
 ```
 
 ## Run the model for UV bright
+
+This model includes a lot of data and parameters, be prepared for it to take a 
+long time to complete all iterations for all chains.
+
 ```{r UV bright model}
 
 #very long compile time
@@ -376,9 +380,8 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   warmup = 2000, # longer warmup to efficiently sample all parameters
-                   iter = 4000, # longer warmup to efficiently sample all parameters
-                   control = list(adapt_delta = 0.80),
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
                    silent = 2, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -388,6 +391,7 @@ save(file = '2Results/UV_high_model.RData',
      model_uvh)#save for future reference
 
 ```
+## Inspect model estimates
 
 This model identifies both a population level bias (near 0°) and individual biases
  with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
@@ -408,8 +412,16 @@ plot(model_uvh,
 
 ```
 
-The population level mean angle $\mu_0$ appears to oscillate gradually over the course of sampling
-
+The population level mean angle $\mu_0$ appears to oscillate gradually over the 
+course of sampling. These oscillations do not appear to affect convergence 
+heuristics, though they may affect sampling efficiency. Setting $\text{adapt_delta}>0.8$
+ and increasing the length of warmup does not appear to prevent these oscillations. 
+They likely result from uncertainty in the particular values of $\mu_i$ for each 
+dance, and the effect of $\mu_i$ on likely values for $\mu_0$. In general, these 
+oscillations appear symmetrical and uncorrelated across chains, as well as 
+restricted to a narrow range of $\approx 15°$.
+To reduce the influence of any particular oscillation on the final estimate the 
+number of post-warmup samples has been increased to $2000$.
 
 ```{r Inspect individual means UV bright model}
 #inidividual but they overlap when unwrapped
@@ -476,17 +488,15 @@ for(i in 1:length(id_uvh) )
              )
   mu_id_uvh[i] = with(draws_uvh,
                       {
-                        # median.circular(
-                        #      circular(x = 
-                        #      mod_circular(b_mu0_Intercept + get(mu_name)),
-                        #                             units = 'radians',
-                        #                             rotation = 'clock',
-                        #                             zero = pi/2)
-                        #                    )[1]
-                        median(
-                             unwrap_circular( 
-                             b_mu0_Intercept + get(mu_name))
-                        )
+                        median.circular(
+                             circular(x =
+                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                                          template = 'none')
+                                           )[1]
+                        # median(
+                        #      unwrap_circular( 
+                        #      b_mu0_Intercept + get(mu_name))
+                        # )
                       })
   kappa_id_uvh[i] = with(draws_uvh,
                          {softplus(median(Intercept_kappa+get(kappa_name)))} )
@@ -501,7 +511,7 @@ for(i in 1:length(id_uvh) )
                  col = adjustcolor(col_sd, alpha.f = 200/255))
 }
 #Add the population of biases
-dev.new()
+# dev.new()
 par(mfrow = c(1,3))
 PCfun(angles = deg(mu_id_uvh),
       col = col_rho,
@@ -571,7 +581,7 @@ cd_change = within(cd_uv,
 ## Inspect data
 
 Somewhat contrary to expectations, many individuals have their primary mean close
- to 0°, that is no change. It is possible that the mean vectors 
+ to 0°, that is no change. 
 
 ```{r Plot the estimated change data}
 id_uv = with(cd_uv, unique(ID))
@@ -581,18 +591,32 @@ par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
 for(i in 1:length(id_uv) )
 {
-  with(subset(cd_change, ID %in% id_uvh[i]),
+  with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = deg(change_angle),
          col = col_sd2)}
   )
-  calc_mu[i] = with(subset(cd_change, ID %in% id_uvh[i]),
+  calc_mu[i] = with(subset(cd_change, ID %in% id_uv[i]),
                     {mean.circular(x = circular(change_angle, template = 'none'))}
                     )
 }
-dev.new()
+# dev.new()
+par(mfrow = c(1,2))
 PCfun(angles = deg(calc_mu),
       col = col_rho,
+      shrink = 2)
+
+#full condition individuals used for mean vector analysis
+u_id = with(cd, unique(ID))
+luc = sapply(u_id,
+              FUN = IndCond,
+              dt = cd)
+
+#Most individuals that made it to bright green 
+full_ids = u_id[luc == 4]
+
+PCfun(angles = deg(calc_mu[which(full_ids %in% uv_ids)]),
+      col = col_kappa,
       shrink = 2)
 ```
 
@@ -611,10 +635,10 @@ both modes have the same concentration $\kappa_1 = \kappa_2 = \log(1+\exp(k_1))$
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ mu0 + mu1 + mui), #secondary mean, population mean plus offset, plus individual mean
+  nlf(mu2 ~ mu0 + mub + mui), #secondary mean, population mean plus offset, plus individual mean
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
-  mu1 ~ 1, #angle between primary mean and secondary mean
+  mub ~ 1, #angle between primary mean and secondary mean
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -627,15 +651,18 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
 
 This model requires priors additional priors for $\mu_1$ and $\kappa_2$. For a 
 near axial bimodal distribution the expectation would be that $\mu_1$ and $\mu_2$
- are separated by ≈180°, so the prior for `mu1` is set to this value. For this 
+ are separated by ≈180°, so the prior for $\mu_\beta$ is set to this value. For this 
 formula, $\kappa_1$ and $\kappa_2$ are both set deterministically by the parameter
  `k1`, so both can take the same prior.
+In a bimodal model, $\mu_1$ and $\mu_2$ can become indistinguishable, so we also 
+need tighter priors for `mu0` and `mub` to ensure that their estimates do not 
+switch places.
 
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(0,3*pi()/2)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi,pi()/2)', class = 'b', nlpar = 'mu1') + #expected offset of ≈180°
+pr_mu_change = prior('normal(0, pi()/3)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi(), pi()/3)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -647,8 +674,7 @@ pr_mu_change = prior('normal(0,3*pi()/2)', class = 'b', nlpar = 'mu0') +
 
 #priors for kappa
 pr_kappa_change = 
-                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa1') +
-                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa2') +
+                  prior('normal(3,3)', class = 'b', nlpar = 'k1') +
                   prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
@@ -658,4 +684,212 @@ pr_theta_change =
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change
+```
+
+## Run the model for bimodal change
+
+```{r change model}
+
+#very long compile time
+system.time(
+  {
+    
+    model_change = brm(formula = formula_change,
+                   data = cd_change,
+                   prior = pr_change,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   silent = 2, # echo only high priority Stan messages
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/UV_change_model.RData',
+     model_change)#save for future reference
+
+```
+
+## Inspect model estimates
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect UV bright model}
+load(file = '2Results/UV_change_model.RData')
+#population kappa and its standard deviation
+plot(model_change,
+      ask = FALSE,
+      variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population directional bias
+plot(model_change,
+      ask = FALSE,
+      variable = 'mu0',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+#population level change in direction
+plot(model_change,
+      ask = FALSE,
+      variable = 'mub',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+
+```
+
+The population level mean angle $\mu_0$ appears to oscillate gradually over the 
+course of sampling. These oscillations do not appear to affect convergence 
+heuristics, though they may affect sampling efficiency. Setting $\text{adapt_delta}>0.8$
+ and increasing the length of warmup does not appear to prevent these oscillations. 
+They likely result from uncertainty in the particular values of $\mu_i$ for each 
+dance, and the effect of $\mu_i$ on likely values for $\mu_0$. In general, these 
+oscillations appear symmetrical and uncorrelated across chains, as well as 
+restricted to a narrow range of $\approx 15°$.
+To reduce the influence of any particular oscillation on the final estimate the 
+number of post-warmup samples has been increased to $2000$.
+
+```{r Inspect individual means change model}
+#inidividual but they overlap when unwrapped
+plot(x = model_change,
+     variable = 'mui',
+     regex = TRUE,
+     ask = FALSE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+```
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the change model}
+
+sm_change = summary(model_change,
+                 variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+                regex = TRUE)
+print(sm_change, digits = 2)
+#mu0 and mui look bad, but good after unwrapping
+UnwrapRhats(model_change,
+            variable = '^b_mu0')
+summary(UnwrapRhats(model_change,
+            variable = '^b_mui') )
+```
+
+
+## Extract predictions for the UV high model
+
+Since this model's estimates provide context for the 'UV dim' data, most importantly 
+the directional bias for each individual dance, we need to extract the estimates 
+for each individual before attempting the next model.
+
+
+```{r Plot the UV bright model}
+mu1_id_change = rep(NA, length(id_uv))
+kappa_id_change = rep(NA, length(id_uv))
+
+draws_change = as_draws_df(model_change)
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+for(i in 1:length(id_uv) )
+{
+  mu_name = paste0('b_mui_ID',id_uv[i])
+  kappa_name = paste0('r_ID__kappa[',id_uv[i],',Intercept]')
+  with(subset(cd_change, ID %in% id_uv[i]),
+  {
+    PCfun(angles = bearing,
+         col = col_obs,
+         plot_rho = FALSE)
+    }
+  )
+  Draws2Cont(draws_change,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_k1+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_k1+get(kappa_name)))',
+             palette = 'Red-Yellow' 
+             )
+  mu1_id_change[i] = with(draws_change,
+                      {
+                        median.circular(
+                             circular(x =
+                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                                          template = 'none')
+                                           )[1]
+                        # median(
+                        #      unwrap_circular( 
+                        #      b_mu0_Intercept + get(mu_name))
+                        # )
+                      })
+  mu2_id_change[i] = with(draws_change,
+                      {
+                        median.circular(
+                             circular(x =
+                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
+                                          template = 'none')
+                                           )[1]
+                        # median(
+                        #      unwrap_circular( 
+                        #      b_mu0_Intercept + get(mu_name))
+                        # )
+                      })
+  kappa_id_change[i] = with(draws_change,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  arrows.circular(x = circular(x = mu_id_change[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_change[i]),
+                 lwd = 2,
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_sd, alpha.f = 200/255))
+}
+#Add the population of biases
+dev.new()
+par(mfrow = c(1,3))
+PCfun(angles = deg(mu_id_change),
+      col = col_rho,
+      plot_rho = FALSE)
+Draws2Cont(draws = draws_change,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(kappa_mu)'
+           )
+
+with(draws_change,
+     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2)
+     )[1],
+     y = A1(median(kappa_mu)),
+     lwd = 2,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255))
+)
+
+
+with(draws_change,
+     VertHist(data = softplus(Intercept_kappa), 
+              main = '\npopulation kappa',
+              ylim = c(0, 30),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+with(draws_change,
+     VertHist(data = kappa_mu, 
+              main = '\npopulation kappamu',
+              ylim = c(0, 5),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5)
 ```
