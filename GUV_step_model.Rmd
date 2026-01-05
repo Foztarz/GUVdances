@@ -493,10 +493,6 @@ for(i in 1:length(id_uvh) )
                              mod_circular(b_mu0_Intercept + get(mu_name)),
                                           template = 'none')
                                            )[1]
-                        # median(
-                        #      unwrap_circular( 
-                        #      b_mu0_Intercept + get(mu_name))
-                        # )
                       })
   kappa_id_uvh[i] = with(draws_uvh,
                          {softplus(median(Intercept_kappa+get(kappa_name)))} )
@@ -511,7 +507,7 @@ for(i in 1:length(id_uvh) )
                  col = adjustcolor(col_sd, alpha.f = 200/255))
 }
 #Add the population of biases
-# dev.new()
+# 
 par(mfrow = c(1,3))
 PCfun(angles = deg(mu_id_uvh),
       col = col_rho,
@@ -609,7 +605,7 @@ for(i in 1:length(id_uv) )
                     {mean.circular(x = circular(change_angle, template = 'none'))}
                     )
 }
-# dev.new()
+# 
 par(mfrow = c(1,2))
 PCfun(angles = deg(calc_mu),
       col = col_rho,
@@ -671,8 +667,8 @@ we a negative prior for `mu0` and a positive one for `mub`.
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/3)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -799,6 +795,7 @@ for each individual before attempting the next model.
 mu1_id_change = rep(NA, length(id_uv))
 mu2_id_change = rep(NA, length(id_uv))
 kappa_id_change = rep(NA, length(id_uv))
+theta_id_change = rep(NA, length(id_uv))
 
 draws_change = as_draws_df(model_change)
 
@@ -809,6 +806,7 @@ for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
+  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = bearing,
@@ -816,12 +814,21 @@ for(i in 1:length(id_uv) )
          plot_rho = FALSE)
     }
   )
+  #primary mean
   Draws2Cont(draws_change,
              x_string = 'sin(b_mu0_Intercept + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
+             )
+  #secondary mean
+  Draws2Cont(draws_change,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             palette = 'Blue-Yellow' 
              )
   mu1_id_change[i] = with(draws_change,
                       {
@@ -830,10 +837,6 @@ for(i in 1:length(id_uv) )
                              mod_circular(b_mu0_Intercept + get(mu_name)),
                                           template = 'none')
                                            )[1]
-                        # median(
-                        #      unwrap_circular( 
-                        #      b_mu0_Intercept + get(mu_name))
-                        # )
                       })
   mu2_id_change[i] = with(draws_change,
                       {
@@ -842,25 +845,31 @@ for(i in 1:length(id_uv) )
                              mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
                                           template = 'none')
                                            )[1]
-                        # median(
-                        #      unwrap_circular( 
-                        #      b_mu0_Intercept + get(mu_name))
-                        # )
                       })
   kappa_id_change[i] = with(draws_change,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
-  
+  theta_id_change[i] = with(draws_change,
+                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+  #primary mean
   arrows.circular(x = circular(x = mu1_id_change[i],
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_change[i]),
-                 lwd = 2,
+                 lwd = 2*plogis(theta_id_change[i]),
                  length = 0.1/1.25,
-                 col = adjustcolor(col_sd, alpha.f = 200/255))
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
+  #secondary mean
+  arrows.circular(x = circular(x = mu2_id_change[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_change[i]),
+                 lwd = 2*plogis(-theta_id_change[i]),
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
 }
 #Add the population of biases
-dev.new()
 par(mfrow = c(1,3))
 PCfun(angles = deg(mu1_id_change),
       col = col_rho,
@@ -869,7 +878,15 @@ Draws2Cont(draws = draws_change,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_Intercept)*
-             A1(kappa_mu)'
+             A1(kappa_mu)',
+           palette = 'Red-Yellow'
+           )
+Draws2Cont(draws = draws_change,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           palette = 'Blue-Yellow'
            )
 
 with(draws_change,
@@ -897,10 +914,18 @@ axis(2, at = 0:5*5)
 with(draws_change,
      VertHist(data = kappa_mu, 
               main = '\npopulation kappamu',
-              ylim = c(0, 5*5),
+              ylim = c(0, 5),
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
 axis(1)
-axis(2, at = 0:5*5)
+axis(2, at = 0:5)
 ```
+
+
+# Model for non-axial change
+
+It is also possible that the secondary mode is not 180° from the primary one for 
+all individuals. In fact, this is quite likely for individuals that do not change 
+by precisely $\pm 90°$, since the ambiguity about the sun's position relative to 
+the stimulus
