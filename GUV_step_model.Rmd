@@ -364,7 +364,7 @@ pr_uvh = pr_mu_uvh + pr_kappa_uvh
 ## Run the model for UV bright
 
 This model includes a lot of data and parameters, be prepared for it to take a 
-long time to complete all iterations for all chains.
+long time to complete all iterations for all chains. Takes 20 minutes on a 2019 Macbook Pro.
 
 ```{r UV bright model}
 
@@ -511,6 +511,7 @@ for(i in 1:length(id_uvh) )
 par(mfrow = c(1,3))
 PCfun(angles = deg(mu_id_uvh),
       col = col_rho,
+      shrink = 2,
       plot_rho = FALSE)
 Draws2Cont(draws = draws_uvh,
            x_string = 'sin(b_mu0_Intercept)*
@@ -689,7 +690,7 @@ pr_theta_change =
                   prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
-pr_change = pr_mu_change + pr_kappa_change
+pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
 ```
 
 ## Run the model for bimodal change
@@ -708,8 +709,8 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
+                   # warmup = 500, #
+                   # iter = 1000, # longer sampling to efficiently sample mu0
                    silent = 2, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -779,19 +780,16 @@ print(sm_change, digits = 2)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_change,
             variable = '^b_mu0')
+UnwrapRhats(model_change,
+            variable = '^b_mub')
 summary(UnwrapRhats(model_change,
             variable = '^b_mui') )
 ```
 
 
-## Extract predictions for the UV high model
+## Extract predictions for the UV change model
 
-Since this model's estimates provide context for the 'UV dim' data, most importantly 
-the directional bias for each individual dance, we need to extract the estimates 
-for each individual before attempting the next model.
-
-
-```{r Plot the UV bright model}
+```{r Plot the change model}
 mu1_id_change = rep(NA, length(id_uv))
 mu2_id_change = rep(NA, length(id_uv))
 kappa_id_change = rep(NA, length(id_uv))
@@ -923,9 +921,276 @@ axis(2, at = 0:5)
 ```
 
 
-# Model for non-axial change
+# Model for symmetrical change
 
 It is also possible that the secondary mode is not 180° from the primary one for 
 all individuals. In fact, this is quite likely for individuals that do not change 
 by precisely $\pm 90°$, since the ambiguity about the sun's position relative to 
-the stimulus
+the stimulus, more specifically whether it falls at a particular angle to the left 
+or right of the stimulus. This would depend specifically on the value of $\mu_i$ 
+for that individual, if the primary mean falls at $\mu_1 = \mu_0 + \mu_i$,  the 
+secondary mean should fall at $\mu_2 = -(\mu_0 + \mu_i)$. In that case, we can 
+exclude the $\mu_\beta$ parameter, though if there are large deviations from 
+symmetry, we could account for these by introducing another parameter, $\mu_{i,\beta}$,
+so that $\mu_2 = -(\mu_0 + \mu_i + \mu_{i,\beta})$.
+
+## Set up formula and priors
+
+```{r Symmetry formula}
+
+formula_symm = bf(#modulus may not be necessary, included in lpd function
+  formula = change_angle ~ mu,
+  nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ -(mu0 + mui) ), #secondary mean, population mean plus offset, plus individual mean
+  mu0 ~ 1, #primary mean
+  mui ~ 0 + ID, # mean angle combines fixed and random effects
+  nlf(kappa1 ~ k1), #concentration for primary mean
+  nlf(kappa2 ~ k1), #concentration for secondary mean
+  k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+  theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  family = mixture(unwrap_von_mises,#primary mean distribution
+                   unwrap_von_mises #secondary mean distribution
+  ),#mixture, specified by the log ratio of theta1 : theta2
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+```
+
+
+```{r Symmetry priors}
+
+#priors for mu
+pr_mu_symm = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior(paste("target +=", 
+                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            ),
+            check = FALSE) +
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                            check = FALSE)
+
+#priors for kappa
+pr_kappa_symm = 
+                  prior('normal(3,3)', class = 'b', nlpar = 'k1') +
+                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+
+#priors for theta
+pr_theta_symm = 
+                  prior('normal(0,1)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+  
+#all unimodal priors
+pr_symm = pr_mu_symm + pr_kappa_symm + pr_theta_symm
+```
+
+
+## Run the model for symmetrical change
+
+```{r symmetry model}
+
+#very long compile time
+system.time(
+  {
+    
+    model_symm = brm(formula = formula_symm,
+                   data = cd_change,
+                   prior = pr_symm,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   # warmup = 500, #
+                   # iter = 1000, # longer sampling to efficiently sample mu0
+                   silent = 2, # echo only high priority Stan messages
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/UV_symm_model.RData',
+     model_symm)#save for future reference
+
+```
+
+## Inspect model estimates
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect symmetrical change model}
+load(file = '2Results/UV_symm_model.RData')
+#population kappa and its standard deviation
+plot(model_symm,
+      ask = FALSE,
+      variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population directional bias
+plot(model_symm,
+      ask = FALSE,
+      variable = 'mu0',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+#population level change in direction
+
+```
+
+The
+
+```{r Inspect individual means symmetrical model}
+#inidividual but they overlap when unwrapped
+plot(x = model_symm,
+     variable = 'mui',
+     regex = TRUE,
+     ask = FALSE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+```
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the symmetry model}
+
+sm_symm = summary(model_symm,
+                 variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+                regex = TRUE)
+print(sm_symm, digits = 2)
+#mu0 and mui look bad, but good after unwrapping
+UnwrapRhats(model_symm,
+            variable = '^b_mu0')
+summary(UnwrapRhats(model_symm,
+            variable = '^b_mui') )
+```
+
+
+
+## Extract predictions for the symmetrical change model
+
+```{r Plot the symmetrical change model}
+mu1_id_symm = rep(NA, length(id_uv))
+mu2_id_symm = rep(NA, length(id_uv))
+kappa_id_symm = rep(NA, length(id_uv))
+theta_id_symm = rep(NA, length(id_uv))
+
+draws_symm = as_draws_df(model_symm)
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+for(i in 1:length(id_uv) )
+{
+  mu_name = paste0('b_mui_ID',id_uv[i])
+  kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
+  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  with(subset(cd_change, ID %in% id_uv[i]),
+  {
+    PCfun(angles = bearing,
+         col = col_obs,
+         plot_rho = FALSE)
+    }
+  )
+  #primary mean
+  Draws2Cont(draws_symm,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             palette = 'Red-Yellow' 
+             )
+  #secondary mean
+  Draws2Cont(draws_symm,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             palette = 'Blue-Yellow' 
+             )
+  mu1_id_symm[i] = with(draws_symm,
+                      {
+                        median.circular(
+                             circular(x =
+                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                                          template = 'none')
+                                           )[1]
+                      })
+  mu2_id_symm[i] = with(draws_symm,
+                      {
+                        median.circular(
+                             circular(x =
+                             mod_circular( -(b_mu0_Intercept + get(mu_name)) ),
+                                          template = 'none')
+                                           )[1]
+                      })
+  kappa_id_symm[i] = with(draws_symm,
+                         {softplus(median(b_k1_Intercept+get(kappa_name)))} )
+  theta_id_symm[i] = with(draws_symm,
+                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+  #primary mean
+  arrows.circular(x = circular(x = mu1_id_symm[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_symm[i]),
+                 lwd = 2*plogis(theta_id_symm[i]),
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
+  #secondary mean
+  arrows.circular(x = circular(x = mu2_id_symm[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_symm[i]),
+                 lwd = 2*plogis(-theta_id_symm[i]),
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
+}
+#Add the population of biases
+par(mfrow = c(1,3))
+PCfun(angles = deg(mu1_id_symm),
+      col = col_rho,
+      plot_rho = FALSE)
+Draws2Cont(draws = draws_symm,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           palette = 'Red-Yellow'
+           )
+Draws2Cont(draws = draws_symm,
+           x_string = 'sin(-b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(-b_mu0_Intercept)*
+             A1(kappa_mu)',
+           palette = 'Blue-Yellow'
+           )
+
+with(draws_symm,
+     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2)
+     )[1],
+     y = A1(median(kappa_mu)),
+     lwd = 2,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255))
+)
+
+
+with(draws_symm,
+     VertHist(data = softplus(b_k1_Intercept), 
+              main = '\npopulation kappa',
+              ylim = c(0, 30),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+with(draws_symm,
+     VertHist(data = kappa_mu, 
+              main = '\npopulation kappamu',
+              ylim = c(0, 5),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5)
+```
