@@ -190,7 +190,7 @@ length(uv_ids)#most individuals
 #extract just those individuals
 
 #find data for full condition individuals
-uv_cd = subset(cd, ID %in% uv_ids)
+cd_uv = subset(cd, ID %in% uv_ids)
 ```
 
 # Set up circular modelling
@@ -376,7 +376,9 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   control = list(adapt_delta = 0.90),
+                   warmup = 2000, # longer warmup to efficiently sample all parameters
+                   iter = 4000, # longer warmup to efficiently sample all parameters
+                   control = list(adapt_delta = 0.80),
                    silent = 2, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -403,15 +405,20 @@ plot(model_uvh,
       variable = 'mu0',
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
+
+```
+
+The population level mean angle $\mu_0$ appears to oscillate gradually over the course of sampling
+
+
+```{r Inspect individual means UV bright model}
 #inidividual but they overlap when unwrapped
 plot(x = model_uvh,
      variable = 'mui',
      regex = TRUE,
      ask = FALSE,
      transform = unwrap_circular_deg) #plot transformed estimates
-
 ```
-
 
 Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
 all estimates converged well ( $\hat{R}<1.01$).
@@ -441,7 +448,7 @@ the directional bias for each individual dance, we need to extract the estimates
 for each individual before attempting the next model.
 
 
-```{r Plot the high correlation individuals model}
+```{r Plot the UV bright model}
 mu_id_uvh = rep(NA, length(id_uvh))
 kappa_id_uvh = rep(NA, length(id_uvh))
 
@@ -455,8 +462,11 @@ for(i in 1:length(id_uvh) )
   mu_name = paste0('b_mui_ID',id_uvh[i])
   kappa_name = paste0('r_ID__kappa[',id_uvh[i],',Intercept]')
   with(subset(cd_uvh, ID %in% id_uvh[i]),
-  {PCfun(angles = bearing,
-         col = col_obs)}
+  {
+    PCfun(angles = bearing,
+         col = col_obs,
+         plot_rho = FALSE)
+    }
   )
   Draws2Cont(draws_uvh,
              x_string = 'sin(b_mu0_Intercept + get(mu_name))*
@@ -466,13 +476,17 @@ for(i in 1:length(id_uvh) )
              )
   mu_id_uvh[i] = with(draws_uvh,
                       {
-                        median.circular(
-                             circular(x = 
-                             mod_circular(b_mu0_Intercept + get(mu_name)),
-                                                    units = 'radians',
-                                                    rotation = 'clock',
-                                                    zero = pi/2)
-                                           )[1]
+                        # median.circular(
+                        #      circular(x = 
+                        #      mod_circular(b_mu0_Intercept + get(mu_name)),
+                        #                             units = 'radians',
+                        #                             rotation = 'clock',
+                        #                             zero = pi/2)
+                        #                    )[1]
+                        median(
+                             unwrap_circular( 
+                             b_mu0_Intercept + get(mu_name))
+                        )
                       })
   kappa_id_uvh[i] = with(draws_uvh,
                          {softplus(median(Intercept_kappa+get(kappa_name)))} )
@@ -487,12 +501,16 @@ for(i in 1:length(id_uvh) )
                  col = adjustcolor(col_sd, alpha.f = 200/255))
 }
 #Add the population of biases
-OpenCplot()
+dev.new()
+par(mfrow = c(1,3))
+PCfun(angles = deg(mu_id_uvh),
+      col = col_rho,
+      plot_rho = FALSE)
 Draws2Cont(draws = draws_uvh,
            x_string = 'sin(b_mu0_Intercept)*
-             A1(softplus(kappa_mu))',
+             A1(kappa_mu)',
            y_string = 'cos(b_mu0_Intercept)*
-             A1(softplus(kappa_mu))'
+             A1(kappa_mu)'
            )
 
 with(draws_uvh,
@@ -501,13 +519,12 @@ with(draws_uvh,
                                                   rotation = 'clock',
                                                   zero = pi/2)
      )[1],
-     y = A1(softplus(median(kappa_mu))),
+     y = A1(median(kappa_mu)),
      lwd = 2,
      length = 0.1/1.25,
      col = adjustcolor(col_sd, alpha.f = 200/255))
 )
 
-with(draws_uvh, paste0(mean(softplus(Intercept_kappa) > kappa_id_uvh)*100, '%') ) #partial pooling allows accurate estimate
 
 with(draws_uvh,
      VertHist(data = softplus(Intercept_kappa), 
@@ -532,6 +549,8 @@ axis(2, at = 0:5)
 
 # Model for bimodal change
 
+## Prepare data
+
 Subtract estimated mean for 'UV bright' dances from dance angles for 'UV dim'.
 
 ```{r Calculate change data}
@@ -547,4 +566,96 @@ cd_change = within(cd_uv,
                                  )
                    }
 )
+```
+
+## Inspect data
+
+Somewhat contrary to expectations, many individuals have their primary mean close
+ to 0°, that is no change. It is possible that the mean vectors 
+
+```{r Plot the estimated change data}
+id_uv = with(cd_uv, unique(ID))
+calc_mu = rep(NA, length(id_uv))
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+for(i in 1:length(id_uv) )
+{
+  with(subset(cd_change, ID %in% id_uvh[i]),
+  {
+    PCfun(angles = deg(change_angle),
+         col = col_sd2)}
+  )
+  calc_mu[i] = with(subset(cd_change, ID %in% id_uvh[i]),
+                    {mean.circular(x = circular(change_angle, template = 'none'))}
+                    )
+}
+dev.new()
+PCfun(angles = deg(calc_mu),
+      col = col_rho,
+      shrink = 2)
+```
+
+
+
+## Set up formula and priors
+
+The simplest possible model for a bimodal distribution with individual effects, 
+needs to account for individual differences in primary mode and concentration. 
+For simplicity, here it is assumed that individual differences affect the primary
+ and secondary mode (separated by approximately 180°) identically, and that 
+both modes have the same concentration $\kappa_1 = \kappa_2 = \log(1+\exp(k_1))$. 
+
+```{r Change formula}
+
+formula_change = bf(#modulus may not be necessary, included in lpd function
+  formula = change_angle ~ mu,
+  nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ mu0 + mu1 + mui), #secondary mean, population mean plus offset, plus individual mean
+  mu0 ~ 1, #primary mean
+  mui ~ 0 + ID, # mean angle combines fixed and random effects
+  mu1 ~ 1, #angle between primary mean and secondary mean
+  nlf(kappa1 ~ k1), #concentration for primary mean
+  nlf(kappa2 ~ k1), #concentration for secondary mean
+  k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+  theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  family = mixture(unwrap_von_mises,#primary mean distribution
+                   unwrap_von_mises #secondary mean distribution
+  ),#mixture, specified by the log ratio of theta1 : theta2
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+```
+
+This model requires priors additional priors for $\mu_1$ and $\kappa_2$. For a 
+near axial bimodal distribution the expectation would be that $\mu_1$ and $\mu_2$
+ are separated by ≈180°, so the prior for `mu1` is set to this value. For this 
+formula, $\kappa_1$ and $\kappa_2$ are both set deterministically by the parameter
+ `k1`, so both can take the same prior.
+
+```{r change priors}
+
+#priors for mu
+pr_mu_change = prior('normal(0,3*pi()/2)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi,pi()/2)', class = 'b', nlpar = 'mu1') + #expected offset of ≈180°
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior(paste("target +=", 
+                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            ),
+            check = FALSE) +
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                            check = FALSE)
+
+#priors for kappa
+pr_kappa_change = 
+                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa1') +
+                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa2') +
+                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+
+#priors for theta
+pr_theta_change = 
+                  prior('normal(0,1)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+  
+#all unimodal priors
+pr_change = pr_mu_change + pr_kappa_change
 ```
