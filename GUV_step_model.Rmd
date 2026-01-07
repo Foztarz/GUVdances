@@ -826,9 +826,9 @@ for(i in 1:length(id_uv) )
              )
   #secondary mean
   Draws2Cont(draws_change,
-             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+             x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+             y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -873,9 +873,12 @@ for(i in 1:length(id_uv) )
 }
 #Add the population of biases
 par(mfrow = c(1,3))
-PCfun(angles = deg(mu1_id_change),
+PCfun(angles = deg(calc_mu),
       col = col_rho,
       plot_rho = FALSE)
+# PCfun(angles = deg(mu1_id_change),
+#       col = col_rho,
+#       plot_rho = FALSE)
 Draws2Cont(draws = draws_change,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
@@ -884,9 +887,9 @@ Draws2Cont(draws = draws_change,
            palette = 'Red-Yellow'
            )
 Draws2Cont(draws = draws_change,
-           x_string = 'sin(b_mu0_Intercept)*
+           x_string = 'sin(b_mu0_Intercept+b_mub_Intercept)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept)*
+           y_string = 'cos(b_mu0_Intercept+b_mub_Intercept)*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
@@ -1100,9 +1103,9 @@ for(i in 1:length(id_uv) )
              )
   #secondary mean
   Draws2Cont(draws_symm,
-             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+             x_string = 'sin(-(b_mu0_Intercept + get(mu_name)))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+             y_string = 'cos(-(b_mu0_Intercept + get(mu_name)))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -1147,9 +1150,12 @@ for(i in 1:length(id_uv) )
 }
 #Add the population of biases
 par(mfrow = c(1,3))
-PCfun(angles = deg(mu1_id_symm),
+PCfun(angles = deg(calc_mu),
       col = col_rho,
       plot_rho = FALSE)
+# PCfun(angles = deg(mu1_id_symm),
+#       col = col_rho,
+#      plot_rho = FALSE)
 Draws2Cont(draws = draws_symm,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
