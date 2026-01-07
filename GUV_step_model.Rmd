@@ -664,6 +664,9 @@ In a bimodal model, $\mu_1$ and $\mu_2$ can become indistinguishable, so we also
 need tighter priors for `mu0` and `mub` to ensure that their estimates do not 
 switch places. Since there appear to be more individuals with a leftwards turn 
 we a negative prior for `mu0` and a positive one for `mub`.
+One additional safeguard would be to ensure that $\mu_1$ is also in the direction 
+that includes the most data, as would be the case for the leftwards mode. This can 
+be implied by biasing $\theta_1$ towards positive values.
 
 ```{r change priors}
 
@@ -686,8 +689,8 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(0,1)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+                  prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
@@ -709,8 +712,8 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 500, #
-                   # iter = 1000, # longer sampling to efficiently sample mu0
+                   warmup = 500, #
+                   iter = 1000, # longer sampling to efficiently sample mu0
                    silent = 2, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -774,7 +777,8 @@ all estimates converged well ( $\hat{R}<1.01$).
 ```{r Convergence heuristics for the change model}
 
 sm_change = summary(model_change,
-                 variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+                 variable = c('Intercept_kappa', 'theta1_Intercept',
+                              'sd', 'kappa_mu'),
                 regex = TRUE)
 print(sm_change, digits = 2)
 #mu0 and mui look bad, but good after unwrapping
@@ -975,8 +979,8 @@ pr_kappa_symm =
 
 #priors for theta
 pr_theta_symm = 
-                  prior('normal(0,1)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+                  prior('normal(3,1)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_symm = pr_mu_symm + pr_kappa_symm + pr_theta_symm
@@ -1020,7 +1024,7 @@ load(file = '2Results/UV_symm_model.RData')
 #population kappa and its standard deviation
 plot(model_symm,
       ask = FALSE,
-      variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+      variable = c('Intercept_kappa', 'theta1_Intercept', 'sd', 'kappa_mu'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_symm,
