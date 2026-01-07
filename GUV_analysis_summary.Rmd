@@ -48,8 +48,6 @@ editor_options:
 > **TODO**
 >
 > -   move necessary functions to GUV_functions
-> -   move raw data to end
-> -   make functions for result extraction from BRMS
 > -   neaten up priors for BRMS models
 
 ```{r setup, include=FALSE}
@@ -216,6 +214,8 @@ lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']),
       lwd = 1)
 mtext(ii,side = 3,line = -2)
 ```
+
+A plot including all 169 dances can be found at the end of this markdown.
 
 ### Plot all
 
@@ -1740,44 +1740,26 @@ hive_coords  =  c(longitude  = 8.811333,
 # left according to openstreetmap 50.802721, 8.806807
 
 #the 150m circle intersecting with the nearest corner
-#West corner 50.805644, 8.809640
-#Nearest corner 50.805565, 8.810290
-#Near South edge w/in 150m 50.805258, 8.810424
 
-#nearer
+#nearest edge
 garden_coords = list(left = 
-                       c(longitude  = 8.809640,
-                         latitude = 50.805644),
+                       c(longitude  = 8.808956,
+                         latitude = 50.805509),
                      centre = 
                        c(longitude  = 8.810290,
                          latitude = 50.805565),
                      right = 
-                       c(longitude  = 8.810424,
-                         latitude = 50.805258)
+                       c(longitude  = 8.810110,
+                         latitude = 50.804854)
                      )
 
-
-#original
-# garden_coords = list(left = 
-#                        c(longitude  = 8.806807,
-#                          latitude = 50.802721),
-#                      centre = 
-#                        c(longitude  = 8.809097,
-#                          latitude = 50.802605),
-#                      right = 
-#                        c(longitude  = 8.811926,
-#                          latitude = 50.803182)
-#                      )
-                     
+#find the bearing from the hive                     
 garden_bearing = sapply(garden_coords, 
                         FUN = bearing, 
                         p1 = hive_coords
                         )
 #standard bearing
 print(garden_bearing %% 360)
-
-#let's make this equivalent to the phototaxis hypothesis
-# garden_bearing[c(1,3)] = garden_bearing[2] + c(-1,1)*30/2#now both are a 30° arc
 
 garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 ```
@@ -1913,7 +1895,6 @@ pr_photo =
                   '+ normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle # not necessary with shrinkage prior
   ),
   check = FALSE) +
-  # set_prior("target += normal_lpdf(kappamu | 1.0, 3.0)", #prior to lower values, indiv differences should be large
   set_prior("target += lognormal_lpdf(log1p_exp(kappamu) | log(15), 0.6)", #shrinkage prior differences should be large
             check = FALSE) +
     prior(normal(3.0,3.0), class = Intercept, dpar = 'kappa') + # bias to oriented
@@ -1921,14 +1902,13 @@ pr_photo =
 
 #for models with a mean we also need an extra parameter
 pr_nophoto = pr_photo +
-  # prior(normal(0,2*pi()), class = b,  nlpar = 'mu0', coef = 'Intercept')
   prior(unwrap_von_mises(0,1e-16), class = b,  nlpar = 'mu0', coef = 'Intercept')
 
 #parameters for the brms runs
-wup = 1000
-sam = 1000
-refr = 0
-siln = 0
+wup = 1000 #number of warmup iterations used to tune the sampler
+sam = 1000 #number of iterations to sample
+refr = 0 #print progress every n iterations
+siln = 2#print only very important messages
 
 #these are pretty slow! About 7 minutes in total
 if(load_model)
@@ -1971,7 +1951,7 @@ if(load_model)
                   iter = wup+sam, #doesn't take a lot of runs
                   chains = 4, # 4 chains in parallel
                   cores = 4, # on 4 CPUs
-                  # control = list(adapt_delta = 0.90),
+                  control = list(adapt_delta = 0.90),
                  refresh = refr, # echo chain progress every n iterations
                  silent = siln, # echo some Stan messages
                   save_pars = save_pars(all = TRUE), # <--- Crucial for moment matching
@@ -2018,7 +1998,7 @@ SumUwRhats = function(x, var = NULL){summary(UnwrapRhats(x, variable = var))}
 lapply(X = modlist[c(2,4)],
        FUN = UnwrapRhats,
        variable = '^b_mu0')
-#TODO check what is wrong with nosunspot
+#Summarise Rhats
 lapply(X = modlist,
        FUN = SumUwRhats)
 
@@ -2049,24 +2029,16 @@ print(sort(unlist(modLIC)), digits = 1)
 
 ```
 
+There is very little separation between our different hypotheses here, 
+suggesting each would do well to explain the data.
+We can also look at the specific predictions to see how well each hypothesis matches.
+
 ### Hypothesis test
 
 ```{r ROPE hypothesis test}
 #since all models are similarly credible, what about the hypotheses?
 #check if the sector surrounding the expected direction is equally full
 
-# bayestestR::rope(x = modlist$no_phototaxis,
-#                  range = c(-1,1)*pi/4,
-#                  parameters = 'fixed_mu0',
-#                  effects = 'all',
-#                  verbose = FALSE)
-# bayestestR::rope(x = modlist$no_sunspot,
-#                  range = c(-1,1)*pi/4,
-#                  parameters = 'mu0_Intercept',
-#                  effects = 'all',
-#                  verbose = FALSE)
-dr_modlist = lapply(modlist,
-                    as_draws_df)
 #for each individual, calculate the likelihood of foraging in the expected region
 
 PostROPE = function(id, rope, drs, mu = 'b_mu0_Intercept')
@@ -3157,3 +3129,110 @@ print(
               type = 'response')[2:4]*180,
   digits = 1)
 ```
+
+
+# Plot all raw data
+
+Plot all 169 dances
+
+```{r Raw dances, echo=FALSE, warning=FALSE}
+#TODO make function
+#set up a sequence for the axes
+xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
+par(mfrow = c(2, 2),
+    mar = c(0,0,0,0))
+par(pty = 's')
+
+#add legend to 1st page
+plot(x = NULL,
+     xlim = c(-1,1),
+     ylim = c(-1,1),
+     pch = 19,
+     axes = FALSE,
+     xlab = '',
+     ylab = '',
+     main = ''
+)
+legend(x = 'center',
+       legend = c('Green Bright',
+                  'Green Dim',
+                  'UV Bright',
+                  'UV Dim',
+                  'Sun azimuth (North = Up)'),
+       col = c('green',
+               'darkgreen',
+               'magenta',
+               'purple',
+               'orange'),
+       pch = c(21,21,21,21,NA),
+       lty = c(NA, NA, NA, NA, 1),
+       lwd = c(2,2,2,2,3)
+       )
+#loop through individuals
+for(ii in u_id)
+{
+  mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
+  mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
+  mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
+  mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
+  plot(x = NULL,
+       xlim = 100*c(-1,1),
+       ylim = 100*c(-1,1),
+       pch = 19,
+       axes = FALSE,
+       xlab = '',
+       ylab = '',
+       main = ''
+       )
+  abline(a = 0, b = 1, col = 'gray90')
+  abline(a = 0, b = -1, col = 'gray90')
+  abline(h = 0, v = 0, col = 'gray75')
+  lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
+  lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
+  lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
+  lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3)
+  text(x = 1:4*20,
+       y = c(0,0,0,0),
+       labels = paste(' run', 1:4*20), 
+       cex = 0.3,
+       adj = c(0,1))
+  with(subset(cd, ID %in% ii),
+       {
+  lines(x = c(0, 100*sin(sun_az_rad)),
+        y = c(0, 100*cos(sun_az_rad)),
+        col = adjustcolor('orange',alpha.f = 0.5),
+        lwd = 2)
+  points(x = run*sin(as.numeric(angle)),
+         y = run*cos(as.numeric(angle)),
+         bg = gray(level = 1.0,
+                   alpha =  0.4),
+         col = c('green', 'darkgreen', 'magenta', 'purple')
+                [ifelse(colour %in% 'g',
+                        yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
+                        no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
+        pch = 21,
+        lwd = 2
+       )
+       }
+  )
+  lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
+        y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
+        col = 'green', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
+        y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
+        col = 'darkgreen', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
+        y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
+        col = 'magenta', 
+        lwd = 1)
+  lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
+        y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
+        col = 'purple', 
+        lwd = 1)
+  mtext(ii,side = 3,line = -2)
+}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
