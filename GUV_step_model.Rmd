@@ -502,7 +502,7 @@ for(i in 1:length(id_uvh) )
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_uvh[i]),
-                 lwd = 2,
+                 lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor(col_sd, alpha.f = 200/255))
 }
@@ -527,7 +527,7 @@ with(draws_uvh,
                                                   zero = pi/2)
      )[1],
      y = A1(median(kappa_mu)),
-     lwd = 2,
+     lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor(col_sd, alpha.f = 200/255))
 )
@@ -731,7 +731,7 @@ load(file = '2Results/UV_change_model.RData')
 #population kappa and its standard deviation
 plot(model_change,
       ask = FALSE,
-      variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+      variable = c('Intercept_kappa', 'theta1_Intercept', 'sd', 'kappa_mu'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_change,
@@ -854,7 +854,7 @@ for(i in 1:length(id_uv) )
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_change[i]),
-                 lwd = 2*plogis(theta_id_change[i]),
+                 lwd = 5*plogis(theta_id_change[i]),
                  length = 0.1/1.25,
                  col = adjustcolor(col_rho, alpha.f = 200/255))
   #secondary mean
@@ -863,7 +863,7 @@ for(i in 1:length(id_uv) )
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_change[i]),
-                 lwd = 2*plogis(-theta_id_change[i]),
+                 lwd = 5*plogis(-theta_id_change[i]),
                  length = 0.1/1.25,
                  col = adjustcolor(col_rho, alpha.f = 200/255))
 }
@@ -894,7 +894,7 @@ with(draws_change,
                                                   zero = pi/2)
      )[1],
      y = A1(median(kappa_mu)),
-     lwd = 2,
+     lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor(col_sd, alpha.f = 200/255))
 )
@@ -1128,7 +1128,7 @@ for(i in 1:length(id_uv) )
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_symm[i]),
-                 lwd = 2*plogis(theta_id_symm[i]),
+                 lwd = 5*plogis(theta_id_symm[i]),
                  length = 0.1/1.25,
                  col = adjustcolor(col_rho, alpha.f = 200/255))
   #secondary mean
@@ -1137,7 +1137,7 @@ for(i in 1:length(id_uv) )
                               rotation = 'clock',
                               zero = pi/2),
                  y = A1(kappa_id_symm[i]),
-                 lwd = 2*plogis(-theta_id_symm[i]),
+                 lwd = 5*plogis(-theta_id_symm[i]),
                  length = 0.1/1.25,
                  col = adjustcolor(col_rho, alpha.f = 200/255))
 }
@@ -1168,7 +1168,7 @@ with(draws_symm,
                                                   zero = pi/2)
      )[1],
      y = A1(median(kappa_mu)),
-     lwd = 2,
+     lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor(col_sd, alpha.f = 200/255))
 )
