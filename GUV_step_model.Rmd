@@ -676,12 +676,14 @@ that includes the most data, as would be the case for the leftwards mode. This c
 be implied by biasing $\theta_1$ towards positive values. The data itself implies 
 a value around `1.0` (`qlogis(mean(calc_mu<0))`), but when estimates cross 0 the 
 modes may switch roles, such that there would also be a stable estimate at `-1.0`.
-
+A wide prior on individual variation in $\theta_1$ ($\sigma_\theta$) allows the 
+model to flexibly identify dances that for which $\mu_2$ is the dominant mode 
+rather than $\mu_1$.
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+pr_mu_change = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi(), pi()/3)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -699,7 +701,7 @@ pr_kappa_change =
 #priors for theta
 pr_theta_change = 
                   prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
+                  prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
