@@ -643,10 +643,12 @@ both modes have the same concentration $\kappa_1 = \kappa_2 = \log(1+\exp(k_1))$
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ mu0 + mub + mui), #secondary mean, population mean plus offset, plus individual mean
+  nlf(mu2 ~ mu0 + mub + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu2 ~ mu0 + mub + mui + mubi), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
   mub ~ 1, #angle between primary mean and secondary mean
+  mubi ~ 0 + ID, # individual devations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -655,6 +657,18 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
                    unwrap_von_mises #secondary mean distribution
   ),#mixture, specified by the log ratio of theta1 : theta2
   nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+
+  # #Introduce stan variable for kappamub
+  # #in this case this is a measure of deviation from kappamu, an added coefficient
+  # stan_softkappamub = stanvar(scode = "
+  # real softkappamub;
+  #                            ",
+  #                            block = "parameters") + 
+  #   stanvar(scode = "
+  # real kappa_mub = log1p_exp(softkappamub);
+  #           ", 
+  #           block = 'genquant')
 ```
 
 This model requires priors additional priors for $\mu_1$ and $\kappa_2$. For a 
@@ -682,8 +696,13 @@ rather than $\mu_1$.
 A further source of instability in estimates of the two means appears to be 
 differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals,
 corresponding to stable values of `mub` both larger and smaller than 180°. This 
-could be accounted for by an additional parameter $\mu_{\beta, i}$, but may also 
+needs to be accounted for by an additional parameter $\mu_{\beta, i}$, but may also 
 indicative of a tendency away from the axial bimodality assumed here (see Symmetrical Model).
+Ideally the distribution of this variable would be accounted for in the same way 
+as $\kappa_\mu$, so that $\kappa_{\mu, \beta} = \log(1+\exp(\text{softkappamub}))$,
+but for the purposes of identifiability it is preferable to set a restrictive prior 
+$\mu_{\beta, i} \sim \mathcal{V}(0, 30)$.
+
 ```{r change priors}
 
 #priors for mu
@@ -695,8 +714,15 @@ pr_mu_change = prior('normal(-pi()/2, pi()/4)', class = 'b', nlpar = 'mu0') +
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
-                            check = FALSE)
+            # prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))',
+            prior('unwrap_von_mises_vect(0, 30)',
+                        nlpar  = 'mubi',  class = 'b') +
+            set_prior(paste("target +=",
+                            'normal_lpdf(b_mubi | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            ),
+            check = FALSE) #+
+                  # set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(100), 0.6)", #expect high concentration (low variation) 
+                  #           check = FALSE)
 
 #priors for kappa
 pr_kappa_change = 
@@ -705,7 +731,7 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
@@ -725,7 +751,8 @@ system.time(
                    prior = pr_change,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
-                      stan_softkappamu,
+                      stan_softkappamu,# +
+                      # stan_softkappamub,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
                    warmup = 500, #
@@ -745,7 +772,7 @@ save(file = '2Results/UV_change_model.RData',
 This model identifies both a population level bias (near 0°) and individual biases
  with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
  
-```{r Inspect UV bright model}
+```{r Inspect change model}
 load(file = '2Results/UV_change_model.RData')
 #population kappa and its standard deviation
 plot(model_change,
@@ -761,7 +788,7 @@ plot(model_change,
 #population level change in direction
 plot(model_change,
       ask = FALSE,
-      variable = 'mub',
+      variable = 'mub_Intercept',
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
 
@@ -823,6 +850,7 @@ par(mar = c(0,0,0,0),
 for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
+  mub_name = paste0('b_mubi_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
   theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
   with(subset(cd_change, ID %in% id_uv[i]),
@@ -842,9 +870,9 @@ for(i in 1:length(id_uv) )
              )
   #secondary mean
   Draws2Cont(draws_change,
-             x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+             x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+             y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -860,7 +888,7 @@ for(i in 1:length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
+                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name)),
                                           template = 'none')
                                            )[1]
                       })
