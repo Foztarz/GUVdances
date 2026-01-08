@@ -536,7 +536,7 @@ with(draws_uvh,
 with(draws_uvh,
      VertHist(data = softplus(Intercept_kappa), 
               main = '\npopulation kappa',
-              ylim = c(0, 30),
+              ylim = c(0, 15),
               col = adjustcolor(col_kappa, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
@@ -624,6 +624,8 @@ full_ids = u_id[luc == 4]
 PCfun(angles = deg(calc_mu[which(full_ids %in% uv_ids)]),
       col = col_kappa,
       shrink = 2)
+
+mean(calc_mu<0)
 ```
 
 
@@ -660,13 +662,20 @@ near axial bimodal distribution the expectation would be that $\mu_1$ and $\mu_2
  are separated by ≈180°, so the prior for $\mu_\beta$ is set to this value. For this 
 formula, $\kappa_1$ and $\kappa_2$ are both set deterministically by the parameter
  `k1`, so both can take the same prior.
+Note that values of $\mu_i$ estimated for this dataset account only for individual 
+deviations in turn angle, since individual directional preferences estimated for 
+the UV bright stimulus have already been subtracted. This may introduce excess 
+uncertainty about the particular values of $\mu_i$, so the shrinkage towards no 
+difference enforced by $\kappa_\mu$ is important for stability.
 In a bimodal model, $\mu_1$ and $\mu_2$ can become indistinguishable, so we also 
 need tighter priors for `mu0` and `mub` to ensure that their estimates do not 
 switch places. Since there appear to be more individuals with a leftwards turn 
 we a negative prior for `mu0` and a positive one for `mub`.
 One additional safeguard would be to ensure that $\mu_1$ is also in the direction 
 that includes the most data, as would be the case for the leftwards mode. This can 
-be implied by biasing $\theta_1$ towards positive values.
+be implied by biasing $\theta_1$ towards positive values. The data itself implies 
+a value around `1.0` (`qlogis(mean(calc_mu<0))`), but when estimates cross 0 the 
+modes may switch roles, such that there would also be a stable estimate at `-1.0`.
 
 ```{r change priors}
 
@@ -910,7 +919,7 @@ with(draws_change,
 with(draws_change,
      VertHist(data = softplus(b_k1_Intercept), 
               main = '\npopulation kappa',
-              ylim = c(0, 30),
+              ylim = c(0, 15),
               col = adjustcolor(col_kappa, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
@@ -982,7 +991,7 @@ pr_kappa_symm =
 
 #priors for theta
 pr_theta_symm = 
-                  prior('normal(3,1)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(3,0.5)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
@@ -1187,7 +1196,7 @@ with(draws_symm,
 with(draws_symm,
      VertHist(data = softplus(b_k1_Intercept), 
               main = '\npopulation kappa',
-              ylim = c(0, 30),
+              ylim = c(0, 15),
               col = adjustcolor(col_kappa, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
