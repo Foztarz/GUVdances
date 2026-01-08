@@ -679,11 +679,16 @@ modes may switch roles, such that there would also be a stable estimate at `-1.0
 A wide prior on individual variation in $\theta_1$ ($\sigma_\theta$) allows the 
 model to flexibly identify dances that for which $\mu_2$ is the dominant mode 
 rather than $\mu_1$.
+A further source of instability in estimates of the two means appears to be 
+differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals,
+corresponding to stable values of `mub` both larger and smaller than 180°. This 
+could be accounted for by an additional parameter $\mu_{\beta, i}$, but may also 
+indicative of a tendency away from the axial bimodality assumed here (see Symmetrical Model).
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/3)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+pr_mu_change = prior('normal(-pi()/2, pi()/4)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi(), pi()/4)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -700,7 +705,7 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(3, 1.0)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
