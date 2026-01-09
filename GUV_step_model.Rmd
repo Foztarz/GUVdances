@@ -1329,7 +1329,7 @@ pr_kappa_symm =
 
 #priors for theta
 pr_theta_symm = 
-                  prior('normal(3,1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(3.0,1.0)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
