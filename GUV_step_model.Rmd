@@ -731,7 +731,7 @@ system.time(
   {
     
     model_change = brm(formula = formula_change,
-                   data = cd_change,
+                   data = subset(cd_change, ID %in% uv_ids[1:20]),
                    prior = pr_change,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -830,7 +830,7 @@ draws_change = as_draws_df(model_change)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:length(id_uv) )
+for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1049,7 +1049,7 @@ system.time(
   {
     
     model_devchange = brm(formula = formula_devchange,
-                   data = cd_change,
+                   data = subset(cd_change, ID %in% uv_ids[1:20]),
                    prior = pr_devchange,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1140,7 +1140,7 @@ draws_devchange = as_draws_df(model_devchange)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:length(id_uv) )
+for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   mub_name = paste0('b_mubi_ID',id_uv[i])
@@ -1330,7 +1330,7 @@ pr_kappa_symm =
 #priors for theta
 pr_theta_symm = 
                   prior('normal(3,1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
+                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_symm = pr_mu_symm + pr_kappa_symm + pr_theta_symm
