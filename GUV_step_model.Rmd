@@ -637,6 +637,9 @@ needs to account for individual differences in primary mode and concentration.
 For simplicity, here it is assumed that individual differences affect the primary
  and secondary mode (separated by approximately 180°) identically, and that 
 both modes have the same concentration $\kappa_1 = \kappa_2 = \log(1+\exp(k_1))$. 
+Although the population shows a general bias to one side, it may be simpler to 
+assume that the proportion of data around $\mu_1$ ($\theta_1$) depends only on the
+individual.
 
 ```{r Change formula}
 
@@ -644,15 +647,14 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ modulo_circular(mu0 + mui)), #primary mean, population mean plus individual mean
   nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
-  nlf(mu2 ~ mu0 + mub + mui + mubi), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
   mub ~ 1, #angle between primary mean and secondary mean
-  mubi ~ 0 + ID, # individual devations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-  theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  # theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  theta1 ~ 0 + ID, #for mixture weighting, this is specific to individual
   family = mixture(unwrap_von_mises,#primary mean distribution
                    unwrap_von_mises #secondary mean distribution
   ),#mixture, specified by the log ratio of theta1 : theta2
@@ -689,32 +691,38 @@ needs to be accounted for by an additional parameter $\mu_{\beta, i}$, but may a
 indicative of a tendency away from the axial bimodality assumed here (see Symmetrical Model).
 Ideally the distribution of this variable would be accounted for in the same way 
 as $\kappa_\mu$, so that $\kappa_{\mu, \beta} = \log(1+\exp(\text{softkappamub}))$,
-but for the purposes of identifiability it is preferable to set a restrictive prior 
+but for the purposes of identifiability it could be preferable to set a restrictive prior 
 $\mu_{\beta, i} \sim \mathcal{V}(0, 30)$.
+
+There is strong bimodality in posterior density for $\mu_1$ centred around 30° and
+150°. We can avoid this by setting an informative prior that keeps $\mu_1$ away 
+from 0° and 180°.
+
 
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(-pi()/2, pi()/4)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
+                prior('normal(pi(), pi()/8)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(10), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
 #priors for kappa
 pr_kappa_change = 
                   prior('normal(3,3)', class = 'b', nlpar = 'k1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+                  prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
+                  # prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  # prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
@@ -733,7 +741,8 @@ system.time(
   {
     
     model_change = brm(formula = formula_change,
-                   data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   # data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   data = cd_change,
                    prior = pr_change,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -762,7 +771,7 @@ load(file = '2Results/UV_change_model.RData')
 #population kappa and its standard deviation
 plot(model_change,
       ask = FALSE,
-      variable = c('Intercept_kappa', 'theta1_Intercept', 'sd', 'kappa_mu'),
+      variable = c('k1_Intercept', 'theta1_Intercept', 'sd', 'kappa_mu'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_change,
@@ -836,7 +845,8 @@ for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
-  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  # theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  theta_name = paste0('b_theta1_ID',id_uv[i])
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = bearing,
@@ -879,7 +889,8 @@ for(i in 1:20)#length(id_uv) )
   kappa_id_change[i] = with(draws_change,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
   theta_id_change[i] = with(draws_change,
-                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+                         {plogis(median(get(theta_name)))} )
+                         # {plogis(median(b_theta1_Intercept+get(theta_name)))} )
   #primary mean
   arrows.circular(x = circular(x = mu1_id_change[i],
                                units = 'radians',
@@ -1050,7 +1061,8 @@ system.time(
   {
     
     model_devchange = brm(formula = formula_devchange,
-                   data = subset(cd_change, ID %in% uv_ids[1:20]),
+                    # data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   data = cd_change,
                    prior = pr_devchange,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1351,7 +1363,8 @@ system.time(
   {
     
     model_symm = brm(formula = formula_symm,
-                   data = subset(cd_change, ID %in% uv_ids[1:20]),
+                     # data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   data = cd_change,
                    prior = pr_symm,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1380,7 +1393,7 @@ load(file = '2Results/UV_symm_model.RData')
 #population kappa and its standard deviation
 plot(model_symm,
       ask = FALSE,
-      variable = c('Intercept_kappa', 'theta1_Intercept', 'k1_Intercept', 'sd', 'kappa_mu'),
+      variable = c('k1_Intercept', 'theta1_Intercept', 'sd', 'kappa_mu'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 # plot(model_symm,
