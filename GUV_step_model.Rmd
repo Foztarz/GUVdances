@@ -642,8 +642,8 @@ both modes have the same concentration $\kappa_1 = \kappa_2 = \log(1+\exp(k_1))$
 
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ mu0 + mub + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu1 ~ modulo_circular(mu0 + mui)), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   nlf(mu2 ~ mu0 + mub + mui + mubi), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
@@ -702,7 +702,9 @@ pr_mu_change = prior('normal(-pi()/2, pi()/4)', class = 'b', nlpar = 'mu0') +
             set_prior(paste("target +=", 
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
-            check = FALSE)
+            check = FALSE) +
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                            check = FALSE)
 
 #priors for kappa
 pr_kappa_change = 
@@ -870,7 +872,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name)),
+                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
                                           template = 'none')
                                            )[1]
                       })
@@ -970,9 +972,8 @@ find the individual deviations from the population-level change $\mu_\beta$.
 
 formula_devchange = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ mu0 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ mu0 + mub + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
-  nlf(mu2 ~ mu0 + mub + mui + mubi), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu1 ~ modulo_circular(mu0 + mui) ), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ modulo_circular(mu0 + mub + mui + mubi) ), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
   mub ~ 1, #angle between primary mean and secondary mean
@@ -1037,7 +1038,7 @@ pr_theta_devchange =
                   prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
-pr_devchange = pr_mu_devchange + pr_kappa_devchange+ pr_theta_dechange
+pr_devchange = pr_mu_devchange + pr_kappa_devchange+ pr_theta_devchange
 ```
 
 ## Run the model for individual deviations in bimodal change
