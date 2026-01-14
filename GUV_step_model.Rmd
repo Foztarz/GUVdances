@@ -653,8 +653,8 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-  # theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
-  theta1 ~ 0 + ID, #for mixture weighting, this is specific to individual
+  theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  # theta1 ~ 0 + ID, #for mixture weighting, this is specific to individual
   family = mixture(unwrap_von_mises,#primary mean distribution
                    unwrap_von_mises #secondary mean distribution
   ),#mixture, specified by the log ratio of theta1 : theta2
@@ -703,7 +703,7 @@ from 0° and 180°.
 
 #priors for mu
 pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/8)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -720,9 +720,9 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
-                  # prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  # prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  # prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
@@ -845,8 +845,8 @@ for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
-  # theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
-  theta_name = paste0('b_theta1_ID',id_uv[i])
+  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  # theta_name = paste0('b_theta1_ID',id_uv[i])
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = bearing,
@@ -889,8 +889,8 @@ for(i in 1:20)#length(id_uv) )
   kappa_id_change[i] = with(draws_change,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
   theta_id_change[i] = with(draws_change,
-                         {plogis(median(get(theta_name)))} )
-                         # {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+                         # {plogis(median(get(theta_name)))} )
   #primary mean
   arrows.circular(x = circular(x = mu1_id_change[i],
                                units = 'radians',
