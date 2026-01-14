@@ -646,10 +646,11 @@ individual.
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ modulo_circular(mu0 + mui)), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu2 ~ modulo_circular(mu0 + pi() + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  # nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
-  mub ~ 1, #angle between primary mean and secondary mean
+  # mub ~ 1, #angle between primary mean and secondary mean
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -698,19 +699,21 @@ There is strong bimodality in posterior density for $\mu_1$ centred around 30° 
 150°. We can avoid this by setting an informative prior that keeps $\mu_1$ away 
 from 0° and 180°.
 
+`20260114` attempt with `mub` forced to 180°. 
+
 
 ```{r change priors}
 
 #priors for mu
 pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+                # prior('normal(pi(), pi()/12)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(10), 0.6)", #expect high concentration (low variation) 
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(15), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
 #priors for kappa
@@ -720,8 +723,8 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(3.0, 0.25)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
                   # prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
   
 #all unimodal priors
@@ -780,11 +783,11 @@ plot(model_change,
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
 #population level change in direction
-plot(model_change,
-      ask = FALSE,
-      variable = 'mub_Intercept',
-      regex = TRUE,
-     transform = unwrap_circular_deg) #plot transformed estimates
+# plot(model_change,
+#       ask = FALSE,
+#       variable = 'mub_Intercept',
+#       regex = TRUE,
+#      transform = unwrap_circular_deg) #plot transformed estimates
 
 ```
 
@@ -821,8 +824,8 @@ print(sm_change, digits = 2)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_change,
             variable = '^b_mu0')
-UnwrapRhats(model_change,
-            variable = '^b_mub')
+# UnwrapRhats(model_change,
+#             variable = '^b_mub')
 summary(UnwrapRhats(model_change,
             variable = '^b_mui') )
 ```
@@ -863,10 +866,17 @@ for(i in 1:20)#length(id_uv) )
              palette = 'Red-Yellow' 
              )
   #secondary mean
+  # Draws2Cont(draws_change,
+  #            x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+  #                        A1(softplus(b_k1_Intercept+get(kappa_name)))',
+  #            y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+  #                        A1(softplus(b_k1_Intercept+get(kappa_name)))',
+  #            palette = 'Blue-Yellow' 
+  #            )
   Draws2Cont(draws_change,
-             x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+             x_string = 'sin(b_mu0_Intercept + pi + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name))*
+             y_string = 'cos(b_mu0_Intercept + pi + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -878,11 +888,19 @@ for(i in 1:20)#length(id_uv) )
                                           template = 'none')
                                            )[1]
                       })
+  # mu2_id_change[i] = with(draws_change,
+  #                     {
+  #                       median.circular(
+  #                            circular(x =
+  #                            mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
+  #                                         template = 'none')
+  #                                          )[1]
+  #                     })
   mu2_id_change[i] = with(draws_change,
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name)),
+                             mod_circular(b_mu0_Intercept + pi + get(mu_name)),
                                           template = 'none')
                                            )[1]
                       })
@@ -925,10 +943,17 @@ Draws2Cont(draws = draws_change,
              A1(kappa_mu)',
            palette = 'Red-Yellow'
            )
+# Draws2Cont(draws = draws_change,
+#            x_string = 'sin(b_mu0_Intercept+b_mub_Intercept)*
+#              A1(kappa_mu)',
+#            y_string = 'cos(b_mu0_Intercept+b_mub_Intercept)*
+#              A1(kappa_mu)',
+#            palette = 'Blue-Yellow'
+#            )
 Draws2Cont(draws = draws_change,
-           x_string = 'sin(b_mu0_Intercept+b_mub_Intercept)*
+           x_string = 'sin(b_mu0_Intercept+pi)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept+b_mub_Intercept)*
+           y_string = 'cos(b_mu0_Intercept+pi)*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
