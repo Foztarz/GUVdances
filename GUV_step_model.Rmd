@@ -641,12 +641,15 @@ Although the population shows a general bias to one side, it may be simpler to
 assume that the proportion of data around $\mu_1$ ($\theta_1$) depends only on the
 individual.
 
+Could make it explicit that mu1 is left and mu2 is right,
+would have to set wrap point at -pi/2
+
 ```{r Change formula}
 
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ modulo_circular(mu0 + mui)), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0 + pi() + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu1 ~ modulo_circular(mu0)/2 -pi/2 + mui), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ modulo_circular(mu0)/2 -pi/2 + pi() + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   # nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
@@ -700,12 +703,30 @@ There is strong bimodality in posterior density for $\mu_1$ centred around 30° 
 from 0° and 180°.
 
 `20260114` attempt with `mub` forced to 180°. 
+`20260115` tested wider `theta1`, results in multimodal posterior.
+Most stable near 4.0, shifted prior.
+Testing wider mu prior.
+`theta1` shifted to 4.5 for stability.
+`sigma_theta1` shifted to 2.0 to better tame it (keep it down below 10).
+Narrower mu prior (pi/4)
+`20260116` narrower mu prior (pi/5)
+raised theta1 intercept and sd to try to tame them (5.0, 5.0)
+minimised theta1 sd to try to tame it (0.5)
+widened theta1 intercept (5,1.0) and vonmises prior on mu1 (k = 3; equiv sd ≈pi/5 )
+vonmises prior too chaotic, switched back to normal, very narrow (pi/6)
+changed theta1 sd to 1.0
 
+Now estimating `mu0` on doubled scale w/ normal(-pi, pi)
+Increased theta1 sd to 3.0, reduced softkappamu mean to 10
+Reduced softkappamu mean to 15, reduced `mu0` sd to pi/2
+Reducted `mu0` sd to pi/4
+Need to consider the correct transform
+Now wrap point is at -pi and 0, set expected mu1 to 0
 
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(-pi()/2, pi()/6)', class = 'b', nlpar = 'mu0') +
+pr_mu_change = prior('normal(0, pi()/4)', class = 'b', nlpar = 'mu0') +
                 # prior('normal(pi(), pi()/12)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
@@ -723,7 +744,7 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3.0, 0.25)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(5.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
                   # prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
   
@@ -737,6 +758,8 @@ pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
 rm(list = c('model_uvh'))
 ```
 
+To avoid instability in the circular estimates, we use smaller adaptation steps
+by setting `adapt_delta` $> 0.8$.
 ```{r change model}
 
 #very long compile time
@@ -754,7 +777,8 @@ system.time(
                    cores = 4, # on 4 CPUs
                    # warmup = 500, #
                    # iter = 1000, # longer sampling to efficiently sample mu0
-                   silent = 2, # echo only high priority Stan messages
+                   control = list(adapt_delta = 0.9),
+                   silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
   }
@@ -774,7 +798,12 @@ load(file = '2Results/UV_change_model.RData')
 #population kappa and its standard deviation
 plot(model_change,
       ask = FALSE,
-      variable = c('k1_Intercept', 'theta1_Intercept', 'sd', 'kappa_mu'),
+      variable = c('k1_Intercept', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population theta and its standard deviation
+plot(model_change,
+      ask = FALSE,
+      variable = c('theta1_Intercept'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_change,
@@ -859,9 +888,9 @@ for(i in 1:20)#length(id_uv) )
   )
   #primary mean
   Draws2Cont(draws_change,
-             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
              )
@@ -874,9 +903,9 @@ for(i in 1:20)#length(id_uv) )
   #            palette = 'Blue-Yellow' 
   #            )
   Draws2Cont(draws_change,
-             x_string = 'sin(b_mu0_Intercept + pi + get(mu_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + pi + get(mu_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -884,7 +913,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                             mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name),
                                           template = 'none')
                                            )[1]
                       })
@@ -900,7 +929,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + pi + get(mu_name)),
+                             mod_circular(b_mu0_Intercept)/2 - pi/2 + pi + get(mu_name),
                                           template = 'none')
                                            )[1]
                       })
@@ -937,9 +966,9 @@ PCfun(angles = deg(calc_mu),
 #       col = col_rho,
 #       plot_rho = FALSE)
 Draws2Cont(draws = draws_change,
-           x_string = 'sin(b_mu0_Intercept)*
+           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept)*
+           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2)*
              A1(kappa_mu)',
            palette = 'Red-Yellow'
            )
@@ -951,15 +980,15 @@ Draws2Cont(draws = draws_change,
 #            palette = 'Blue-Yellow'
 #            )
 Draws2Cont(draws = draws_change,
-           x_string = 'sin(b_mu0_Intercept+pi)*
+           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 +pi)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept+pi)*
+           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 +pi)*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
 
 with(draws_change,
-     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+     arrows.circular(x = mean.circular(circular(b_mu0_Intercept/2,
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2)
@@ -1001,6 +1030,7 @@ indicative of a tendency away from the axial bimodality assumed here (see Symmet
 
 ## Set up formula and priors
 
+
 To account for these excess deviations we introduce $\mu_{i,\beta}$, which should 
 find the individual deviations from the population-level change $\mu_\beta$.
 
@@ -1009,10 +1039,10 @@ find the individual deviations from the population-level change $\mu_\beta$.
 formula_devchange = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ modulo_circular(mu0 + mui) ), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0 + mub + mui + mubi) ), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu2 ~ modulo_circular(mu0 + pi() + mui + mubi) ), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
-  mub ~ 1, #angle between primary mean and secondary mean
+  # mub ~ 1, #angle between primary mean and secondary mean
   mubi ~ 0 + ID, # individual devations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
@@ -1046,7 +1076,7 @@ $\mu_{\beta, i} \sim \mathcal{V}(0, 30)$.
 
 #priors for mu
 pr_mu_devchange = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
-                prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+                # prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
@@ -1070,7 +1100,7 @@ pr_kappa_devchange =
 
 #priors for theta
 pr_theta_devchange = 
-                  prior('normal(3, 0.5)', class = 'Intercept', dpar = 'theta1') +
+                  prior('normal(4.5, 0.5)', class = 'Intercept', dpar = 'theta1') +
                   prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
@@ -1115,9 +1145,15 @@ This model identifies both a population level bias (near 0°) and individual bia
 ```{r Inspect change model}
 load(file = '2Results/UV_devchange_model.RData')
 #population kappa and its standard deviation
+#population kappa and its standard deviation
 plot(model_devchange,
       ask = FALSE,
-      variable = c('Intercept_kappa', 'theta1_Intercept', 'sd', 'kappa_mu'),
+      variable = c('k1_Intercept', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population theta and its standard deviation
+plot(model_devchange,
+      ask = FALSE,
+      variable = c('theta1_Intercept'),
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_devchange,
@@ -1126,11 +1162,11 @@ plot(model_devchange,
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
 #population level change in direction
-plot(model_devchange,
-      ask = FALSE,
-      variable = 'mub_Intercept',
-      regex = TRUE,
-     transform = unwrap_circular_deg) #plot transformed estimates
+# plot(model_devchange,
+#       ask = FALSE,
+#       variable = 'mub_Intercept',
+#       regex = TRUE,
+#      transform = unwrap_circular_deg) #plot transformed estimates
 
 ```
 
