@@ -648,8 +648,8 @@ would have to set wrap point at -pi/2
 
 formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ modulo_circular(mu0)/2 -pi/2 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0)/2 -pi/2 + pi() + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu1 ~ modulo_circular(mu0)/2 -pi()/2 + mui), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ modulo_circular(mu0)/2 -pi()/2 + pi() + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   # nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
