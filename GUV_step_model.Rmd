@@ -722,11 +722,12 @@ Reduced softkappamu mean to 15, reduced `mu0` sd to pi/2
 Reducted `mu0` sd to pi/4
 Need to consider the correct transform
 Now wrap point is at -pi and 0, set expected mu1 to 0
+Wider prior mu0 pi/1
 
 ```{r change priors}
 
 #priors for mu
-pr_mu_change = prior('normal(0, pi()/4)', class = 'b', nlpar = 'mu0') +
+pr_mu_change = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                 # prior('normal(pi(), pi()/12)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
@@ -988,7 +989,7 @@ Draws2Cont(draws = draws_change,
            )
 
 with(draws_change,
-     arrows.circular(x = mean.circular(circular(b_mu0_Intercept/2,
+     arrows.circular(x = mean.circular(circular(mod_circular(b_mu0_Intercept)/2 - pi/2,
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2)
