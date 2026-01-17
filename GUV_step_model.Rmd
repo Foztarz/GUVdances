@@ -719,10 +719,18 @@ changed theta1 sd to 1.0
 Now estimating `mu0` on doubled scale w/ normal(-pi, pi)
 Increased theta1 sd to 3.0, reduced softkappamu mean to 10
 Reduced softkappamu mean to 15, reduced `mu0` sd to pi/2
-Reducted `mu0` sd to pi/4
+Reduced `mu0` sd to pi/4
 Need to consider the correct transform
 Now wrap point is at -pi and 0, set expected mu1 to 0
-Wider prior mu0 pi/1
+Wider prior mu0 pi/1 -> mostly stable some unstable mui
+`20260117` reduced prior on theta1 intercept  norm(3.0, 1.0)
+-> minority chain: low kappamu, low theta1 intercept, excessively high theta1 sd
+what if we assume kappa should be similar to UV bright? kappa Intercept N(10, 3)
+reduced theta1 sd to 1.0
+and raised softkappmu mean to 30 ->possibly best looking predictions so far for mu0
+-> still minority chain w/ low kappamu, low theta1 interecept and high theta1 sd
+[raise theta1 intercept to 4.0]
+[switch theta1 sd to lognormal]
 
 ```{r change priors}
 
@@ -735,18 +743,18 @@ pr_mu_change = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(15), 0.6)", #expect high concentration (low variation) 
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
 #priors for kappa
 pr_kappa_change = 
-                  prior('normal(3,3)', class = 'b', nlpar = 'k1') +
+                  prior('normal(10,3)', class = 'b', nlpar = 'k1') +
                   prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(5.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 3.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
                   # prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
   
 #all unimodal priors
