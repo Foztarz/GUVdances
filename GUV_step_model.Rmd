@@ -729,8 +729,14 @@ what if we assume kappa should be similar to UV bright? kappa Intercept N(10, 3)
 reduced theta1 sd to 1.0
 and raised softkappmu mean to 30 ->possibly best looking predictions so far for mu0
 -> still minority chain w/ low kappamu, low theta1 interecept and high theta1 sd
-[raise theta1 intercept to 4.0]
-[switch theta1 sd to lognormal]
+`20260119` 
+raise theta1 intercept to 4.0 -> stabilised theta1 intercept, still unstable theta1 sd
+switch theta1 sd to lognormal LN(log(3.0), 0.2) -> minority chain now sd = 3
+for the necessary flexibility, expect sd >=4
+theta1 sd to LN(log(4.0), 0.1) -> sd >5 suppressed kappamu and split mu0
+theta1 sd to LN(log(3.5), 0.1) -> sd >4.5 split mu0
+[more regularising prior LN(log(2.0), 0.3) ]
+
 
 ```{r change priors}
 
@@ -753,9 +759,9 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
-                  # prior('normal(0.0, 5.0)', class = 'b', dpar = 'theta1')
+                  prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('lognormal(log(3.5), 0.1)', class = 'sd', dpar = 'theta1')
+                  # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_change = pr_mu_change + pr_kappa_change+ pr_theta_change
@@ -882,7 +888,7 @@ draws_change = as_draws_df(model_change)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:20)#length(id_uv) )
+for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1016,6 +1022,7 @@ with(draws_change,
               col = adjustcolor(col_kappa, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
+abline(h = 10, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5*5)
 with(draws_change,
@@ -1025,6 +1032,7 @@ with(draws_change,
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
+abline(h = 1.5, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5)
 ```
