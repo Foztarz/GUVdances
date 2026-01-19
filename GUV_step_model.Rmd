@@ -735,7 +735,9 @@ switch theta1 sd to lognormal LN(log(3.0), 0.2) -> minority chain now sd = 3
 for the necessary flexibility, expect sd >=4
 theta1 sd to LN(log(4.0), 0.1) -> sd >5 suppressed kappamu and split mu0
 theta1 sd to LN(log(3.5), 0.1) -> sd >4.5 split mu0
-[more regularising prior LN(log(2.0), 0.3) ]
+more regularising prior LN(log(2.0), 3.0) 3.0 was an accident! -> nearly all stable, except sd params
+narrowed to LN(log(2.0), 0.3) -> minority chain theta1 sd > 6.0
+[lowered to LN(log(1.5), 0.4)]
 
 
 ```{r change priors}
@@ -760,7 +762,7 @@ pr_kappa_change =
 #priors for theta
 pr_theta_change = 
                   prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('lognormal(log(3.5), 0.1)', class = 'sd', dpar = 'theta1')
+                  prior('lognormal(log(2.0), 0.3)', class = 'sd', dpar = 'theta1')
                   # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
