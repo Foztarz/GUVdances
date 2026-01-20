@@ -440,7 +440,8 @@ all estimates converged well ( $\hat{R}<1.01$).
 sm_uvh = summary(model_uvh,
                  variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
                 regex = TRUE)
-print(sm_uvh, digits = 2)
+print(sm_uvh$fixed[c(1:2),], digits = 3)
+print(sm_uvh$random, digits = 3)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_uvh,
             variable = '^b_mu0')
@@ -796,8 +797,8 @@ system.time(
                       stan_softkappamu,#
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 1000, #
-                   # iter = 3000, # longer sampling to efficiently sample mu0
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
                    control = list(adapt_delta = 0.9),
                    refresh = 200,
                    silent = 1, # echo only high priority Stan messages
@@ -856,7 +857,7 @@ plot(x = model_change,
 ```
 
 Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
-all estimates converged well ( $\hat{R}<1.01$).
+most estimates converged well ( $\hat{R}<1.01$).
 
 ```{r Convergence heuristics for the change model}
 
@@ -869,8 +870,6 @@ print(sm_change$random, digits = 3)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_change,
             variable = '^b_mu0')
-# UnwrapRhats(model_change,
-#             variable = '^b_mub')
 summary(UnwrapRhats(model_change,
             variable = '^b_mui') )
 ```
@@ -1057,12 +1056,11 @@ find the individual deviations from the population-level change $\mu_\beta$.
 
 formula_devchange = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ modulo_circular(mu0 + mui) ), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0 + pi() + mui + mubi) ), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
+  nlf(mu1 ~ modulo_circular(mu0)/2 -pi()/2 + mui), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ modulo_circular(mu0)/2 -pi()/2 + pi() + mui + mubi), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
-  # mub ~ 1, #angle between primary mean and secondary mean
-  mubi ~ 0 + ID, # individual devations
+  mubi ~ 0 + ID, # individual deviations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -1094,48 +1092,51 @@ $\mu_{\beta, i} \sim \mathcal{V}(0, 30)$.
 ```{r change priors}
 
 #priors for mu
-pr_mu_devchange = prior('normal(-pi()/2, pi()/3)', class = 'b', nlpar = 'mu0') +
-                # prior('normal(pi(), pi()/6)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
+pr_mu_devchange = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-            # prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))',
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)
             prior('unwrap_von_mises_vect(0, 30)',
                         nlpar  = 'mubi',  class = 'b') +
             set_prior(paste("target +=",
                             'normal_lpdf(b_mubi | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
-            check = FALSE) #+
-                  # set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(100), 0.6)", #expect high concentration (low variation) 
-                  #           check = FALSE)
+            check = FALSE) 
+            # prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))')+
+            # set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(100), 0.6)", #expect high concentration (low variation) 
+            #           check = FALSE)
+
 
 #priors for kappa
 pr_kappa_devchange = 
-                  prior('normal(3,3)', class = 'b', nlpar = 'k1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+                  prior('normal(10,3)', class = 'b', nlpar = 'k1') +
+                  prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
 pr_theta_devchange = 
-                  prior('normal(4.5, 0.5)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
+                  # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
-#all unimodal priors
+#all bimodal priors
 pr_devchange = pr_mu_devchange + pr_kappa_devchange+ pr_theta_devchange
 ```
 
 ## Run the model for individual deviations in bimodal change
+Takes > 1h for 700 iterations!
 
-```{r change model}
+```{r individual change model}
 
 #very long compile time
 system.time(
   {
     
     model_devchange = brm(formula = formula_devchange,
-                    # data = subset(cd_change, ID %in% uv_ids[1:20]),
                    data = cd_change,
                    prior = pr_devchange,
                    stanvars = stan_unwrap_fun + 
@@ -1144,9 +1145,12 @@ system.time(
                       # stan_softkappamub,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 500, #
-                   # iter = 1000, # longer sampling to efficiently sample mu0
-                   silent = 2, # echo only high priority Stan messages
+                   warmup = 500, #
+                   iter = 700, #
+                   # warmup = 1000, #
+                   # iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 200,
+                   silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
   }
@@ -1248,17 +1252,17 @@ for(i in 1:20)#length(id_uv) )
   )
   #primary mean
   Draws2Cont(draws_devchange,
-             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
              )
   #secondary mean
   Draws2Cont(draws_devchange,
-             x_string = 'sin(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi + get(mu_name) + get(mub_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 -pi/2 + pi + get(mu_name) + get(mub_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -1266,7 +1270,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + get(mu_name)),
+                             mod_circular(b_mu0_Intercept)/2 -pi/2 + get(mu_name),
                                           template = 'none')
                                            )[1]
                       })
@@ -1274,7 +1278,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular(b_mu0_Intercept + b_mub_Intercept + get(mu_name) + get(mub_name)),
+                             mod_circular(b_mu0_Intercept)/2 -pi/2 + pi + get(mu_name) + get(mub_name),
                                           template = 'none')
                                            )[1]
                       })
@@ -1310,22 +1314,22 @@ PCfun(angles = deg(calc_mu),
 #       col = col_rho,
 #       plot_rho = FALSE)
 Draws2Cont(draws = draws_devchange,
-           x_string = 'sin(b_mu0_Intercept)*
+           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept)*
+           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2)*
              A1(kappa_mu)',
            palette = 'Red-Yellow'
            )
 Draws2Cont(draws = draws_devchange,
-           x_string = 'sin(b_mu0_Intercept+b_mub_Intercept)*
+           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept+b_mub_Intercept)*
+           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi)*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
 
 with(draws_devchange,
-     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+     arrows.circular(x = mean.circular(circular(mod_circular(b_mu0_Intercept)/2 - pi/2,
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2)
@@ -1344,6 +1348,7 @@ with(draws_devchange,
               col = adjustcolor(col_kappa, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
+abline(h = 10, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5*5)
 with(draws_devchange,
@@ -1353,6 +1358,7 @@ with(draws_devchange,
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
+abline(h = 1.5, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5)
 ```
