@@ -650,7 +650,6 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ modulo_circular(mu0)/2 -pi()/2 + mui), #primary mean, population mean plus individual mean
   nlf(mu2 ~ modulo_circular(mu0)/2 -pi()/2 + pi() + mui), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
-  # nlf(mu2 ~ modulo_circular(mu0 + mub + mui)), #secondary mean, population mean plus offset, plus individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
   # mub ~ 1, #angle between primary mean and secondary mean
@@ -658,7 +657,6 @@ formula_change = bf(#modulus may not be necessary, included in lpd function
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
   theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
-  # theta1 ~ 0 + ID, #for mixture weighting, this is specific to individual
   family = mixture(unwrap_von_mises,#primary mean distribution
                    unwrap_von_mises #secondary mean distribution
   ),#mixture, specified by the log ratio of theta1 : theta2
@@ -737,7 +735,12 @@ theta1 sd to LN(log(4.0), 0.1) -> sd >5 suppressed kappamu and split mu0
 theta1 sd to LN(log(3.5), 0.1) -> sd >4.5 split mu0
 more regularising prior LN(log(2.0), 3.0) 3.0 was an accident! -> nearly all stable, except sd params
 narrowed to LN(log(2.0), 0.3) -> minority chain theta1 sd > 6.0
-[lowered to LN(log(1.5), 0.4)]
+`20260120` lowered to LN(log(1.5), 0.4) -> mu0 stable, minority chain w/ excess t1 sd
+very general regularising LN(log(1.0), 1.0) -> slower, very similar to previous!
+penalise > 4 more: LN(log(1.0), 0.7) -> faster, very similar (2 chains sd >4)
+LN(log(1.0), 0.5) ->  narrower, excess t1 sd now >4
+avoid mode switching LN(log(0.5), 0.7) ->  much slower, all stable! Some Rhats >1.01
+
 
 
 ```{r change priors}
@@ -762,7 +765,7 @@ pr_kappa_change =
 #priors for theta
 pr_theta_change = 
                   prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('lognormal(log(2.0), 0.3)', class = 'sd', dpar = 'theta1')
+                  prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
                   # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
@@ -777,6 +780,7 @@ rm(list = c('model_uvh'))
 
 To avoid instability in the circular estimates, we use smaller adaptation steps
 by setting `adapt_delta` $> 0.8$.
+Longer sampling (warmup = 1000, iter = 3000) may be necessary to efficiently sample mu_i.
 ```{r change model}
 
 #very long compile time
@@ -792,9 +796,10 @@ system.time(
                       stan_softkappamu,#
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 500, #
-                   # iter = 1000, # longer sampling to efficiently sample mu0
+                   # warmup = 1000, #
+                   # iter = 3000, # longer sampling to efficiently sample mu0
                    control = list(adapt_delta = 0.9),
+                   refresh = 200,
                    silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -828,13 +833,6 @@ plot(model_change,
       variable = 'mu0',
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
-#population level change in direction
-# plot(model_change,
-#       ask = FALSE,
-#       variable = 'mub_Intercept',
-#       regex = TRUE,
-#      transform = unwrap_circular_deg) #plot transformed estimates
-
 ```
 
 The population level mean angle $\mu_0$ appears to oscillate gradually over the 
@@ -866,7 +864,8 @@ sm_change = summary(model_change,
                  variable = c('Intercept_kappa', 'theta1_Intercept',
                               'sd', 'kappa_mu'),
                 regex = TRUE)
-print(sm_change, digits = 2)
+print(sm_change$fixed[c(1:2,3+length(id_uv)),], digits = 3)
+print(sm_change$random, digits = 3)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_change,
             variable = '^b_mu0')
@@ -878,6 +877,7 @@ summary(UnwrapRhats(model_change,
 
 
 ## Extract predictions for the UV change model
+**TODO** manual sorting of means.
 
 ```{r Plot the change model}
 mu1_id_change = rep(NA, length(id_uv))
