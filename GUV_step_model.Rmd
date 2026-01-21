@@ -1277,7 +1277,8 @@ for(i in 1:length(id_uv) )
   kappa_id_symm[i] = with(draws_symm,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
   theta_id_symm[i] = with(draws_symm,
-                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+                         {plogis(median(b_theta1_Intercept))} )
+                         # {plogis(median(b_theta1_Intercept+get(theta_name)))} )
   #primary mean
   arrows.circular(x = circular(x = mu1_id_symm[i],
                                units = 'radians',
@@ -1302,7 +1303,17 @@ par(mfrow = c(1,3))
 PCfun(angles = deg(calc_mu),
       col = col_rho,
       plot_rho = FALSE)
-
+for(i in 1:length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(-abs(mu1_id_symm[i]))*A1(kappa_id_symm[i]),
+         y1 = cos(-abs(mu1_id_symm[i]))*A1(kappa_id_symm[i]),
+         lwd = 0.5,
+         length = 0.01,
+         col = adjustcolor(col_sd, alpha.f = 50/255)
+         )
+}
 # Draws2Cont(draws = draws_symm,
 #            x_string = 'sin(-(mod_circular(b_mu0_Intercept)/2 + pi/2))*
 #              A1(kappa_mu)',
