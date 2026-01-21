@@ -1129,6 +1129,10 @@ pr_devchange = pr_mu_devchange + pr_kappa_devchange+ pr_theta_devchange
 
 ## Run the model for individual deviations in bimodal change
 Takes > 1h for 700 iterations!
+Takes nearly 6h for 3000 iterations!
+
+To avoid instability in the circular estimates, we use smaller adaptation steps
+by setting `adapt_delta` $> 0.8$.
 
 ```{r individual change model}
 
@@ -1145,11 +1149,12 @@ system.time(
                       # stan_softkappamub,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   warmup = 500, #
-                   iter = 700, #
-                   # warmup = 1000, #
-                   # iter = 3000, # longer sampling to efficiently sample mu0
+                   # warmup = 500, #
+                   # iter = 700, #
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
                    refresh = 200,
+                   control = list(adapt_delta = 0.9),
                    silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -1385,9 +1390,9 @@ logit scale.
 
 formula_symm = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf( mu1 ~ -(pi()*inv_logit(logitmu0) + mui) ), #primary mean, population mean plus individual mean
-  nlf( mu2 ~ pi()*inv_logit(logitmu0)  + mui ), #secondary mean, population mean plus offset, plus individual mean
-  logitmu0 ~ 1, #primary mean
+  nlf( mu1 ~ -(modulo_circular(mu0)/2 + pi()/2 + mui) ), #primary mean, population mean plus individual mean
+  nlf( mu2 ~ (modulo_circular(mu0)/2 + pi()/2  + mui) ), #secondary mean, population mean plus offset, plus individual mean
+  mu0 ~ 1, #primary mean
   mui ~ 0 + ID, # mean angle combines fixed and random effects
   nlf( kappa1 ~ k1 ), #concentration for primary mean
   nlf( kappa2 ~ k1 ), #concentration for secondary mean
@@ -1410,26 +1415,27 @@ retain identifiability (avoiding $\mu_1 = \mu_0 + \mu_i$ crossing from left to r
 ```{r Symmetry priors}
 
 #priors for mu
-pr_mu_symm = #prior('normal(-pi()/2, pi()/4)', class = 'b', nlpar = 'mu0') +
-              prior('normal(0, 1.0)', class = 'b', nlpar = 'logitmu0') +
+pr_mu_symm = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
+              # prior('normal(0, 1.0)', class = 'b', nlpar = 'logitmu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior(paste("target +=", 
                             'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(15), 0.6)", #expect high concentration (low variation) 
+                  set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
 #priors for kappa
 pr_kappa_symm = 
-                  prior('normal(3,3)', class = 'b', nlpar = 'k1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+                  prior('normal(10,3)', class = 'b', nlpar = 'k1') +
+                  prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
 pr_theta_symm = 
-                  prior('normal(3.0,1.0)', class = 'Intercept', dpar = 'theta1') +
-                  prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
+                  prior('normal(4.0,1.0)', class = 'Intercept', dpar = 'theta1') +
+                  prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
+                  # prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
 #all unimodal priors
 pr_symm = pr_mu_symm + pr_kappa_symm + pr_theta_symm
@@ -1459,7 +1465,9 @@ system.time(
                    cores = 4, # on 4 CPUs
                    # warmup = 500, #
                    # iter = 1000, # longer sampling to efficiently sample mu0
-                   silent = 2, # echo only high priority Stan messages
+                   refresh = 200,
+                   control = list(adapt_delta = 0.9),
+                   silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
   }
@@ -1479,20 +1487,19 @@ load(file = '2Results/UV_symm_model.RData')
 #population kappa and its standard deviation
 plot(model_symm,
       ask = FALSE,
-      variable = c('k1_Intercept', 'theta1_Intercept', 'sd', 'kappa_mu'),
+      variable = c('k1_Intercept', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population theta and its standard deviation
+plot(model_symm,
+      ask = FALSE,
+      variable = c('theta1_Intercept'),
       regex = TRUE) #plot raw estimates
 #population directional bias
-# plot(model_symm,
-#       ask = FALSE,
-#       variable = 'mu0',
-#       regex = TRUE,
-#      transform = unwrap_circular_deg) #plot transformed estimates
 plot(model_symm,
       ask = FALSE,
       variable = 'mu0',
       regex = TRUE,
-     transform = plogis) #plot transformed estimates
-#population level change in direction
+     transform = unwrap_circular_deg) #plot transformed estimates
 
 ```
 
@@ -1552,17 +1559,17 @@ for(i in 1:20)#length(id_uv) )
   )
   #primary mean
   Draws2Cont(draws_symm,
-             x_string = 'sin(-(pi*plogis(b_logitmu0_Intercept) + get(mu_name)))*
+             x_string = 'sin(-(mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name)))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(-(pi*plogis(b_logitmu0_Intercept) + get(mu_name)))*
+             y_string = 'cos(-(mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name)))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
              )
   #secondary mean
   Draws2Cont(draws_symm,
-             x_string = 'sin(pi*plogis(b_logitmu0_Intercept) + get(mu_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(pi*plogis(b_logitmu0_Intercept) + get(mu_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -1571,7 +1578,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular( -(pi*plogis(b_logitmu0_Intercept) + get(mu_name)) ),
+                             -(mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name)),
                                           template = 'none')
                                            )[1]
                       })
@@ -1579,7 +1586,7 @@ for(i in 1:20)#length(id_uv) )
                       {
                         median.circular(
                              circular(x =
-                             mod_circular( pi*plogis(b_logitmu0_Intercept) + get(mu_name) ),
+                             mod_circular(b_mu0_Intercept)/2 + pi/2 + get(mu_name),
                                           template = 'none')
                                            )[1]
                       })
@@ -1615,22 +1622,22 @@ PCfun(angles = deg(calc_mu),
 #       col = col_rho,
 #      plot_rho = FALSE)
 Draws2Cont(draws = draws_symm,
-           x_string = 'sin(-pi*plogis(b_logitmu0_Intercept))*
+           x_string = 'sin(-(mod_circular(b_mu0_Intercept)/2 + pi/2))*
              A1(kappa_mu)',
-           y_string = 'cos(-pi*plogis(b_logitmu0_Intercept))*
+           y_string = 'cos(-(mod_circular(b_mu0_Intercept)/2 + pi/2))*
              A1(kappa_mu)',
            palette = 'Red-Yellow'
            )
 Draws2Cont(draws = draws_symm,
-           x_string = 'sin(pi*plogis(b_logitmu0_Intercept))*
+           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 + pi/2)*
              A1(kappa_mu)',
-           y_string = 'cos(pi*plogis(b_logitmu0_Intercept))*
+           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 + pi/2)*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
 
 with(draws_symm,
-     arrows.circular(x = mean.circular(circular(-pi*plogis(b_logitmu0_Intercept),
+     arrows.circular(x = mean.circular(circular(-(mod_circular(b_mu0_Intercept)/2 + pi/2),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2)
