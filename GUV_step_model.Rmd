@@ -442,6 +442,7 @@ sm_uvh = summary(model_uvh,
                 regex = TRUE)
 print(sm_uvh$fixed[c(1:2),], digits = 3)
 print(sm_uvh$random, digits = 3)
+print(sm_uvh$spec_pars, digits = 3)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_uvh,
             variable = '^b_mu0')
@@ -529,11 +530,10 @@ Draws2Cont(draws = draws_uvh,
            )
 
 with(draws_uvh,
-     arrows.circular(x = mean.circular(circular(b_mu0_Intercept,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept),
                                                   units = 'radians',
                                                   rotation = 'clock',
-                                                  zero = pi/2)
-     )[1],
+                                                  zero = pi/2),
      y = A1(median(kappa_mu)),
      lwd = 5,
      length = 0.1/1.25,
@@ -880,6 +880,7 @@ sm_change = summary(model_change,
                 regex = TRUE)
 print(sm_change$fixed[c(1:2,3+length(id_uv)),], digits = 3)
 print(sm_change$random, digits = 3)
+# print(sm_change$spec_pars, digits = 3)#kappa_mu missing?
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_change,
             variable = '^b_mu0')
@@ -1028,7 +1029,7 @@ with(draws_change,
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
-abline(h = 1.5, lty = 2, col = gray(0,0.5))
+abline(h = 1.58, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5)
 ```
@@ -1378,13 +1379,13 @@ axis(2, at = 0:5*5)
 with(draws_symm,
      VertHist(data = kappa_mu, 
               main = '\npopulation kappamu',
-              ylim = c(0, 5*3),
+              ylim = c(0, 5),
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
-abline(h = 1.5, lty = 2, col = gray(0,0.5))
+abline(h = 1.58, lty = 2, col = gray(0,0.5))
 axis(1)
-axis(2, at = 0:3*5)
+axis(2, at = 0:5)
 ```
 
 
@@ -1393,10 +1394,10 @@ axis(2, at = 0:3*5)
 *May not be identifiable.*
 
 A further source of instability in estimates of the two means appears to be 
-differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals,
-corresponding to stable values of `mub` both larger and smaller than 180°. This 
-needs to be accounted for by an additional parameter $\mu_{\beta, i}$, but may also 
-indicative of a tendency away from the axial bimodality assumed here (see Symmetrical Model).
+differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals. This needs to be accounted for by an additional parameter $\mu_{i,\beta}$, such that
+$\mu_{i,2} = \mu_i + \mu_{i, \beta}$. For the purposes of identifiability, it may
+be easier to fit $\mu_1 = \mu_0 + \mu_{i, 1}$ and $\mu_2 = -(\mu_0 + \mu_{i,2})$.
+.
 
 
 ## Set up formula and priors
@@ -1409,11 +1410,11 @@ find the individual deviations from the population-level change $\mu_\beta$.
 
 formula_devchange = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
-  nlf(mu1 ~ modulo_circular(mu0)/2 -pi()/2 + mui), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ modulo_circular(mu0)/2 -pi()/2 + pi() + mui + mubi), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
+  nlf(mu1 ~ (modulo_circular(mu0) + mui1) ), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ -(modulo_circular(mu0) + mui2) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
-  mui ~ 0 + ID, # mean angle combines fixed and random effects
-  mubi ~ 0 + ID, # individual deviations
+  mui1 ~ 0 + ID, # mean angle combines fixed and random effects
+  mui2 ~ 0 + ID, # individual deviations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -1437,28 +1438,26 @@ real kappa_mub = log1p_exp(softkappamub);
           block = 'genquant')
 ```
 
-Ideally the distribution of `mubi` would be accounted for in the same way 
-as $\kappa_\mu$, so that $\kappa_{\mu, \beta} = \log(1+\exp(\text{softkappamub}))$,
-but for the purposes of identifiability it is preferable to set a restrictive prior 
-$\mu_{\beta, i} \sim \mathcal{V}(0, 30)$.
-
+Ideally the distribution of `mui2` would be accounted for in the same way 
+as $\kappa_\mu$, so that $\kappa_{\mu_2, i} = \log(1+\exp(\text{softkappamub}))$.
+To begin with, we assume both share the same $\kappa_\mu$.
 
 ```{r change priors}
 
 #priors for mu
 pr_mu_devchange = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
-                        nlpar  = 'mui',  class = 'b') +
+                        nlpar  = 'mui1',  class = 'b') +
             set_prior(paste("target +=", 
-                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+                            'normal_lpdf(b_mui1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
             set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                       check = FALSE)
-            prior('unwrap_von_mises_vect(0, 30)',
-                        nlpar  = 'mubi',  class = 'b') +
+            prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui2',  class = 'b') +
             set_prior(paste("target +=",
-                            'normal_lpdf(b_mubi | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+                            'normal_lpdf(b_mui2 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) 
             # prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))')+
@@ -1615,35 +1614,31 @@ for(i in 1:20)#length(id_uv) )
   )
   #primary mean
   Draws2Cont(draws_devchange,
-             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
+             x_string = 'sin(mod_circular(b_mu0_Intercept) + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + get(mu_name))*
+             y_string = 'cos(mod_circular(b_mu0_Intercept) + get(mu_name))*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Red-Yellow' 
              )
   #secondary mean
   Draws2Cont(draws_devchange,
-             x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi + get(mu_name) + get(mub_name))*
+             x_string = 'sin( -(mod_circular(b_mu0_Intercept) + get(mub_name)) )*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos(mod_circular(b_mu0_Intercept)/2 -pi/2 + pi + get(mu_name) + get(mub_name))*
+             y_string = 'cos( -(mod_circular(b_mu0_Intercept) + get(mub_name)) )*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
   mu1_id_devchange[i] = with(draws_devchange,
                       {
-                        median.circular(
-                             circular(x =
-                             mod_circular(b_mu0_Intercept)/2 -pi/2 + get(mu_name),
-                                          template = 'none')
-                                           )[1]
+                        MedCDraws(
+                             mod_circular(b_mu0_Intercept) + get(mu_name)
+                                           )
                       })
   mu2_id_devchange[i] = with(draws_devchange,
                       {
-                        median.circular(
-                             circular(x =
-                             mod_circular(b_mu0_Intercept)/2 -pi/2 + pi + get(mu_name) + get(mub_name),
-                                          template = 'none')
-                                           )[1]
+                        MedCDraws(
+                             -(mod_circular(b_mu0_Intercept) + get(mub_name) )
+                                           )
                       })
   kappa_id_devchange[i] = with(draws_devchange,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
@@ -1678,30 +1673,30 @@ PCfun(angles = deg(calc_mu),
 #       col = col_rho,
 #       plot_rho = FALSE)
 Draws2Cont(draws = draws_devchange,
-           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2)*
+           x_string = 'sin(mod_circular(b_mu0_Intercept))*
              A1(kappa_mu)',
-           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2)*
+           y_string = 'cos(mod_circular(b_mu0_Intercept))*
              A1(kappa_mu)',
            palette = 'Red-Yellow'
            )
 Draws2Cont(draws = draws_devchange,
-           x_string = 'sin(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi)*
+           x_string = 'sin( -(mod_circular(b_mu0_Intercept)) )*
              A1(kappa_mu)',
-           y_string = 'cos(mod_circular(b_mu0_Intercept)/2 - pi/2 + pi)*
+           y_string = 'cos( -(mod_circular(b_mu0_Intercept)) )*
              A1(kappa_mu)',
            palette = 'Blue-Yellow'
            )
 
 with(draws_devchange,
-     arrows.circular(x = mean.circular(circular(mod_circular(b_mu0_Intercept)/2 - pi/2,
+     arrows.circular(x = circular( MedCDraws(mod_circular(b_mu0_Intercept)),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2)
-     )[1],
+     ),
      y = A1(median(kappa_mu)),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor(col_sd, alpha.f = 200/255))
+     col = adjustcolor(col_sd, alpha.f = 200/255)
 )
 
 
@@ -1722,7 +1717,7 @@ with(draws_devchange,
               col = adjustcolor(col_sd, alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
-abline(h = 1.5, lty = 2, col = gray(0,0.5))
+abline(h = 1.58, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5)
 ```
