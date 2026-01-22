@@ -754,6 +754,8 @@ avoid mode switching LN(log(0.5), 0.7) ->  much slower, all stable! Some Rhats >
 
 `20260121` no theta1 sd -> very stable, but some predictions still appear multimodal
 expanding k1 sd to 1.0 and reducing intercept theta1 to 3
+`20260122` theta1 Intercept half-N(0,1) with lb = 0 -> stable lower theta1 Intercept
+remove normal prior on mui to allow rotation -> no noticeable difference
 
 ```{r change priors}
 
@@ -762,10 +764,10 @@ pr_mu_change = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                 # prior('normal(pi(), pi()/12)', class = 'b', nlpar = 'mub') + #expected offset of ≈180°
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
-            set_prior(paste("target +=", 
-                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
-            ),
-            check = FALSE) +
+            # set_prior(paste("target +=", 
+            #                 'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            # ),
+            # check = FALSE) +
                   set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
@@ -777,7 +779,8 @@ pr_kappa_change =
 
 #priors for theta
 pr_theta_change = 
-                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') #+
+                  prior('normal(0, 1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) #+
+                  # prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') #+
                   # prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') #+
                   # prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
                   # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
@@ -802,8 +805,8 @@ system.time(
   {
     
     model_change = brm(formula = formula_change,
-                   # data = subset(cd_change, ID %in% uv_ids[1:20]),
-                   data = cd_change,
+                   data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   # data = cd_change,
                    prior = pr_change,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -813,7 +816,7 @@ system.time(
                    warmup = 1000, #
                    iter = 3000, # longer sampling to efficiently sample mu0
                    control = list(adapt_delta = 0.9),
-                   refresh = 200,
+                   refresh = 500,
                    silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -903,7 +906,7 @@ draws_change = as_draws_df(model_change)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:length(id_uv) )
+for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1083,6 +1086,11 @@ Population $\theta_1$ converges well with a moderately positive biased prior, an
 $\sigma_\theta$ appears dependent on $\kappa_\mu$. $\kappa_\mu$ is potentially quite 
 low, given the spread of individual means, but needs a bias to higher values to 
 retain identifiability (avoiding $\mu_1 = \mu_0 + \mu_i$ crossing from left to right).
+`20260122`
+theta1 Intercept half-N(0,1) with lb = 0 (& removed normal b_mui) -> bimodality!
+theta1 I HN(0,3) -> minority chain at theta1 = 0
+LN(-1, 1.0) -> slower, good chains, but 1 with E-BFMI less than 0.3 (dips towards 1.0)
+LN(0,1) -> faster, converges well (still some underfitting?)
 
 ```{r Symmetry priors}
 
@@ -1091,10 +1099,10 @@ pr_mu_symm = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
               # prior('normal(0, 1.0)', class = 'b', nlpar = 'logitmu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
-            set_prior(paste("target +=", 
-                            'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
-            ),
-            check = FALSE) +
+            # set_prior(paste("target +=", 
+            #                 'normal_lpdf(b_mui | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            # ),
+            # check = FALSE) +
                   set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                             check = FALSE)
 
@@ -1105,7 +1113,8 @@ pr_kappa_symm =
 
 #priors for theta
 pr_theta_symm = 
-                  prior('normal(4.0,1.0)', class = 'Intercept', dpar = 'theta1') #+
+                  prior('lognormal(0,1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) #+
+                  # prior('normal(4.0,1.0)', class = 'Intercept', dpar = 'theta1') #+
                   # prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
                   # prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
   
@@ -1127,8 +1136,8 @@ system.time(
   {
     
     model_symm = brm(formula = formula_symm,
-                     # data = subset(cd_change, ID %in% uv_ids[1:20]),
-                   data = cd_change,
+                     data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   # data = cd_change,
                    prior = pr_symm,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1137,7 +1146,7 @@ system.time(
                    cores = 4, # on 4 CPUs
                    warmup = 1000, #
                    iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 200,
+                   refresh = 500,
                    control = list(adapt_delta = 0.9),
                    silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
@@ -1192,9 +1201,9 @@ all estimates converged well ( $\hat{R}<1.01$).
 ```{r Convergence heuristics for the symmetry model}
 
 sm_symm = summary(model_symm,
-                 variable = c('Intercept_kappa', 'sd', 'kappa_mu'),
+                 variable = c('k1_Intercept', 'sd', 'kappa_mu'),
                 regex = TRUE)
-print(sm_symm$fixed[c(1:2,3+length(id_uv)),], digits = 3)
+print(sm_symm$fixed[c(1:2,2+length(id_uv)),], digits = 3)
 print(sm_symm$random, digits = 3)
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_symm,
@@ -1218,7 +1227,7 @@ draws_symm = as_draws_df(model_symm)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:length(id_uv) )
+for(i in 1:20)#length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1392,6 +1401,7 @@ axis(2, at = 0:5)
 # Model for individual deviations from bimodal change
 **This model takes a long time to run and generates split chains**
 *May not be identifiable.*
+*Testing additive version*
 
 A further source of instability in estimates of the two means appears to be 
 differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals. This needs to be accounted for by an additional parameter $\mu_{i,\beta}$, such that
@@ -1411,15 +1421,15 @@ find the individual deviations from the population-level change $\mu_\beta$.
 formula_devchange = bf(#modulus may not be necessary, included in lpd function
   formula = change_angle ~ mu,
   nlf(mu1 ~ (modulo_circular(mu0) + mui1) ), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ -(modulo_circular(mu0) + mui2) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
+  nlf(mu2 ~ -(modulo_circular(mu0) + mui1 + mui2) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
   mui1 ~ 0 + ID, # mean angle combines fixed and random effects
   mui2 ~ 0 + ID, # individual deviations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
-  theta1 ~ 1, #for mixture weighting, this is specific to individual and condition combination
-  # theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  # theta1 ~ 1, #for mixture weighting, this is specific to individual and condition combination
+  theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
   family = mixture(unwrap_von_mises,#primary mean distribution
                    unwrap_von_mises #secondary mean distribution
   ),#mixture, specified by the log ratio of theta1 : theta2
@@ -1441,6 +1451,20 @@ real kappa_mub = log1p_exp(softkappamub);
 Ideally the distribution of `mui2` would be accounted for in the same way 
 as $\kappa_\mu$, so that $\kappa_{\mu_2, i} = \log(1+\exp(\text{softkappamub}))$.
 To begin with, we assume both share the same $\kappa_\mu$.
+`20260122` reduced softkappamu prior to 15 & raised mui2 to $\kappa = 100$ -> improved
+still poor fits of mui2, reduced mui2 to $\kappa = 5$ -> improved chains, still underfit
+raised mui2 to $\kappa = 100$, lowered $\kappa_\mu$ to 10 -> improved, still underfit
+normal(0, pi()/12) on mui2 -> bimodality
+Raised theta1 to N(4,1) -> still one minority chain for opposite mean
+positive theta1 LN(0, 1) -> good chains, still underfitting
+Half normal theta1 N(0,1) -> very good, some underfitting
+reduce softkappamu to LN(log(5),0.6) -> still underfitting
+widen mui2 to pi()/6 -> slightly improved
+widen mui2 to pi()/3 -> messy mu2, but no improvments in underfitting
+widen mui2 to pi()/4 -> still some underfitting
+widen k1 sd to 2.0 -> some better fits, without changing estimate of k1 sd
+ test w/ theta1 sd 0.5 -> some better fits, unexpectedly high kappamu
+ [run w/ all data]
 
 ```{r change priors}
 
@@ -1452,14 +1476,16 @@ pr_mu_devchange = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                             'normal_lpdf(b_mui1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
             ),
             check = FALSE) +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
-                      check = FALSE)
-            prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
-                        nlpar  = 'mui2',  class = 'b') +
-            set_prior(paste("target +=",
-                            'normal_lpdf(b_mui2 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
-            ),
-            check = FALSE) 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(5), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE) + #was this prior even being added before?!
+            prior('normal(0, pi()/4)', # force close to 0°
+                        nlpar  = 'mui2',  class = 'b') 
+            # prior('unwrap_von_mises_vect(0, 100)', # force close to 0°
+            #             nlpar  = 'mui2',  class = 'b') +
+            # set_prior(paste("target +=",
+            #                 'normal_lpdf(b_mui2 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            # ),
+            # check = FALSE) 
             # prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))')+
             # set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(100), 0.6)", #expect high concentration (low variation) 
             #           check = FALSE)
@@ -1468,15 +1494,15 @@ pr_mu_devchange = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
 #priors for kappa
 pr_kappa_devchange = 
                   prior('normal(10,3)', class = 'b', nlpar = 'k1') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', nlpar = 'k1')
+                  prior('student_t(3, 0, 2.0)', class = 'sd', nlpar = 'k1')
                   # prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
 
 #priors for theta
 pr_theta_devchange = 
-                  prior('normal(3.0, 1.0)', class = 'Intercept', dpar = 'theta1') #+
+                  prior('normal(0, 1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) +
                   # prior('normal(4.0, 1.0)', class = 'Intercept', dpar = 'theta1') +
                   # prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
-                  # prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'theta1')
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
   
 #all bimodal priors
 pr_devchange = pr_mu_devchange + pr_kappa_devchange+ pr_theta_devchange
@@ -1496,7 +1522,8 @@ system.time(
   {
     
     model_devchange = brm(formula = formula_devchange,
-                   data = cd_change,
+                   # data = cd_change,
+                   data = subset(cd_change, ID %in% id_uv[1:20]),
                    prior = pr_devchange,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1508,8 +1535,8 @@ system.time(
                    # iter = 700, #
                    warmup = 1000, #
                    iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 200,
-                   control = list(adapt_delta = 0.9),
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
                    silent = 1, # echo only high priority Stan messages
                    backend = 'cmdstanr')
     
@@ -1570,19 +1597,19 @@ all estimates converged well ( $\hat{R}<1.01$).
 ```{r Convergence heuristics for the change model}
 
 sm_devchange = summary(model_devchange,
-                 variable = c('Intercept_kappa', 'theta1_Intercept',
+                 variable = c('k1', 'theta1_Intercept',
                               'sd', 'kappa_mu'),
                 regex = TRUE)
-print(sm_devchange$fixed[c(1:2,3+2*length(id_uv)),], digits = 3)
+print(sm_devchange$fixed[c(1:2),], digits = 3)
 print(sm_devchange$random, digits = 3)
 
 #mu0 and mui look bad, but good after unwrapping
 UnwrapRhats(model_devchange,
             variable = '^b_mu0')
 summary(UnwrapRhats(model_devchange,
-            variable = '^b_mui') )
+            variable = '^b_mui1') )
 summary(UnwrapRhats(model_devchange,
-            variable = '^b_mubi'))
+            variable = '^b_mui2'))
 ```
 
 
@@ -1601,10 +1628,10 @@ par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
 for(i in 1:20)#length(id_uv) )
 {
-  mu_name = paste0('b_mui_ID',id_uv[i])
-  mub_name = paste0('b_mubi_ID',id_uv[i])
+  mu_name = paste0('b_mui1_ID',id_uv[i])
+  mub_name = paste0('b_mui2_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
-  # theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = bearing,
@@ -1622,9 +1649,9 @@ for(i in 1:20)#length(id_uv) )
              )
   #secondary mean
   Draws2Cont(draws_devchange,
-             x_string = 'sin( -(mod_circular(b_mu0_Intercept) + get(mub_name)) )*
+             x_string = 'sin( -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name)) )*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
-             y_string = 'cos( -(mod_circular(b_mu0_Intercept) + get(mub_name)) )*
+             y_string = 'cos( -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name)) )*
                          A1(softplus(b_k1_Intercept+get(kappa_name)))',
              palette = 'Blue-Yellow' 
              )
@@ -1637,14 +1664,14 @@ for(i in 1:20)#length(id_uv) )
   mu2_id_devchange[i] = with(draws_devchange,
                       {
                         MedCDraws(
-                             -(mod_circular(b_mu0_Intercept) + get(mub_name) )
+                             -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name) )
                                            )
                       })
   kappa_id_devchange[i] = with(draws_devchange,
                          {softplus(median(b_k1_Intercept+get(kappa_name)))} )
   theta_id_devchange[i] = with(draws_devchange,
-                         {plogis(median(b_theta1_Intercept))} )
-                         # {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+                         # {plogis(median(b_theta1_Intercept))} )
+                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
   #primary mean
   arrows.circular(x = circular(x = mu1_id_devchange[i],
                                units = 'radians',
@@ -1669,9 +1696,28 @@ par(mfrow = c(1,3))
 PCfun(angles = deg(calc_mu),
       col = col_rho,
       plot_rho = FALSE)
-# PCfun(angles = deg(mu1_id_change),
-#       col = col_rho,
-#       plot_rho = FALSE)
+for(i in 1:20)#length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(-abs(mu1_id_devchange[i]))*A1(kappa_id_symm[i]),
+         y1 = cos(-abs(mu1_id_devchange[i]))*A1(kappa_id_symm[i]),
+         lwd = 0.5,
+         length = 0.01,
+         col = adjustcolor(col_sd, alpha.f = 50/255)
+         )
+}
+for(i in 1:20)#length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(abs(mu2_id_devchange[i]))*A1(kappa_id_symm[i]),
+         y1 = cos(abs(mu2_id_devchange[i]))*A1(kappa_id_symm[i]),
+         lwd = 0.5,
+         length = 0.01,
+         col = adjustcolor(col_obs, alpha.f = 50/255)
+         )
+}
 Draws2Cont(draws = draws_devchange,
            x_string = 'sin(mod_circular(b_mu0_Intercept))*
              A1(kappa_mu)',
@@ -1691,12 +1737,11 @@ with(draws_devchange,
      arrows.circular(x = circular( MedCDraws(mod_circular(b_mu0_Intercept)),
                                                   units = 'radians',
                                                   rotation = 'clock',
-                                                  zero = pi/2)
-     ),
+                                                  zero = pi/2),
      y = A1(median(kappa_mu)),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor(col_sd, alpha.f = 200/255)
+     col = adjustcolor(col_sd, alpha.f = 200/255) )
 )
 
 
