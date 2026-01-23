@@ -473,6 +473,16 @@ MedCDraws = function(x,
                             template = templ)
                                            )[medn]
 }
+QCDraws = function(x,
+                   probs = c(0.025, 0.5, 0.975),
+                     templ = 'none',
+                     medn = 1)
+{
+  quantile.circular( circular(x = mod_circular(x),
+                            template = templ),
+                     probs = probs
+                                           )
+}
 
 mu_id_uvh = rep(NA, length(id_uvh))
 kappa_id_uvh = rep(NA, length(id_uvh))
@@ -597,12 +607,74 @@ near $\pm 90°$, that is a quarter turn to left or right. This is clearest for t
 In addition, a subset of individuals exhibit (axial) bimodality, with a secondary 
 mean approximately 180° from the primary mean.
 
+
+```{r Fit MLE models to each dance}
+calc_cmle = list( )
+system.time(
+  
+for(i in 1:length(id_uv) )
+{
+  calc_cmle[[i]] = with(subset(cd_change, ID %in% id_uv[i]),
+                      {circ_mle(data = circular(change_angle,
+                                                template = 'none',
+                                                modulo = "2pi"),
+                              # exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
+                      niter = 1e4)}
+                    )
+}
+
+)
+
+calc_bim_diff_par = t( sapply(X = calc_cmle,
+                      FUN = MD_extract) )
+calc_bim_diff_par = data.frame(lapply(X = data.frame(calc_bim_diff_par),
+                                      FUN =  unlist) )
+
+calc_bim_diff_par = within(calc_bim_diff_par, 
+                           {
+                             theta = ifelse(test = weight1>0.5,
+                                          yes = 1-(1-weight1),
+                                          no =1-weight1)
+                             deltamu = mod_circular(mu1 - mu2)
+                             absdeltamu = abs(mod_circular(mu1 - mu2))
+                           })
+calc_bim_res = with(calc_bim_diff_par, 
+                    {
+                      data.frame(prop_bimodal = mean(!is.na(mu2)),
+                                 max_theta = max(theta[!is.na(mu2)]),
+                                 prop_30 = mean(absdeltamu > rad(30),
+                                                       na.rm = TRUE),
+                                 prop_0.7 = mean(theta < 0.7 ),
+                      prop_30_0.7 =  mean(theta[absdeltamu > rad(30)] < 0.7,
+                                                  na.rm = TRUE )
+                                )
+                    }
+                    )
+print(t(calc_bim_res), digits = 2)
+par(mfrow = c(1,2))
+with(calc_bim_diff_par,
+     VertHist(data = theta,
+              breaks = 36,
+              ylab = 'prop. primary mean')
+     )
+with(calc_bim_diff_par,
+     VertHist(data = deg(absdeltamu),
+              breaks = 36,
+              ylab = '[primary mean - secondary mean]',
+              ylim = c(0, 180),
+              axes = FALSE))
+axis(1); axis(2, at = 0:6*(180/6))
+
+```
+
 ```{r Plot the estimated change data}
 id_uv = with(cd_uv, unique(ID))
 calc_mu = rep(NA, length(id_uv))
+
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
+
 for(i in 1:length(id_uv) )
 {
   with(subset(cd_change, ID %in% id_uv[i]),
@@ -612,6 +684,13 @@ for(i in 1:length(id_uv) )
   )
   calc_mu[i] = with(subset(cd_change, ID %in% id_uv[i]),
                     {mean.circular(x = circular(change_angle, template = 'none'))}
+                    )
+  calc_cmle[[i]] = with(subset(cd_change, ID %in% id_uv[i]),
+                      {circ_mle(data = circular(change_angle,
+                                                template = 'none',
+                                                modulo = "2pi"),
+                              # exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
+                      niter = 1e4)}
                     )
 }
 # 
@@ -634,6 +713,8 @@ PCfun(angles = deg(calc_mu[which(full_ids %in% uv_ids)]),
       shrink = 2)
 
 mean(calc_mu<0)
+
+
 ```
 
 
@@ -756,6 +837,9 @@ avoid mode switching LN(log(0.5), 0.7) ->  much slower, all stable! Some Rhats >
 expanding k1 sd to 1.0 and reducing intercept theta1 to 3
 `20260122` theta1 Intercept half-N(0,1) with lb = 0 -> stable lower theta1 Intercept
 remove normal prior on mui to allow rotation -> no noticeable difference
+`20260123` chains split,theta1 intercept might be pushing against upper limit (>4)
+wider normal prior HN(0, 2.0) ->
+[HN(0, 4.0)]
 
 ```{r change priors}
 
@@ -1091,6 +1175,9 @@ theta1 Intercept half-N(0,1) with lb = 0 (& removed normal b_mui) -> bimodality!
 theta1 I HN(0,3) -> minority chain at theta1 = 0
 LN(-1, 1.0) -> slower, good chains, but 1 with E-BFMI less than 0.3 (dips towards 1.0)
 LN(0,1) -> faster, converges well (still some underfitting?)
+Strongly drawn towards equal proportion at 0° and 180°. Could represent real cases.
+`20260123` to reduce PD near 0 LN(0.5, 0.5) -> good chains, but treedepth problems
+HN(2.0, 0.7) ->
 
 ```{r Symmetry priors}
 
@@ -1113,7 +1200,8 @@ pr_kappa_symm =
 
 #priors for theta
 pr_theta_symm = 
-                  prior('lognormal(0,1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) #+
+                  prior('normal(2.0,0.7)', class = 'Intercept', dpar = 'theta1', lb = 0) #+
+                  # prior('lognormal(0.5,0.5)', class = 'Intercept', dpar = 'theta1', lb = 0) #+
                   # prior('normal(4.0,1.0)', class = 'Intercept', dpar = 'theta1') #+
                   # prior('lognormal(log(0.5), 0.7)', class = 'sd', dpar = 'theta1')
                   # prior('student_t(3, 0, 5.0)', class = 'sd', dpar = 'theta1')
@@ -1144,8 +1232,10 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
+                   warmup = 500, #
+                   iter = 700, # longer sampling to efficiently sample mu0
+                   # warmup = 1000, #
+                   # iter = 3000, # longer sampling to efficiently sample mu0
                    refresh = 500,
                    control = list(adapt_delta = 0.9),
                    silent = 1, # echo only high priority Stan messages
@@ -1461,8 +1551,9 @@ widen mui2 to pi()/3 -> messy mu2, but no improvments in underfitting
 widen mui2 to pi()/4 -> still some underfitting
 widen k1 sd to 2.0 -> some better fits, without changing estimate of k1 sd
  test w/ theta1 sd 0.5 -> some better fits, unexpectedly high kappamu
- [run w/ all data]
- [test w/o normal(0,2pi)]
+ run w/ all data -> mostly good some splitting on kappamu & theta 
+ raise softkappmu log(15),  w/o normal(0,2pi) ->
+ [prior for abs(modulo_circular(mu1 - mu2)) ]
 
 ```{r change priors}
 
@@ -1470,14 +1561,17 @@ widen k1 sd to 2.0 -> some better fits, without changing estimate of k1 sd
 pr_mu_devchange = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui1',  class = 'b') +
-            set_prior(paste("target +=", 
-                            'normal_lpdf(b_mui1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
-            ),
-            check = FALSE) +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(5), 0.6)", #expect high concentration (low variation) 
+            # set_prior(paste("target +=", 
+            #                 'normal_lpdf(b_mui1 | 0, 2*pi())'# additional prior to keep estimates from walking around the circle
+            # ),
+            # check = FALSE) +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(15), 0.6)", #expect high concentration (low variation) 
                       check = FALSE) + #was this prior even being added before?!
             prior('normal(0, pi()/4)', # force close to 0°
                         nlpar  = 'mui2',  class = 'b') 
+
+# 'target += lognormal_lpdf(abs(modulo_circular(mu1 - mu2) | log(pi()/6), 0.6)'
+
             # prior('unwrap_von_mises_vect(0, 100)', # force close to 0°
             #             nlpar  = 'mui2',  class = 'b') +
             # set_prior(paste("target +=",
@@ -1764,6 +1858,104 @@ abline(h = 1.58, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5)
 ```
+```{r Summarise bimodal change estimates}
+par(mfrow = c(1,4))
+#MLE 
+with(calc_bim_diff_par,
+     VertHist(data = deg(absdeltamu),
+              breaks = 36,
+              ylab = '[primary mean - secondary mean]',
+              main = 'CircMLE',
+              ylim = c(0, 180),
+              axes = FALSE))
+axis(1); axis(2, at = 0:6*(180/6))
+#Bayes symmetric
+VertHist(data = deg(abs(mod_circular(mu1_id_devchange - mu2_id_devchange))),
+              breaks = 36,
+              ylab = '[primary mean - secondary mean]',
+              main = 'GLM symmetric',
+               col = adjustcolor(col_rho, alpha.f = 100/255),
+              axes = FALSE)
+axis(1); axis(2, at = 0:6*(180/6))
+#Primary mean 
+VertHist(data = deg(abs(mu1_id_devchange)),
+              breaks = 36,
+         ylim = c(0,180),
+              ylab = '[mean change]',
+              main = 'primary mean',
+               col = adjustcolor(col_obs, alpha.f = 100/255),
+              axes = FALSE)
+with(draws_devchange,
+abline(h = 
+     deg(abs(mod_circular(
+       QCDraws(b_mu0_Intercept)
+       ) ) ),
+     lwd = c(0.5, 3, 0.5),
+     lty = c(3,2,3)
+      )
+)
+axis(1); axis(2, at = 0:6*(180/6))
+
+#calculate across all individual draws
+mu1_id_draws = with(draws_devchange, 
+                    sapply(X = 1:length(id_uv),
+                           FUN = function(i)
+                             {
+                             (mod_circular(b_mu0_Intercept) +
+                                get(paste0('b_mui1_ID',id_uv[i])))
+                           }
+                           )
+)
+mu2_id_draws = with(draws_devchange, 
+                    sapply(X = 1:length(id_uv),
+                           FUN = function(i)
+                             {
+                             -(mod_circular(b_mu0_Intercept) +
+                                get(paste0('b_mui1_ID',id_uv[i])) +
+                                 get(paste0('b_mui2_ID',id_uv[i])) )
+                           }
+                           )
+)
+
+abline(h = 
+     quantile(
+       deg(abs(mod_circular( mu1_id_draws) ) ),
+       probs = c(0.025, 0.5, 0.975)
+       ),
+     lwd = c(0.5, 3, 0.5),
+     lty = c(3,2,3),
+     col = 2
+      )
+#Secondary mean
+VertHist(data = deg(abs(mu2_id_devchange)),
+              breaks = 36,
+         ylim = c(0,180),
+              ylab = '[mean change]',
+              main = 'secondary mean',
+               col = adjustcolor(col_pdf, alpha.f = 100/255),
+              axes = FALSE)
+axis(1); axis(2, at = 0:6*(180/6))
+with(draws_devchange,
+abline(h = 
+     deg(abs(mod_circular(
+       QCDraws(b_mu0_Intercept)
+       ) ) ),
+     lwd = c(0.5, 3, 0.5),
+     lty = c(3,2,3)
+      )
+)
+abline(h = 
+     quantile(
+       deg(abs(mod_circular( mu2_id_draws) ) ),
+       probs = c(0.025, 0.5, 0.975)
+       ),
+     lwd = c(0.5, 3, 0.5),
+     lty = c(3,2,3),
+     col = 2
+      )
+
+```
+
 
 # Joint model for bimodal change
 
@@ -1786,11 +1978,11 @@ find the individual deviations from the population-level change $\mu_\beta$.
 formula_joint = bf(#modulus may not be necessary, included in lpd function
   formula = angle ~ mu,
   nlf(mu1 ~ mu0 + mui1 + modulo_circular(mub + muib1) ), #primary mean, population mean plus individual mean
-  nlf(mu2 ~ mu0 -(modulo_circular(mub + muib1)) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
+  nlf(mu2 ~ mu0 + mui1 -(modulo_circular(mub + muib1)) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
   mu0 ~ 1, #primary mean
+  mub ~ 0 + BR, #primary mean
   mui1 ~ 0 + ID, # individual mu offset 
   muib1 ~ 0 + BR:ID, # individual mu offset added when BR = low
-  # mui2 ~ 0 + ID, # individual deviations
   nlf(kappa1 ~ k1), #concentration for primary mean
   nlf(kappa2 ~ k1), #concentration for secondary mean
   k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
@@ -1825,7 +2017,7 @@ pr_mu_joint = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
             set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                       check = FALSE) + #
             prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))', # force close to 0°
-                        nlpar  = 'muib',  class = 'b') +
+                        nlpar  = 'muib1',  class = 'b') +
             set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(5), 0.6)", #expect high concentration (low variation)
                       check = FALSE)
 
@@ -1839,8 +2031,8 @@ pr_kappa_joint =
 #priors for theta
 pr_theta_joint = 
                   prior('normal(0, 1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) +
-                  prior('normal(0, 1.0)', class = 'b', dpar = 'theta1', lb = 0) +
-                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+                  prior('normal(0, 1.0)', class = 'b', dpar = 'theta1', lb = 0) #+
+                  # prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
   
 #all bimodal priors
 pr_joint = pr_mu_joint + pr_kappa_joint+ pr_theta_joint
@@ -1860,8 +2052,8 @@ system.time(
   {
     
     model_joint = brm(formula = formula_joint,
-                   data = cd_uv,
-                   # data = subset(cd_change, ID %in% id_uv[1:20]),
+                   # data = cd_uv,
+                   data = subset(cd_uv, ID %in% id_uv[1:20]),
                    prior = pr_joint,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1869,10 +2061,10 @@ system.time(
                       stan_softkappamub,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   # warmup = 500, #
-                   # iter = 700, #
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
+                   warmup = 500, #
+                   iter = 700, #
+                   # warmup = 1000, #
+                   # iter = 3000, # longer sampling to efficiently sample mu0
                    refresh = 500,
                    control = list(adapt_delta = 0.90),
                    silent = 1, # echo only high priority Stan messages
@@ -1912,7 +2104,7 @@ plot(model_joint,
 #population level change in direction
 plot(model_joint,
       ask = FALSE,
-      variable = 'mub_Intercept',
+      variable = 'b_mub',
       regex = TRUE,
      transform = unwrap_circular_deg) #plot transformed estimates
 
