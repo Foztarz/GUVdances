@@ -805,8 +805,8 @@ system.time(
   {
     
     model_change = brm(formula = formula_change,
-                   data = subset(cd_change, ID %in% uv_ids[1:20]),
-                   # data = cd_change,
+                   # data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   data = cd_change,
                    prior = pr_change,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -906,7 +906,7 @@ draws_change = as_draws_df(model_change)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:20)#length(id_uv) )
+for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1136,8 +1136,8 @@ system.time(
   {
     
     model_symm = brm(formula = formula_symm,
-                     data = subset(cd_change, ID %in% uv_ids[1:20]),
-                   # data = cd_change,
+                     # data = subset(cd_change, ID %in% uv_ids[1:20]),
+                   data = cd_change,
                    prior = pr_symm,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1227,7 +1227,7 @@ draws_symm = as_draws_df(model_symm)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:20)#length(id_uv) )
+for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui_ID',id_uv[i])
   kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
@@ -1399,9 +1399,6 @@ axis(2, at = 0:5)
 
 
 # Model for individual deviations from bimodal change
-**This model takes a long time to run and generates split chains**
-*May not be identifiable.*
-*Testing additive version*
 
 A further source of instability in estimates of the two means appears to be 
 differences in the position of $\mu_2$ relative to $\mu_1$ for different individuals. This needs to be accounted for by an additional parameter $\mu_{i,\beta}$, such that
@@ -1465,6 +1462,7 @@ widen mui2 to pi()/4 -> still some underfitting
 widen k1 sd to 2.0 -> some better fits, without changing estimate of k1 sd
  test w/ theta1 sd 0.5 -> some better fits, unexpectedly high kappamu
  [run w/ all data]
+ [test w/o normal(0,2pi)]
 
 ```{r change priors}
 
@@ -1522,8 +1520,8 @@ system.time(
   {
     
     model_devchange = brm(formula = formula_devchange,
-                   # data = cd_change,
-                   data = subset(cd_change, ID %in% id_uv[1:20]),
+                   data = cd_change,
+                   # data = subset(cd_change, ID %in% id_uv[1:20]),
                    prior = pr_devchange,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1626,7 +1624,7 @@ draws_devchange = as_draws_df(model_devchange)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,5) )
-for(i in 1:20)#length(id_uv) )
+for(i in 1:length(id_uv) )
 {
   mu_name = paste0('b_mui1_ID',id_uv[i])
   mub_name = paste0('b_mui2_ID',id_uv[i])
@@ -1756,6 +1754,346 @@ abline(h = 10, lty = 2, col = gray(0,0.5))
 axis(1)
 axis(2, at = 0:5*5)
 with(draws_devchange,
+     VertHist(data = kappa_mu, 
+              main = '\npopulation kappamu',
+              ylim = c(0, 5),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+abline(h = 1.58, lty = 2, col = gray(0,0.5))
+axis(1)
+axis(2, at = 0:5)
+```
+
+# Joint model for bimodal change
+
+Ideally, our estimates of bimodal change would also account for uncertainty in 
+individual directional bias. In practice this is very small ($\kappa = 10$: $\sigma = 20°$) but could affect the uncertainty of our estimate of change, which depends 
+on the position of the original mean angle. We construct this model as bimodal with
+a default expectation of near complete concentration around the primary mean. To make
+this symmetrical the effect of low brightness must be positive for one mean and 
+negative for the other.
+
+
+## Set up formula and priors
+
+
+To account for these excess deviations we introduce $\mu_{i,\beta}$, which should 
+find the individual deviations from the population-level change $\mu_\beta$.
+
+```{r Deviations change formula}
+
+formula_joint = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu1 ~ mu0 + mui1 + modulo_circular(mub + muib1) ), #primary mean, population mean plus individual mean
+  nlf(mu2 ~ mu0 -(modulo_circular(mub + muib1)) ), #secondary mean, population mean plus offset, individual mean, plus additional individual offset
+  mu0 ~ 1, #primary mean
+  mui1 ~ 0 + ID, # individual mu offset 
+  muib1 ~ 0 + BR:ID, # individual mu offset added when BR = low
+  # mui2 ~ 0 + ID, # individual deviations
+  nlf(kappa1 ~ k1), #concentration for primary mean
+  nlf(kappa2 ~ k1), #concentration for secondary mean
+  k1 ~ 1 + (1 |ID), #for kappa this occurs in linear space, and BRMS can set it up automatically
+  theta1 ~ 1 + BR, #for mixture weighting, this is specific to condition combination
+  # theta1 ~ 1 + (1 |ID), #for mixture weighting, this is specific to individual and condition combination
+  family = mixture(unwrap_von_mises,#primary mean distribution
+                   unwrap_von_mises #secondary mean distribution
+  ),#mixture, specified by the log ratio of theta1 : theta2
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+
+#Introduce stan variable for kappamub
+#in this case this is a measure of deviation from kappamu, an added coefficient
+stan_softkappamub = stanvar(scode = "
+real softkappamub;
+                           ",
+                           block = "parameters") +
+  stanvar(scode = "
+real kappa_mub = log1p_exp(softkappamub);
+          ",
+          block = 'genquant')
+```
+
+
+```{r change priors}
+
+#priors for mu
+pr_mu_joint = prior('normal(0, pi()/1)', class = 'b', nlpar = 'mu0') +
+                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mub') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui1',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE) + #
+            prior('unwrap_von_mises_vect(0, log1p_exp(softkappamub))', # force close to 0°
+                        nlpar  = 'muib',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(5), 0.6)", #expect high concentration (low variation)
+                      check = FALSE)
+
+
+#priors for kappa
+pr_kappa_joint = 
+                  prior('normal(10,3)', class = 'b', nlpar = 'k1') +
+                  prior('student_t(3, 0, 2.0)', class = 'sd', nlpar = 'k1')
+                  # prior('student_t(3, 0, 0.5)', class = 'sd', nlpar = 'k1')
+
+#priors for theta
+pr_theta_joint = 
+                  prior('normal(0, 1.0)', class = 'Intercept', dpar = 'theta1', lb = 0) +
+                  prior('normal(0, 1.0)', class = 'b', dpar = 'theta1', lb = 0) +
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'theta1')
+  
+#all bimodal priors
+pr_joint = pr_mu_joint + pr_kappa_joint+ pr_theta_joint
+```
+
+## Run the model for individual deviations in bimodal change
+Takes > 1h for 700 iterations!
+Takes nearly 6h for 3000 iterations!
+
+To avoid instability in the circular estimates, we use smaller adaptation steps
+by setting `adapt_delta` $> 0.8$.
+
+```{r individual change model}
+
+#very long compile time
+system.time(
+  {
+    
+    model_joint = brm(formula = formula_joint,
+                   data = cd_uv,
+                   # data = subset(cd_change, ID %in% id_uv[1:20]),
+                   prior = pr_joint,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu +
+                      stan_softkappamub,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   # warmup = 500, #
+                   # iter = 700, #
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/UV_joint_model.RData',
+     model_joint)#save for future reference
+
+```
+
+## Inspect model estimates
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect change model}
+load(file = '2Results/UV_joint_model.RData')
+#population kappa and its standard deviation
+#population kappa and its standard deviation
+plot(model_joint,
+      ask = FALSE,
+      variable = c('k1_Intercept', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population theta and its standard deviation
+plot(model_joint,
+      ask = FALSE,
+      variable = c('theta1_Intercept'),
+      regex = TRUE) #plot raw estimates
+#population directional bias
+plot(model_joint,
+      ask = FALSE,
+      variable = 'mu0',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+#population level change in direction
+plot(model_joint,
+      ask = FALSE,
+      variable = 'mub_Intercept',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+
+```
+
+
+
+```{r Inspect individual means change model}
+#inidividual but they overlap when unwrapped
+plot(x = model_joint,
+     variable = 'mui',
+     regex = TRUE,
+     ask = FALSE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+```
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the change model}
+
+sm_joint = summary(model_joint,
+                 variable = c('k1', 'theta1_Intercept',
+                              'sd', 'kappa_mu'),
+                regex = TRUE)
+print(sm_joint$fixed[c(1:2),], digits = 3)
+print(sm_joint$random, digits = 3)
+
+#mu0 and mui look bad, but good after unwrapping
+UnwrapRhats(model_joint,
+            variable = '^b_mu0')
+summary(UnwrapRhats(model_joint,
+            variable = '^b_mui1') )
+summary(UnwrapRhats(model_joint,
+            variable = '^b_mui2'))
+```
+
+
+## Extract predictions for the individual deviations in bimodal change model
+
+```{r Plot the change model}
+mu1_id_joint = rep(NA, length(id_uv))
+mu2_id_joint = rep(NA, length(id_uv))
+kappa_id_joint = rep(NA, length(id_uv))
+theta_id_joint = rep(NA, length(id_uv))
+
+draws_joint = as_draws_df(model_joint)
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+for(i in 1:length(id_uv) )
+{
+  mu_name = paste0('b_mui1_ID',id_uv[i])
+  mub_name = paste0('b_mui2_ID',id_uv[i])
+  kappa_name = paste0('r_ID__k1[',id_uv[i],',Intercept]')
+  theta_name = paste0('r_ID__theta1[',id_uv[i],',Intercept]')
+  with(subset(cd_change, ID %in% id_uv[i]),
+  {
+    PCfun(angles = bearing,
+         col = col_obs,
+         plot_rho = FALSE)
+    }
+  )
+  #primary mean
+  Draws2Cont(draws_joint,
+             x_string = 'sin(mod_circular(b_mu0_Intercept) + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             y_string = 'cos(mod_circular(b_mu0_Intercept) + get(mu_name))*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             palette = 'Red-Yellow' 
+             )
+  #secondary mean
+  Draws2Cont(draws_joint,
+             x_string = 'sin( -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name)) )*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             y_string = 'cos( -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name)) )*
+                         A1(softplus(b_k1_Intercept+get(kappa_name)))',
+             palette = 'Blue-Yellow' 
+             )
+  mu1_id_joint[i] = with(draws_joint,
+                      {
+                        MedCDraws(
+                             mod_circular(b_mu0_Intercept) + get(mu_name)
+                                           )
+                      })
+  mu2_id_joint[i] = with(draws_joint,
+                      {
+                        MedCDraws(
+                             -(mod_circular(b_mu0_Intercept) + get(mu_name) + get(mub_name) )
+                                           )
+                      })
+  kappa_id_joint[i] = with(draws_joint,
+                         {softplus(median(b_k1_Intercept+get(kappa_name)))} )
+  theta_id_joint[i] = with(draws_joint,
+                         # {plogis(median(b_theta1_Intercept))} )
+                         {plogis(median(b_theta1_Intercept+get(theta_name)))} )
+  #primary mean
+  arrows.circular(x = circular(x = mu1_id_joint[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_joint[i]),
+                 lwd = 5*plogis(theta_id_joint[i]),
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
+  #secondary mean
+  arrows.circular(x = circular(x = mu2_id_joint[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_joint[i]),
+                 lwd = 5*plogis(-theta_id_joint[i]),
+                 length = 0.1/1.25,
+                 col = adjustcolor(col_rho, alpha.f = 200/255))
+}
+#Add the population of biases
+par(mfrow = c(1,3))
+PCfun(angles = deg(calc_mu),
+      col = col_rho,
+      plot_rho = FALSE)
+for(i in 1:20)#length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(-abs(mu1_id_joint[i]))*A1(kappa_id_symm[i]),
+         y1 = cos(-abs(mu1_id_joint[i]))*A1(kappa_id_symm[i]),
+         lwd = 0.5,
+         length = 0.01,
+         col = adjustcolor(col_sd, alpha.f = 50/255)
+         )
+}
+for(i in 1:20)#length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(abs(mu2_id_joint[i]))*A1(kappa_id_symm[i]),
+         y1 = cos(abs(mu2_id_joint[i]))*A1(kappa_id_symm[i]),
+         lwd = 0.5,
+         length = 0.01,
+         col = adjustcolor(col_obs, alpha.f = 50/255)
+         )
+}
+Draws2Cont(draws = draws_joint,
+           x_string = 'sin(mod_circular(b_mu0_Intercept))*
+             A1(kappa_mu)',
+           y_string = 'cos(mod_circular(b_mu0_Intercept))*
+             A1(kappa_mu)',
+           palette = 'Red-Yellow'
+           )
+Draws2Cont(draws = draws_joint,
+           x_string = 'sin( -(mod_circular(b_mu0_Intercept)) )*
+             A1(kappa_mu)',
+           y_string = 'cos( -(mod_circular(b_mu0_Intercept)) )*
+             A1(kappa_mu)',
+           palette = 'Blue-Yellow'
+           )
+
+with(draws_joint,
+     arrows.circular(x = circular( MedCDraws(mod_circular(b_mu0_Intercept)),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255) )
+)
+
+
+with(draws_joint,
+     VertHist(data = softplus(b_k1_Intercept), 
+              main = '\npopulation kappa',
+              ylim = c(0, 15),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+abline(h = 10, lty = 2, col = gray(0,0.5))
+axis(1)
+axis(2, at = 0:5*5)
+with(draws_joint,
      VertHist(data = kappa_mu, 
               main = '\npopulation kappamu',
               ylim = c(0, 5),
