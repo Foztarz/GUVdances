@@ -1,0 +1,925 @@
+---
+title: "GUV_model_figure"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    fig_caption: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Details
+
+**DESCRIPTION**
+
+Fit and plot circular GLMs to describe the four stimulus conditions.
+
+**INPUTS**
+
+`GUV_functions.R`
+
+**OUTPUTS**
+
+Models and plotted estimates.
+
+**REFERENCES**
+
+**Experimental approach**
+
+Edrich W, Neumeyer C & von Helversen, O.
+(1979) “Anti-sun orientation” of bees with regard to a field of ultraviolet light.
+*J. Comp. Physiol.* 134, 151–157.
+
+Rossel, S.
+& Wehner, R.
+(1984).
+Celestial orientation in bees: the use of spectral cues.
+*J. Comp. Physiol. A* 155, 605–613.
+
+**modelling methods**
+
+Sayin S, Couzin-Fuchs E, Petelski I, Günzel Y, Salahshour M, Lee CY, Graving JM, Li L, Deussen O, Sword GA, et al. (2025) The behavioral mechanisms governing collective motion in swarming locusts.
+*Science* 387(6737):995–791
+
+Gabry J, Češnovar R, Johnson A (2022).
+cmdstanr: R Interface to 'CmdStan'.
+<https://mc-stan.org/cmdstanr/>
+
+Bürkner, P.-C.
+(2018).
+Advanced Bayesian Multilevel Modeling with the R Package brms.
+*The R Journal* 10, 395–411.
+
+Carpenter, B., Gelman, A., Hoffman, M. D., Lee, D., Goodrich, B., Betancourt, M., Brubaker, M., Guo, J., Li, P. and Riddell, A.
+(2017).
+Stan: A Probabilistic Programming Language.
+*Journal of Statistical Software* 76 doi: 10.18637/jss.v076.i01
+
+Vehtari, A., Gelman, A., and Gabry, J.
+(2017) Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC.
+*Statistics and Computing* 27(5), 1413–1432.
+<doi:10.1007/s11222-016-9696-4>.
+
+Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A.
+(2021).
+Implicitly adaptive importance sampling.
+*Statistics and Computing* 31, 16.
+<doi:10.1007/s11222-020-09982-2>.
+
+# Motivation
+
+
+# Set up workspace
+
+Estimating these models, we need to load the appropriate functions.
+Make sure that the `circular`, `cmdstanr` and `brms` are installed, and 
+(on Windows) that you have installed the latest version of [Rtools](https://cran.r-project.org/bin/windows/Rtools/).
+
+```{r Load functions and packages}
+source('GUV_functions.R')
+```
+
+Set up some colours for plotting.
+
+```{r Set up plot colours}
+col_kappa = '#1E78B5'#colour for kappa parameter
+col_rho = '#F08024' #colour for mean vector length
+col_sd = '#E74A29' #colour for SD and mean angle
+col_sd2 = '#E57461' #colour for other SD heuristics
+col_pdf = adjustcolor(col = '#21A885', # colour for probability density
+                      alpha.f = 0.7)
+col_obs = '#3E1F51' #colour for control observations
+col_treat = '#006400' # colour for treatment observations
+```
+
+# Prepare data
+
+Then load the data that will be used.
+This is our dance data, reorganised by `GUV_organisedata.R` as `colour_dance_reorg.csv`.
+
+```{r Load data}
+#Dance angle data
+cd = read.table(file = '1Data/colour_dance_reorg.csv', 
+                header = T, 
+                sep  = ',')
+head(cd)
+```
+
+## Format data
+
+Ensure that each variable has the correct data format for subsequent analysis.
+
+```{r Data formatting}
+cd = within(cd,
+            {
+              ID = as.factor(ID) # beedance identifier as a factor
+              date = as.factor(date) # date as a factor
+              signed_angle = Mod360.180(bearing)  # bearing between -180 and 180
+              angle = circular(rad(signed_angle),# bearing between -pi and pi
+                               rotation = 'clock') # circular format suppresses later warnings
+            }
+)
+u_id = with(cd, unique(ID)) # unique beedances
+length(u_id)#169 beedances
+```
+```{r Shorten variable names for modelling}
+cd = within(cd,
+            {
+              BR = brightn
+              CL = colour
+              DT = date
+              RN = run
+            }
+)
+```
+
+## Identify dances for both conditions
+Identify dances in which all four stimulus conditions were used.
+
+```{r both conditions}
+uvc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'u'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
+
+#There should be two brightness levels for UV
+uv_ids = u_id[uvc == 2]
+length(uv_ids)#most individuals
+#extract just those individuals
+
+#find data for full condition individuals
+cd_uv = subset(cd, ID %in% uv_ids)
+```
+
+# Set up circular modelling
+
+```{r Set up the circular model custom family}
+#set up required Stan functions
+#circular modulo in Stan code
+modulo_circular_fun = stanvar(scode = "
+  real modulo_circular(real y) {
+    return fmod(y + pi(), 2*pi()) - pi();
+  }
+",
+                           block = 'functions')
+
+#custom likelihood function using the shifted modulo link
+#additional function to account for vectors
+stan_unwrap_fun = stanvar(scode = "
+    real unwrap_von_mises_lpdf(real y, real mu, real kappa) {
+      return von_mises_lpdf(y | modulo_circular(mu), kappa);
+    }
+    real unwrap_von_mises_rng(real mu, real kappa) {
+      return von_mises_rng( modulo_circular(mu) , kappa);
+    }
+    real unwrap_von_mises_vect_lpdf(vector y, real mu, real kappa) {
+    real tmp = 0;
+    for(i in 1:size(y))
+    {
+    tmp = tmp + unwrap_von_mises_lpdf(y[i] | mu, kappa);
+    }
+      return tmp;
+    }
+  ",
+                          block = 'functions')
+
+
+#Introduce stan variable for kappamu
+stan_softkappamu = stanvar(scode = "
+real softkappamu;
+                           ",
+                           block = "parameters") + 
+  stanvar(scode = "
+real kappa_mu = log1p_exp(softkappamu);
+          ", 
+          block = 'genquant')
+
+#define the custom family
+unwrap_von_mises = custom_family(
+  name = "unwrap_von_mises",
+  dpars = c("mu",
+            "kappa"),
+  links = c('identity',#N.B. the link function is defined via the LPD function
+            "softplus"), 
+  lb = c(-pi,#lower bound of mu should be -pi
+         0),
+  ub = c(pi,#upper bound of mu should be pi
+         NA),
+  type = "real",#takes continuous response data
+)
+
+```
+
+
+```{r Set up plotting functions for circular estimates}
+
+#add contours
+Draws2Cont = function(draws,
+                      palette = 'Heat 2',
+                      nlevels = 20,
+                      x_string = 'sin(Intercept)*A1(softplus(Intercept_kappa))',
+                      y_string = 'cos(Intercept)*A1(softplus(Intercept_kappa))',
+                      alpha = 200/255,
+                      ngrid = 25, # defaults to a 25x25 grid
+                      cropc = FALSE, #crop region outside circle
+                      denstype = 'relative' # 'normalised' or 'relative' (normalised fails to plot low densities)
+)
+{
+  kdc = with(draws,
+             {
+               MASS::kde2d(x = eval(str2lang(x_string)),
+                           y = eval(str2lang(y_string)),
+                           n = ngrid)
+             }
+  )
+  if(cropc)
+  {
+    xy = with(kdc, expand.grid(x = x,y= y))#find coordinates of z variable
+    idc = with(xy, x^2+y^2 < 1.0)
+    #crop edge of circle
+    kdc = within(kdc,
+                 {z[!idc] = 0})
+  }
+  with(kdc,
+       {
+         .filled.contour(x = x,
+                         y = y,
+                         z = z,
+                         levels = (1:nlevels)*
+                           switch(EXPR = denstype,
+                                  relative = max(z/nlevels),
+                                  normalised = sum(z/nlevels),#warning, fails to plot low densities
+                                  max(z/nlevels)
+                           ),
+                         col = hcl.colors(n = nlevels,
+                                          palette = palette,
+                                          rev = TRUE,
+                                          alpha = alpha)
+         )
+       }
+  )
+}
+```
+
+# Model for unimodal conditions
+
+For the two bright stimuli, and the dim green stimulus, all changes between stimuli
+appear to be unimodal. This allows us to model both the dances and changes in dances
+using a unimodal distribution. To account for individual differences in dance bias,
+we include a parameter $\mu_i$, and which may also differ for different conditions.
+
+```{r Subset unimodal conditions}
+cd_uni = subset(x = cd, 
+                subset = !(BR %in% 'l' &
+                           CL %in% 'u')
+                )
+
+```
+
+## Set up formula and priors
+
+
+```{r Unimodal change formula}
+
+formula_uni = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + BR + CL, #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + BR + CL + (1 + BR + CL | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+```
+
+
+```{r Unimodal change priors}
+
+#priors for mu
+pr_mu_uni = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)  #
+
+#priors for kappa
+pr_kappa_uni = 
+                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
+                  prior('student_t(3, 0, 2.0)', class = 'sd', dpar = 'kappa')
+
+  
+#all bimodal priors
+pr_uni = pr_mu_uni + pr_kappa_uni
+```
+
+## Run the model for individual deviations in bimodal change
+
+```{r individual change model}
+
+#very long compile time
+system.time(
+  {
+    
+    model_uni = brm(formula = formula_uni,
+                   # data = subset(cd_uni, ID %in% u_id[1:20]),
+                   data = subset(cd_uni),
+                   prior = pr_uni,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), # Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/uni_model.RData',
+     model_uni)#save for future reference
+
+```
+
+
+## Inspect model estimates
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect unimodal change model}
+load(file = '2Results/uni_model.RData')
+#population kappa and its standard deviation
+#population kappa and its standard deviation
+plot(model_uni,
+      ask = FALSE,
+      variable = c('kappa_Intercept', 'kappa_mu'),
+      regex = TRUE) #plot raw estimates
+#population directional bias
+plot(model_uni,
+      ask = FALSE,
+      variable = 'mu0',
+      regex = TRUE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+```
+
+
+
+```{r Inspect individual means unimodal change model}
+#inidividual but they overlap when unwrapped
+plot(x = model_uni,
+     variable = 'mui',
+     regex = TRUE,
+     ask = FALSE,
+     transform = unwrap_circular_deg) #plot transformed estimates
+```
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the change model}
+
+sm_uni = summary(model_uni,
+                 variable = c('kappa', 
+                              'sd',
+                              'kappa_mu'),
+                regex = TRUE)
+print(sm_uni$fixed[c(1,5:6+20),], digits = 3)
+# print(sm_uni$fixed[c(1,4+length(u_id)),], digits = 3)
+print(sm_uni$random, digits = 3)
+print(sm_uni$spec_pars, digits = 3)
+
+#mu0 and mui look bad, but good after unwrapping
+UnwrapRhats(model_uni,
+            variable = '^b_mu0')
+summary(UnwrapRhats(model_uni,
+            variable = '^b_mui') )
+```
+
+## Extract predictions
+
+```{r set up functions to summarise draws}
+
+#A function to find the circular median in (-pi, pi)
+MedCDraws = function(x,
+                     templ = 'none',
+                     medn = 1)
+{
+  median.circular( circular(x = mod_circular(x),
+                            template = templ)
+                                           )[medn]
+}
+QCDraws = function(x,
+                   probs = c(0.025, 0.5, 0.975),
+                     templ = 'none',
+                     medn = 1)
+{
+  quantile.circular( circular(x = mod_circular(x),
+                            template = templ),
+                     probs = probs
+                                           )
+}
+```
+
+```{r Plot the unimodal model}
+
+#green high
+mu_id_gh = rep(NA, length(u_id))
+kappa_id_gh = rep(NA, length(u_id))
+
+#UV high
+mu_id_uh = rep(NA, length(u_id))
+kappa_id_uh = rep(NA, length(u_id))
+
+#green dim
+mu_id_gl = rep(NA, length(u_id))
+kappa_id_gl = rep(NA, length(u_id))
+
+draws_uni = as_draws_df(model_uni)
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,3) )
+for(i in 1:length(u_id) )
+# for(i in 1:20 )
+{
+  mu_name = paste0('b_mui_ID',u_id[i])
+  kappa_name = paste0('r_ID__kappa[',u_id[i],',Intercept]')
+  
+  
+  #green high
+  with(subset(cd_uni, 
+              ID %in% u_id[i] &
+                CL %in% 'g' & BR %in% 'h'),
+  {
+    PCfun(angles = bearing,
+         col = 'green3',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+  Draws2Cont(draws_uni,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name))*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))'
+             )
+  mu_id_gh[i] = with(draws_uni,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name))
+                      })
+  kappa_id_gh[i] = with(draws_uni,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  arrows.circular(x = circular(x = mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gh[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('green3', alpha.f = 200/255))
+  #UV high
+  with(subset(cd_uni, 
+              ID %in% u_id[i] &
+                CL %in% 'u' & BR %in% 'h'),
+  {
+    PCfun(angles = bearing,
+         col = 'magenta3',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+  Draws2Cont(draws_uni,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name) + b_mu0_CLu)*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name) + b_mu0_CLu)*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))'
+             )
+  mu_id_uh[i] = with(draws_uni,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name)  + b_mu0_CLu)
+                      })
+  kappa_id_uh[i] = with(draws_uni,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  arrows.circular(x = circular(x = mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gh[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
+  
+  #green low
+  with(subset(cd_uni, 
+              ID %in% u_id[i] &
+                CL %in% 'g' & BR %in% 'l'),
+  {
+    PCfun(angles = bearing,
+         col = 'green4',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+  Draws2Cont(draws_uni,
+             x_string = 'sin(b_mu0_Intercept + get(mu_name) + b_mu0_BRl)*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))',
+             y_string = 'cos(b_mu0_Intercept + get(mu_name) + b_mu0_BRl)*
+                         A1(softplus(Intercept_kappa+get(kappa_name)))'
+             )
+  mu_id_gl[i] = with(draws_uni,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name) + b_mu0_BRl)
+                      })
+  kappa_id_gl[i] = with(draws_uni,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  arrows.circular(x = circular(x = mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gh[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('green4', alpha.f = 200/255))
+}
+
+```
+
+
+## Plot population level predictions
+
+
+```{r Calculate estimates of means and changes}
+
+#calculate mean vectors
+mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad, # N.B. Including sun azimuth drops some cases without a time stamp
+                         data = cd,
+                         FUN = rho.circular
+)
+#correct names
+mean_vectors = within(mean_vectors,
+                      {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
+)
+#add kappa
+mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
+                          data = cd,
+                          FUN = MLE_est
+)
+#Rayleigh tests
+rayleigh_tests = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
+                          data = cd,
+                          FUN = Rayleigh_p
+                          )
+#add to the summary table and 
+#calculate inverse softplus kappa
+mean_vectors = within(mean_vectors,
+                      {
+                        mu = deg(mle_estimates$angle[,'mu'])
+                        kappa = mle_estimates$angle[,'kappa']
+                        iskappa  = inv_softplus(kappa)
+                      }
+)
+
+luc = sapply(u_id,
+              FUN = IndCond,
+              dt = cd)
+
+#Most individuals that made it to bright green 
+full_ids = u_id[luc == 4]
+
+
+mu_diff_gl = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul = sapply(X = full_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l')
+
+```
+
+```{r Extract population level predictions}
+
+
+#Population mean for green bright
+par(mfrow = c(1,3),
+    mar = c(0,0,0,0))
+with(subset(mean_vectors,
+            colour %in% 'g' &
+              brightn %in% 'h'),
+     {
+PCfun(angles = mu,
+      col = 'green3',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+Draws2Cont(draws = draws_uni,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(kappa_mu)'
+           )
+
+with(draws_uni,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('green3', alpha.f = 200/255))
+)
+
+#effect of UV
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 2,
+      plot_rho = FALSE)
+Draws2Cont(draws = draws_uni,
+           x_string = 'sin(b_mu0_CLu)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_CLu)*
+             A1(kappa_mu)'
+           )
+
+with(draws_uni,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_CLu),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray40', alpha.f = 200/255))
+)
+
+#effect of dim green
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 2,
+      plot_rho = FALSE)
+Draws2Cont(draws = draws_uni,
+           x_string = 'sin(b_mu0_BRl)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_BRl)*
+             A1(kappa_mu)'
+           )
+
+with(draws_uni,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_BRl),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
+#plot kappa
+par(mfrow = c(1,3))
+
+with(draws_uni,
+     VertHist(data = softplus(Intercept_kappa), 
+              main = '\ngreen bright',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('green3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_uni,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_CLu), 
+              main = '\nUV bright',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('magenta3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_uni,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_BRl), 
+              main = '\ngreen dim',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('green4', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+```
+
+# Model comparison for unimodal
+## Set up formula and priors
+
+
+```{r Unimodal change formula}
+
+formula_noCL = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + BR , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + BR + (1 + BR | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_noBR = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + CL , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + CL + (1 + CL | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_null = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + (1 | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+```
+
+N.B. Since the priors specify changes, but not what kind, each change model can use the same priors.
+ 
+```{r Unimodal change priors}
+
+#priors for mu
+pr_mu_null = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)  #
+
+#priors for kappa
+pr_kappa_null = 
+                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
+                  prior('student_t(3, 0, 2.0)', class = 'sd', dpar = 'kappa')
+
+  
+#all bimodal priors
+pr_null = pr_mu_null + pr_kappa_null
+```
+
+## Run the alternative models
+
+```{r run alternative models}
+
+#very long compile time
+system.time(
+  {
+    
+    model_noCL = brm(formula = formula_noCL,
+                   data = subset(cd_uni),
+                   prior = pr_uni,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/noCL_model.RData',
+     model_noCL)#save for future reference
+
+system.time(
+  {
+    
+    model_noBR = brm(formula = formula_noBR,
+                   data = subset(cd_uni),
+                   prior = pr_uni,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/noBR_model.RData',
+     model_noBR)#save for future reference
+
+system.time(
+  {
+    
+    model_null = brm(formula = formula_null,
+                   data = subset(cd_uni),
+                   prior = pr_null,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/uninull_model.RData',
+     model_null)#save for future reference
+
+```
+
+## Unimodal LOO comparison
+```{r Loo comparison for unimodal models}
+#collect models
+load(file = '2Results/uni_model.RData')#model_uni
+load(file = '2Results/noCL_model.RData')#model_noCL
+load(file = '2Results/noBR_model.RData')#model_noBR
+load(file = '2Results/uninull_model.RData')#model_null
+
+modlist = list(maximal = model_uni,
+               noCL = model_noCL,
+               noBR = model_noBR,
+               null = model_null
+                )
+
+#calculate loo
+modlist = lapply(modlist,
+       FUN = add_criterion,
+       'loo',
+       moment_match = TRUE)
+
+save(modlist,
+     file = '2Results/uni_modlist.RData')
+
+#compare all models
+with(modlist, loo_compare(maximal, noCL, noBR, null))
+#effect of UV bright
+with(modlist, loo_compare(maximal, noCL))
+#effect of green dim
+with(modlist, loo_compare(maximal, noBR))
+#compare LOO IC
+LooIC = function(lmod)
+{
+  loo(lmod)$estimates['looic', 'Estimate']
+}
+
+modLIC = lapply(X = modlist,
+       FUN = LooIC)
+print(sort(unlist(modLIC)), digits = 1)
+
+```
