@@ -403,7 +403,7 @@ all estimates converged well ( $\hat{R}<1.01$).
 
 sm_uni = summary(model_uni)
 # print(sm_uni$fixed[c(1,5:6+20),], digits = 3)
-print(sm_uni$fixed[c(1,5:6+length(u_id)),], digits = 3)
+print(sm_uni$fixed[c(1:2,5:6+length(u_id)),], digits = 3)
 print(sm_uni$random, digits = 3)
 print(sm_uni$spec_pars, digits = 3)
 
@@ -880,7 +880,7 @@ formula_null = bf(#modulus may not be necessary, included in lpd function
 
 N.B. Since the priors specify changes, but not what kind, each change model can use the same priors.
  
-```{r Unimodal change priors}
+```{r Null change priors}
 
 #priors for mu
 pr_mu_null = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
@@ -908,6 +908,7 @@ system.time(
   {
     
     model_noCL = brm(formula = formula_noCL,
+                     # data = subset(cd_uni, ID %in% u_id[1:20]),
                    data = subset(cd_uni),
                    prior = pr_uni,
                    stanvars = stan_unwrap_fun + 
@@ -932,6 +933,7 @@ system.time(
   {
     
     model_noBR = brm(formula = formula_noBR,
+                     # data = subset(cd_uni, ID %in% u_id[1:20]),
                    data = subset(cd_uni),
                    prior = pr_uni,
                    stanvars = stan_unwrap_fun + 
@@ -956,6 +958,7 @@ system.time(
   {
     
     model_null = brm(formula = formula_null,
+                     # data = subset(cd_uni, ID %in% u_id[1:20]),
                    data = subset(cd_uni),
                    prior = pr_null,
                    stanvars = stan_unwrap_fun + 
