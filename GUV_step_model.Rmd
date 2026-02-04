@@ -607,15 +607,38 @@ near $\pm 90°$, that is a quarter turn to left or right. This is clearest for t
 In addition, a subset of individuals exhibit (axial) bimodality, with a secondary 
 mean approximately 180° from the primary mean.
 
+```{r Plot the estimated change data}
+id_uv = with(cd_uv, unique(ID))
+calc_mu = rep(NA, length(id_uv))
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,5) )
+
+for(i in 1:length(id_uv) )
+{
+  with(subset(cd_change, ID %in% id_uv[i]),
+  {
+    PCfun(angles = deg(change_angle),
+         col = col_sd2)}
+  )
+  calc_mu[i] = with(subset(cd_change, ID %in% id_uv[i]),
+                    {mean.circular(x = circular(change_angle, template = 'none'))}
+                    )
+}
+
+```
 
 ```{r Fit MLE models to each dance}
 calc_cmle = list( )
-system.time(
+id_uv = with(cd_uv, unique(ID))
+system.time(#takes ≈5 minutes
   
 for(i in 1:length(id_uv) )
 {
   calc_cmle[[i]] = with(subset(cd_change, ID %in% id_uv[i]),
-                      {circ_mle(data = circular(change_angle,
+                      {
+                        circ_mle(data = circular(change_angle,
                                                 template = 'none',
                                                 modulo = "2pi"),
                               # exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
@@ -651,10 +674,15 @@ calc_bim_res = with(calc_bim_diff_par,
                     }
                     )
 print(t(calc_bim_res), digits = 2)
+```
+
+
+```{r summarise MLE models}
 par(mfrow = c(1,2))
 with(calc_bim_diff_par,
      VertHist(data = theta,
               breaks = 36,
+              col = adjustcolor(col_rho, alpha.f = 100/255),
               ylab = 'prop. primary mean')
      )
 with(calc_bim_diff_par,
@@ -665,11 +693,122 @@ with(calc_bim_diff_par,
               axes = FALSE))
 axis(1); axis(2, at = 0:6*(180/6))
 
+par(mfrow = c(1,3))
+with(calc_bim_diff_par,
+     {
+     VertHist(data = deg(abs(mod_circular(c(mu1, mu2)))),
+              breaks = 36,
+              ylab = 'bimodal mean change',
+              ylim = c(0, 180),
+              axes = FALSE)
+       abline(h = quantile(x =deg(abs(mod_circular(
+                                   c(mu1,mu2) 
+                                   ))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE 
+                           ),
+             lty = c(2,1,2))
+     }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
+with(calc_bim_diff_par,
+     {
+     VertHist(data = deg(abs(mod_circular(mu1))),
+              breaks = 36,
+              main = 'all dances',
+              ylab = 'primary mean change',
+              ylim = c(0, 180),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE)
+       abline(h = quantile(deg(abs(mod_circular(mu1))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE),
+                           lty = c(2,1,2))
+     }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
+with(calc_bim_diff_par,
+     {
+     VertHist(data = deg(abs(mod_circular(mu2))),
+              breaks = 36,
+              ylab = 'secondary mean change',
+              ylim = c(0, 180),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE)
+       abline(h = quantile(deg(abs(mod_circular(mu2))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE),
+                           lty = c(2,1,2))
+       }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
+#just the balanced
+par(mfrow = c(1,3))
+with(calc_bim_diff_par[which(full_ids %in% uv_ids),],
+     {
+     VertHist(data = deg(abs(mod_circular(c(mu1, mu2)))),
+              breaks = 36,
+              main = 'full condition dances',
+              ylab = 'bimodal mean change',
+              ylim = c(0, 180),
+              axes = FALSE)
+       abline(h = quantile(x =deg(abs(mod_circular(
+                                   c(mu1,mu2) 
+                                   ))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE 
+                           ),
+             lty = c(2,1,2))
+     }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
+with(calc_bim_diff_par[which(full_ids %in% uv_ids),],
+     {
+     VertHist(data = deg(abs(mod_circular(mu1))),
+              breaks = 36,
+              ylab = 'primary mean change',
+              ylim = c(0, 180),
+              col = adjustcolor(col_sd, alpha.f = 100/255),
+              axes = FALSE)
+       abline(h = quantile(deg(abs(mod_circular(mu1))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE),
+                           lty = c(2,1,2))
+     }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
+with(calc_bim_diff_par[which(full_ids %in% uv_ids),],
+     {
+     VertHist(data = deg(abs(mod_circular(mu2))),
+              breaks = 36,
+              ylab = 'secondary mean change',
+              ylim = c(0, 180),
+              col = adjustcolor(col_kappa, alpha.f = 100/255),
+              axes = FALSE)
+       abline(h = quantile(deg(abs(mod_circular(mu2))),
+                           probs = c(0.25, 0.5, 0.75),
+                           na.rm = TRUE),
+                           lty = c(2,1,2))
+       }
+     )
+axis(1); axis(2, at = 0:6*(180/6))
+
 ```
 
-```{r Plot the estimated change data}
+After accounting for bimodality, the distribution of turn angles is very broad,
+close to a uniform distriubtion between 0° and 180° (expected quartiles 45°, 90°, 135°).
+There are also nearly exactly as many turns <90° as turns >90°, but few turns close to 180°.
+For the dances that included all conditions (typically longer), there is a 
+stronger bias towards large turns particularly for the primary means.
+
+
+```{r Plot the estimated bimodal change data}
 id_uv = with(cd_uv, unique(ID))
-calc_mu = rep(NA, length(id_uv))
 
 par(pty = 's')
 par(mar = c(0,0,0,0),
@@ -680,30 +819,66 @@ for(i in 1:length(id_uv) )
   with(subset(cd_change, ID %in% id_uv[i]),
   {
     PCfun(angles = deg(change_angle),
-         col = col_sd2)}
+         col = col_sd2,
+         plot_rho = FALSE)
+    }
   )
-  calc_mu[i] = with(subset(cd_change, ID %in% id_uv[i]),
-                    {mean.circular(x = circular(change_angle, template = 'none'))}
-                    )
-  calc_cmle[[i]] = with(subset(cd_change, ID %in% id_uv[i]),
-                      {circ_mle(data = circular(change_angle,
-                                                template = 'none',
-                                                modulo = "2pi"),
-                              # exclude = c('M1','M2A', 'M2B', 'M2C'),#no uniform or unimodal
-                      niter = 1e4)}
-                    )
+  with(calc_bim_diff_par[i,],
+       {
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(rad(mu1))*A1(kappa1),
+         y1 = cos(rad(mu1))*A1(kappa1),
+         col = col_sd,
+         length = 0.1,
+         lwd = 5*weight1
+         )
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(rad(mu2))*A1(kappa2),
+         y1 = cos(rad(mu2))*A1(kappa2),
+         col = col_sd,
+         length = 0.1,
+         lwd = 5*(1-weight1)
+         )
 }
-# 
-par(mfrow = c(1,2))
-PCfun(angles = deg(calc_mu),
-      col = col_rho,
-      shrink = 2)
+)
+  
+}
+```
 
+```{r Plot general change pattern fitted to each dance}
+#
 #full condition individuals used for mean vector analysis
 u_id = with(cd, unique(ID))
 luc = sapply(u_id,
               FUN = IndCond,
               dt = cd)
+
+#The change distribution as identified by CMLE may itself be bimodal
+mu12_cmle = with(calc_bim_diff_par,
+                {
+                circ_mle( data = circular(c(mu1,mu2),
+                                          template = 'none',
+                                          modulo = "2pi"))
+                  }
+                )
+mu12_full_cmle = with(calc_bim_diff_par[which(full_ids %in% uv_ids),],
+                {
+                circ_mle( data = circular(
+                                  c(mu1,
+                                     mu2),
+                                          template = 'none',
+                                          modulo = "2pi"))
+                  }
+                )
+
+par(mfrow = c(2,2),
+    mar = c(0,0,0,0))
+PCfun(angles = deg(calc_mu),
+      col = col_rho,
+      shrink = 2)
+
 
 #Most individuals that made it to bright green 
 full_ids = u_id[luc == 4]
@@ -714,10 +889,63 @@ PCfun(angles = deg(calc_mu[which(full_ids %in% uv_ids)]),
 
 mean(calc_mu<0)
 
+#plot CMLE mu1
+with(calc_bim_diff_par,
+  PCfun(angles = deg(c(mu1, mu2)),
+        col = col_rho,
+        shrink = 2)
+)
+with(mu12_cmle$results['M5B',],
+arrows(x0 = 0,
+       y0 = 0,
+       x1 = cos(q1)*A1(k1),
+       y1 = sin(q1)*A1(k1),
+       col = col_sd,
+       length = 0.1,
+       lwd = 5*lamda
+       )
+)
+with(mu12_cmle$results['M5B',],
+arrows(x0 = 0,
+       y0 = 0,
+       x1 = cos(q2)*A1(k2),
+       y1 = sin(q2)*A1(k2),
+       col = col_sd,
+       length = 0.1,
+       lwd = 5*(1-lamda)
+       )
+)
+
+with(calc_bim_diff_par,
+  PCfun(angles = deg(c(mu1[which(full_ids %in% uv_ids)],
+                       mu2[which(full_ids %in% uv_ids)])),
+        col = col_kappa,
+        shrink = 2)
+)
+
+
+with(mu12_full_cmle$results['M5B',],
+arrows(x0 = 0,
+       y0 = 0,
+       x1 = sin(q1)*A1(k1),
+       y1 = cos(q1)*A1(k1),
+       col = col_kappa,
+       length = 0.1,
+       lwd = 5*lamda
+       )
+)
+with(mu12_full_cmle$results['M5B',],
+arrows(x0 = 0,
+       y0 = 0,
+       x1 = sin(q2)*A1(k2),
+       y1 = cos(q2)*A1(k2),
+       col = col_kappa,
+       length = 0.1,
+       lwd = 5*(1-lamda)
+       )
+)
 
 ```
-
-
 
 ## Set up formula and priors
 
@@ -734,7 +962,6 @@ Could make it explicit that mu1 is left and mu2 is right,
 would have to set wrap point at -pi/2
 
 `20260121` try enforcing pop theta
-
 ```{r Change formula}
 
 formula_change = bf(#modulus may not be necessary, included in lpd function
@@ -1232,10 +1459,8 @@ system.time(
                       stan_softkappamu,
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
-                   warmup = 500, #
-                   iter = 700, # longer sampling to efficiently sample mu0
-                   # warmup = 1000, #
-                   # iter = 3000, # longer sampling to efficiently sample mu0
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
                    refresh = 500,
                    control = list(adapt_delta = 0.9),
                    silent = 1, # echo only high priority Stan messages
@@ -1859,7 +2084,7 @@ axis(1)
 axis(2, at = 0:5)
 ```
 ```{r Summarise bimodal change estimates}
-par(mfrow = c(1,4))
+par(mfrow = c(1,2))
 #MLE 
 with(calc_bim_diff_par,
      VertHist(data = deg(absdeltamu),
@@ -1877,6 +2102,28 @@ VertHist(data = deg(abs(mod_circular(mu1_id_devchange - mu2_id_devchange))),
                col = adjustcolor(col_rho, alpha.f = 100/255),
               axes = FALSE)
 axis(1); axis(2, at = 0:6*(180/6))
+
+par(mfrow = c(1,3))
+
+#Both means 
+VertHist(data = deg(abs(c(mu1_id_devchange, mu2_id_devchange)) ),
+              breaks = 36,
+         ylim = c(0,180),
+              ylab = '[mean change]',
+              main = 'both means',
+              axes = FALSE)
+         
+with(draws_devchange,
+abline(h = 
+     deg(abs(mod_circular(
+       QCDraws(b_mu0_Intercept)
+       ) ) ),
+     lwd = c(0.5, 3, 0.5),
+     lty = c(3,2,3)
+      )
+)
+axis(1); axis(2, at = 0:6*(180/6))
+
 #Primary mean 
 VertHist(data = deg(abs(mu1_id_devchange)),
               breaks = 36,
