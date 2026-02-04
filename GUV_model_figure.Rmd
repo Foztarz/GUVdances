@@ -332,6 +332,7 @@ pr_uni = pr_mu_uni + pr_kappa_uni
 
 ## Run the model for individual deviations in bimodal change
 
+For all individuals, expect this to take around 2.5 hours!
 ```{r individual change model}
 
 #very long compile time
@@ -400,13 +401,9 @@ all estimates converged well ( $\hat{R}<1.01$).
 
 ```{r Convergence heuristics for the change model}
 
-sm_uni = summary(model_uni,
-                 variable = c('kappa', 
-                              'sd',
-                              'kappa_mu'),
-                regex = TRUE)
-print(sm_uni$fixed[c(1,5:6+20),], digits = 3)
-# print(sm_uni$fixed[c(1,4+length(u_id)),], digits = 3)
+sm_uni = summary(model_uni)
+# print(sm_uni$fixed[c(1,5:6+20),], digits = 3)
+print(sm_uni$fixed[c(1,5:6+length(u_id)),], digits = 3)
 print(sm_uni$random, digits = 3)
 print(sm_uni$spec_pars, digits = 3)
 
@@ -442,6 +439,7 @@ QCDraws = function(x,
 }
 ```
 
+**TODO add individual kappa effects**
 ```{r Plot the unimodal model}
 
 #green high
@@ -611,18 +609,66 @@ luc = sapply(u_id,
 #Most individuals that made it to bright green 
 full_ids = u_id[luc == 4]
 
+#find pair conditions
+#green
+grc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'g'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
+#bright
+brc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              brightn %in% 'h'),
+                     {
+                       length(unique(colour))
+                       }
+                     )
+              },
+              dt = cd)
+#UV
+uvc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'u'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
 
-mu_diff_gl = sapply(X = full_ids,
+#There should be two brightness levels for green
+gr_ids = u_id[grc == 2]
+#There should be two brightness levels for green
+br_ids = u_id[brc == 2]
+#There should be two brightness levels for UV
+uv_ids = u_id[uvc == 2]
+
+
+mu_diff_gl = sapply(X = gr_ids,
                     FUN = MuDiff,
                     dt = mean_vectors,
                     cl = 'g',
                     br = 'l')
-mu_diff_uh = sapply(X = full_ids,
+mu_diff_uh = sapply(X = br_ids,
                     FUN = MuDiff,
                     dt = mean_vectors,
                     cl = 'u',
                     br = 'h')
-mu_diff_ul = sapply(X = full_ids,
+mu_diff_ul = sapply(X = uv_ids,
                     FUN = MuDiff,
                     dt = mean_vectors,
                     cl = 'u',
@@ -633,6 +679,7 @@ mu_diff_ul = sapply(X = full_ids,
 ```{r Extract population level predictions}
 
 
+par(pty = 's')
 #Population mean for green bright
 par(mfrow = c(1,3),
     mar = c(0,0,0,0))
@@ -664,6 +711,14 @@ with(draws_uni,
      col = adjustcolor('green3', alpha.f = 200/255))
 )
 
+with(draws_uni,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
 #effect of UV
 PCfun(angles = unlist(mu_diff_uh),
       col = 'gray40',
@@ -687,6 +742,15 @@ with(draws_uni,
      col = adjustcolor('gray40', alpha.f = 200/255))
 )
 
+
+with(draws_uni,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_CLu), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
 #effect of dim green
 PCfun(angles = unlist(mu_diff_gl),
       col = 'darkgreen',
@@ -698,6 +762,14 @@ Draws2Cont(draws = draws_uni,
            y_string = 'cos(b_mu0_BRl)*
              A1(kappa_mu)'
            )
+
+with(draws_uni,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_BRl), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
 
 with(draws_uni,
      arrows.circular(x = circular(x = MedCDraws(b_mu0_BRl),
@@ -736,6 +808,17 @@ axis(1)
 axis(2, at = 0:5*5)
 
 with(draws_uni,
+     {
+       round(
+     quantile(softplus(Intercept_kappa + b_kappa_CLu) - 
+                softplus(Intercept_kappa),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+
+with(draws_uni,
      VertHist(data = softplus(Intercept_kappa + b_kappa_BRl), 
               main = '\ngreen dim',
               ylab = 'kappa',
@@ -745,6 +828,18 @@ with(draws_uni,
               cex.axis = 0.7))
 axis(1)
 axis(2, at = 0:5*5)
+
+
+with(draws_uni,
+     {
+       round(
+     quantile(softplus(Intercept_kappa + b_kappa_BRl) - 
+                softplus(Intercept_kappa),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
 
 ```
 
