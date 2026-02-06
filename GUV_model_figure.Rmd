@@ -678,7 +678,6 @@ mu_diff_ul = sapply(X = uv_ids,
 
 ```{r Extract population level predictions}
 
-
 par(pty = 's')
 #Population mean for green bright
 par(mfrow = c(1,3),
@@ -710,7 +709,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_Intercept)*
-             A1(kappa_mu)'
+             A1(kappa_mu)',
+           palette = 'Mint'
            )
 
 with(draws_uni,
@@ -760,7 +760,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_CLu)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_CLu)*
-             A1(kappa_mu)'
+             A1(kappa_mu)',
+           palette = 'Purp'
            )
 
 with(draws_uni,
@@ -806,7 +807,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_BRl)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_BRl)*
-             A1(kappa_mu)'
+             A1(kappa_mu)',
+           palette = 'YlGn'
            )
 
 with(draws_uni,
@@ -827,6 +829,7 @@ with(draws_uni,
      length = 0.1/1.25,
      col = adjustcolor('darkgreen', alpha.f = 200/255))
 )
+
 
 #plot kappa
 par(mfrow = c(1,3))
