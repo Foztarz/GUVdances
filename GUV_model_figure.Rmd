@@ -693,6 +693,19 @@ PCfun(angles = mu,
       plot_rho = FALSE)
      }
 )
+
+for(i in which(u_id %in% gr_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gh[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('green3', alpha.f = 100/255))
+}
 Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
@@ -719,11 +732,30 @@ with(draws_uni,
      }
 )
 
+  
+
+
 #effect of UV
 PCfun(angles = unlist(mu_diff_uh),
       col = 'gray40',
       shrink = 2,
       plot_rho = FALSE)
+
+for(i in which(u_id %in% uv_ids) )
+{
+   #UV high
+  
+  arrows.circular(x = circular(x = mu_id_uh[i] - mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uh[i]),
+                 lwd = 0.5,
+                 length = 0,
+                 col = adjustcolor('magenta3', alpha.f = 100/255))
+  
+}
+
 Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_CLu)*
              A1(kappa_mu)',
@@ -756,6 +788,20 @@ PCfun(angles = unlist(mu_diff_gl),
       col = 'darkgreen',
       shrink = 2,
       plot_rho = FALSE)
+
+#green low
+for(i in which(u_id %in% gr_ids))
+{
+  arrows.circular(x = circular(x = mu_id_gl[i] - mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gl[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('green4', alpha.f = 100/255))
+}
+
 Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_BRl)*
              A1(kappa_mu)',
@@ -864,6 +910,24 @@ formula_noBR = bf(#modulus may not be necessary, included in lpd function
   mu0 ~ 1 + CL , #population level effects
   mui ~ 0 + ID, # individual mu offset 
   kappa ~ 1 + CL + (1 + CL | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_KnoCL = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + BR , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + BR + CL + (1 + BR | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_KnoBR = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + CL , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + BR + CL + (1 + CL | ID), #concentration for primary mean
   family = unwrap_von_mises,
   nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
@@ -981,15 +1045,74 @@ save(file = '2Results/uninull_model.RData',
 
 ```
 
+```{r Kappa only models}
+
+#very long compile time
+system.time(
+  {
+    
+    model_KnoCL = brm(formula = formula_KnoCL,
+                     # data = subset(cd_uni, ID %in% u_id[1:20]),
+                   data = subset(cd_uni),
+                   prior = pr_uni,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/KnoCL_model.RData',
+     model_KnoCL)#save for future reference
+
+system.time(
+  {
+    
+    model_KnoBR = brm(formula = formula_KnoBR,
+                     # data = subset(cd_uni, ID %in% u_id[1:20]),
+                   data = subset(cd_uni),
+                   prior = pr_uni,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/KnoBR_model.RData',
+     model_KnoBR)#save for future reference
+
+```
+
 ## Unimodal LOO comparison
 ```{r Loo comparison for unimodal models}
 #collect models
 load(file = '2Results/uni_model.RData')#model_uni
 load(file = '2Results/noCL_model.RData')#model_noCL
 load(file = '2Results/noBR_model.RData')#model_noBR
+load(file = '2Results/KnoCL_model.RData')#model_KnoCL
+load(file = '2Results/KnoBR_model.RData')#model_KnoBR
 load(file = '2Results/uninull_model.RData')#model_null
 
 modlist = list(maximal = model_uni,
+               KnoCL = model_noCL,
+               KnoBR = model_noBR,
                noCL = model_noCL,
                noBR = model_noBR,
                null = model_null
@@ -1005,7 +1128,8 @@ save(modlist,
      file = '2Results/uni_modlist.RData')
 
 #compare all models
-with(modlist, loo_compare(maximal, noCL, noBR, null))
+lc_all = with(modlist, loo_compare(maximal, KnoCL, KnoBR, noCL, noBR, null))
+print(lc_all)
 #effect of UV bright
 with(modlist, loo_compare(maximal, noCL))
 #effect of green dim
@@ -1019,5 +1143,86 @@ LooIC = function(lmod)
 modLIC = lapply(X = modlist,
        FUN = LooIC)
 print(sort(unlist(modLIC)), digits = 1)
+
+```
+
+```{r Plot the model comparison}
+
+lc_plot = with(modlist,
+  data.frame(elpd = c(null$criteria$loo$estimates['elpd_loo','Estimate'],
+                      noBR$criteria$loo$estimates['elpd_loo','Estimate'],
+                      noCL$criteria$loo$estimates['elpd_loo','Estimate'],
+                      maximal$criteria$loo$estimates['elpd_loo','Estimate'],
+                      maximal$criteria$loo$estimates['elpd_loo','Estimate'] -
+                                  lc_all['noCL','elpd_diff']),
+                     se = c(null$criteria$loo$estimates['elpd_loo','SE'],
+                            noBR$criteria$loo$estimates['elpd_loo','SE'],
+                            noCL$criteria$loo$estimates['elpd_loo','SE'],
+                            maximal$criteria$loo$estimates['elpd_loo','SE'],
+                            lc_all['noCL','se_diff'])
+                     )
+)
+
+par(mar = c(0,4,0,4),
+    mfrow = c(1,1))
+plot(x = 1:dim(lc_plot)[1],
+     y = lc_plot$elpd,
+     xlab = '',
+     ylab = 'expected log predictive density',
+     xlim = c(1,dim(lc_plot)[1]) + c(-1,1)*0.5,
+     ylim = with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}), #within 2sigma of all estimates
+     pch = 19,
+     col = c(col_obs, col_kappa, col_treat, col_sd2, col_rho),
+     cex = 2,
+     axes = FALSE)
+with(lc_plot,
+     {
+arrows(x0 = 1:dim(lc_plot)[1],
+       x1 = 1:dim(lc_plot)[1],
+       y0 = elpd - se,
+       y1 = elpd + se,
+       code = 3,
+       angle = 90,
+       length = 0.1,
+       lwd = 3,
+       col =  c(col_obs, col_kappa, col_treat, col_sd2, col_rho)
+       )
+     }
+)
+axis(2,
+     at = pretty(c(0,
+                   with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}))
+                 )
+     )
+axis(4,
+     at = with(lc_plot,
+               {
+               seq(from = elpd[3], to = elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4, by = 20)
+               }
+               ),
+     labels = with(lc_plot,
+                          {
+                            seq(from = 0, to =  elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4 - elpd[3],  by = 20)
+                          }
+     ),
+     col = col_rho
+)
+abline(h = lc_plot$elpd[3],
+       col = 'gray')
+mtext(text = 'ELPD difference',
+      side = 4,
+      line = 3
+      )
+mtext(side = 1,
+      line = -1,
+      at = 1:dim(lc_plot)[1],
+     text = c('null\nmodel',
+              'no brightness',
+              'no colour',
+              'colour &\nbrightness',
+              'difference'),
+     col = c(col_obs, col_kappa, col_treat, col_sd2, col_rho)
+     )
+
 
 ```
