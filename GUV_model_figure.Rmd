@@ -1001,8 +1001,9 @@ with(draws_uni,
      length = 0.1/1.25,
      col = adjustcolor('darkgreen', alpha.f = 200/255))
 )
+```
 
-
+```{r Kappa effects}
 #plot kappa
 par(mfrow = c(1,3))
 
@@ -1061,6 +1062,46 @@ with(draws_uni,
        )
      }
 )
+
+```
+
+```{r Kappamu effects}
+#plot kappa
+par(mfrow = c(1,3))
+
+with(draws_uni,
+     VertHist(data = kappa_mu, 
+              main = '\ngreen bright',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('green3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_uni,
+     VertHist(data = kappa_muc, 
+              main = '\nUV effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('gray50', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_uni,
+     VertHist(data = kappa_mub, 
+              main = '\ndim effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('darkgreen', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
 
 ```
 
