@@ -479,7 +479,6 @@ QCDraws = function(x,
 }
 ```
 
-**TODO add individual kappa effects**
 ```{r Plot the unimodal model}
 
 #green high
@@ -499,8 +498,8 @@ draws_uni = as_draws_df(model_uni)
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,3) )
-# for(i in 1:length(u_id) )
-for(i in 1:20 )
+for(i in 1:length(u_id) )
+# for(i in 1:20 )
 {
   mu_name = paste0('b_mui_ID',u_id[i])
   mub_name = paste0('b_muib_B:ID',u_id[i])
@@ -713,6 +712,28 @@ br_ids = u_id[brc == 2]
 #There should be two brightness levels for UV
 uv_ids = u_id[uvc == 2]
 
+#condition specific
+gh_ids = with(subset(cd_uni,
+                     subset = CL %in% 'g' & 
+                       BR %in% 'h'),
+              unique(ID)
+              )
+uh_ids = with(subset(cd_uni,
+                     subset = CL %in% 'u' & 
+                       BR %in% 'h'),
+              unique(ID)
+              )
+gl_ids = with(subset(cd_uni,
+                     subset = CL %in% 'g' & 
+                       BR %in% 'l'),
+              unique(ID)
+              )
+ul_ids = with(subset(cd_uni,
+                     subset = CL %in% 'u' & 
+                       BR %in% 'l'),
+              unique(ID)
+              )
+
 
 mu_diff_gl = sapply(X = gr_ids,
                     FUN = MuDiff,
@@ -749,7 +770,7 @@ PCfun(angles = mu,
      }
 )
 
-for(i in which(u_id %in% gr_ids) )
+for(i in which(u_id %in% gh_ids) )
 {
 
   arrows.circular(x = circular(x = mu_id_gh[i],
@@ -765,8 +786,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_Intercept)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_Intercept)*
-             A1(kappa_mu)',
-           palette = 'Mint'
+             A1(kappa_mu)'#,
+           # palette = 'Mint'
            )
 
 with(draws_uni,
@@ -787,6 +808,101 @@ with(draws_uni,
        ))
      }
 )
+
+with(draws_uni,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+#pop mean for UV bright
+with(subset(mean_vectors,
+            colour %in% 'u' &
+              brightn %in% 'h'),
+     {
+PCfun(angles = mu,
+      col = 'magenta3',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% uh_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uh[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('magenta3', alpha.f = 100/255))
+}
+Draws2Cont(draws = draws_uni,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_CLu)*
+             A1(kappa_muc)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_CLu)*
+             A1(kappa_muc)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_uni,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_CLu),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_muc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('magenta3', alpha.f = 200/255))
+)
+
+
+#pop mean for green dim
+with(subset(mean_vectors,
+            colour %in% 'g' &
+              brightn %in% 'l'),
+     {
+PCfun(angles = mu,
+      col = 'darkgreen',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% gl_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gl[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('darkgreen', alpha.f = 100/255))
+}
+Draws2Cont(draws = draws_uni,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_BRl)*
+             A1(kappa_mub)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_BRl)*
+             A1(kappa_mub)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_uni,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_BRl),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mub)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
 
   
 
@@ -816,8 +932,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_CLu)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_CLu)*
-             A1(kappa_mu)',
-           palette = 'Purp'
+             A1(kappa_mu)'#,
+           # palette = 'Purp'
            )
 
 with(draws_uni,
@@ -863,8 +979,8 @@ Draws2Cont(draws = draws_uni,
            x_string = 'sin(b_mu0_BRl)*
              A1(kappa_mu)',
            y_string = 'cos(b_mu0_BRl)*
-             A1(kappa_mu)',
-           palette = 'YlGn'
+             A1(kappa_mu)'#,
+           # palette = 'YlGn'
            )
 
 with(draws_uni,
