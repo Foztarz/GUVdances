@@ -339,7 +339,7 @@ formula_uni = bf(#modulus may not be necessary, included in lpd function
 
 ```
 
-
+[kappa_sd T(3,0,2) -> T(3,0,1) ]
 ```{r Unimodal change priors}
 
 #priors for mu
