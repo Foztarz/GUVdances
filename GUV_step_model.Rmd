@@ -2257,6 +2257,98 @@ abline(h =
 
 ```
 
+## UV dim predictions
+
+```{r Plot UV dim predictions}
+#Add the population of biases
+# par(mfrow = c(1,3))
+# PCfun(angles = deg(calc_mu),
+#       col = col_rho,
+#       plot_rho = FALSE)
+
+mu_id_uvh_uv = mu_id_uvh[u_id %in% id_uv]
+par(pty = 's')
+with(calc_bim_diff_par,
+     {
+      PCfun(angles = deg(mu1) + mu_id_uvh_uv,
+            col = 'purple3',
+            plot_rho = FALSE)
+     }
+)
+# for(i in 1:20)#length(id_uv))
+for(i in 1:length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(-abs(mu1_id_devchange[i] + mu_id_uvh_uv[i]))*A1(kappa_id_devchange[i]),
+         y1 = cos(-abs(mu1_id_devchange[i] + mu_id_uvh_uv[i]))*A1(kappa_id_devchange[i]),
+         lwd = 0.5,
+         length = 0,
+         col = adjustcolor('darkred', alpha.f = 50/255)
+         )
+}
+# for(i in 1:20)#length(id_uv))
+for(i in 1:length(id_uv))
+{
+  arrows(x0 = 0,
+         y0 = 0,
+         x1 = sin(abs(mu2_id_devchange[i] + mu_id_uvh_uv[i]))*A1(kappa_id_devchange[i]),
+         y1 = cos(abs(mu2_id_devchange[i] + mu_id_uvh_uv[i]))*A1(kappa_id_devchange[i]),
+         lwd = 0.5,
+         length = 0,
+         col = adjustcolor('darkblue', alpha.f = 50/255)
+         )
+}
+# Draws2Cont(draws = within(draws_devchange, (b_mu0_Intercept = b_mu)
+#            x_string = 'sin(mod_circular(b_mu0_Intercept))*
+#              A1(kappa_mu)',
+#            y_string = 'cos(mod_circular(b_mu0_Intercept))*
+#              A1(kappa_mu)',
+#            palette = 'Red-Yellow'
+#            )
+# Draws2Cont(draws = draws_devchange,
+#            x_string = 'sin( -(mod_circular(b_mu0_Intercept)) )*
+#              A1(kappa_mu)',
+#            y_string = 'cos( -(mod_circular(b_mu0_Intercept)) )*
+#              A1(kappa_mu)',
+#            palette = 'Blue-Yellow'
+#            )
+#plot both modes
+draws_devchange = within(draws_devchange, 
+                        { mu0_uvh = draws_uvh$b_mu0_Intercept })
+Draws2Cont(draws = draws_devchange,
+           x_string = 'c(sin( -(mod_circular(b_mu0_Intercept))  + mu0_uvh)*
+             A1(kappa_mu),  sin( (mod_circular(b_mu0_Intercept)) + mu0_uvh )*
+             A1(kappa_mu) )',
+           y_string = 'c(cos( -(mod_circular(b_mu0_Intercept ))+ mu0_uvh )*
+             A1(kappa_mu),  cos( (mod_circular(b_mu0_Intercept )) + mu0_uvh)*
+             A1(kappa_mu) )',
+           cropc = TRUE
+           # ngrid = 1000 #needs a wider grid for values closer to edge
+           # palette = 'Blue-Yellow'
+           )
+
+with(draws_devchange,
+     arrows.circular(x = circular( MedCDraws(mod_circular(b_mu0_Intercept) + mu0_uvh),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255) )
+)
+with(draws_devchange,
+     arrows.circular(x = circular( MedCDraws(-mod_circular(b_mu0_Intercept) + mu0_uvh),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor(col_sd, alpha.f = 200/255) )
+)
+```
 
 # Joint model for bimodal change
 
