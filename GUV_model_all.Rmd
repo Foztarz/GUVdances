@@ -337,12 +337,12 @@ cd_all = within(cd_all,
 formula_all = bf(#modulus may not be necessary, included in lpd function
   formula = angle ~ mu,
   nlf(mu ~ mu0 + mui +muib +muic +muibc), #primary mean, population mean plus individual mean
-  mu0 ~ 1 + BR + CL + BR:CL, #population level effects
+  mu0 ~ 1 + B + C + BC, #population level effects
   mui ~ 0 + ID, # individual mu offset 
   muib ~ 0 + B:ID, # individual mu offset for brightness
   muic ~ 0 + C:ID, # individual mu offset for uv
   muibc ~ 0 + BC:ID, # individual mu offset for uv dim
-  kappa ~ 1 + BR + CL + BR:CL + (1 + BR + CL + BR:CL | ID), #concentration for primary mean
+  kappa ~ 1 + B + C + B:C + (1 + B + C + B:C | ID), #concentration for primary mean
   family = unwrap_von_mises,
   nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
@@ -374,7 +374,7 @@ pr_mu_all = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
 #priors for kappa
 pr_kappa_all = 
                   prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
-                  prior('student_t(3, 0, 2.0)', class = 'sd', dpar = 'kappa')
+                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'kappa')
 
   
 #all bimodal priors
@@ -391,8 +391,8 @@ system.time(
   {
     
     model_all = brm(formula = formula_all,
-                   data = subset(cd_all, ID %in% u_id[1:20]),
-                   # data = cd_all,
+                   # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = cd_all,
                    prior = pr_all,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -514,15 +514,18 @@ par(mar = c(0,0,0,0),
 # for(i in 1:length(u_id) )
 for(i in 1:20 )
 {
-  mu_name = paste0('b_mui_ID',u_id[i])
-  mub_name = paste0('b_muib_B:ID',u_id[i])
-  muc_name = paste0('b_muic_C:ID',u_id[i])
-  mubc_name = paste0('b_muibc_BC:ID',u_id[i])
-  kappa_name = paste0('r_ID__kappa[',u_id[i],',Intercept]')
-  kappab_name = paste0('r_ID__kappa[',u_id[i],',BRl]')
-  kappac_name = paste0('r_ID__kappa[',u_id[i],',CLu]')
-  kappabc_name = paste0('draws_all$`r_ID__kappa[',u_id[i],',BRl:CLu]`')
+  mu_name = as.name(paste0('b_mui_ID',u_id[i]))
+  mub_name =  as.name(paste0('b_muib_B:ID',u_id[i]))
+  muc_name =  as.name(paste0('b_muic_C:ID',u_id[i]))
+  mubc_name =  as.name(paste0('b_muibc_BC:ID',u_id[i]))
+  kappa_name =  as.name(paste0('r_ID__kappa[',u_id[i],',Intercept]'))
+  kappab_name =  as.name(paste0('r_ID__kappa[',u_id[i],',B]'))
+  kappac_name =  as.name(paste0('r_ID__kappa[',u_id[i],',C]'))
+  kappabc_name =  as.name(paste0('r_ID__kappa[',u_id[i],',BC]'))
   
+  #proxy for awkward names
+  # b_mu0_BRlClu_name = as.name("b_mu0_BRl:Clu")
+  # b_kappa_BRlCLu_name = as.name("b_kappa_BRl:CLu")
   
   #green high
   with(subset(cd_all, 
@@ -569,22 +572,22 @@ for(i in 1:20 )
   )
   Draws2Cont(draws_all,
              x_string = 'sin(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_CLu + get(muc_name))*
+                                   b_mu0_C + get(muc_name))*
                          A1(softplus(Intercept_kappa+get(kappa_name) +
-                                       b_kappa_CLu +get(kappac_name)))',
+                                       b_kappa_C +get(kappac_name)))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name) + 
-                                 b_mu0_CLu + get(muc_name))*
+                                 b_mu0_C + get(muc_name))*
                          A1(softplus(Intercept_kappa+get(kappa_name) +
-                                       b_kappa_CLu +get(kappac_name)))'
+                                       b_kappa_C +get(kappac_name)))'
              )
   mu_id_uh[i] = with(draws_all,
                       {
                         MedCDraws(b_mu0_Intercept + get(mu_name)  +
-                                      b_mu0_CLu + get(muc_name))
+                                      b_mu0_C + get(muc_name))
                       })
   kappa_id_uh[i] = with(draws_all,
                          {softplus(median(Intercept_kappa+get(kappa_name)+
-                                           b_kappa_CLu +get(kappac_name)))} )
+                                           b_kappa_C +get(kappac_name)))} )
   
   arrows.circular(x = circular(x = mu_id_uh[i],
                                units = 'radians',
@@ -608,22 +611,22 @@ for(i in 1:20 )
   )
   Draws2Cont(draws_all,
              x_string = 'sin(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_BRl + get(mub_name))*
+                                   b_mu0_B + get(mub_name))*
                          A1(softplus(Intercept_kappa +get(kappa_name)+
-                                           b_kappa_BRl +get(kappab_name)))',
+                                           b_kappa_B +get(kappab_name)))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_BRl + get(mub_name))*
+                                   b_mu0_B + get(mub_name))*
                          A1(softplus(Intercept_kappa+get(kappa_name)+
-                                           b_kappa_BRl +get(kappab_name)))'
+                                           b_kappa_B +get(kappab_name)))'
              )
   mu_id_gl[i] = with(draws_all,
                       {
                         MedCDraws(b_mu0_Intercept + get(mu_name) +
-                                        b_mu0_BRl + get(mub_name))
+                                        b_mu0_B + get(mub_name))
                       })
   kappa_id_gl[i] = with(draws_all,
                          {softplus(median(Intercept_kappa+get(kappa_name)+
-                                            b_kappa_BRl + get(kappab_name)))} )
+                                            b_kappa_B + get(kappab_name)))} )
   
   arrows.circular(x = circular(x = mu_id_gl[i],
                                units = 'radians',
@@ -647,27 +650,27 @@ for(i in 1:20 )
   )
   Draws2Cont(draws_all,
              x_string = 'sin(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_BRl + b_mu0_CLu + draws_all$`b_mu0_BRl:Clu` +
+                                   b_mu0_B + b_mu0_C + b_mu0_BC +
                                    get(mub_name) + get(muc_name) + get(mubc_name))*
                          A1(softplus(Intercept_kappa +get(kappa_name)+
-                                   b_kappa_BRl + b_kappa_CLu + draws_all$`b_kappa_BRl:CLu` +
+                                   b_kappa_B + b_kappa_C + b_kappa_BC +
                                    get(kappab_name) + get(kappac_name) + get(kappabc_name) ))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_BRl + b_mu0_CLu + draws_all$`b_mu0_BRl:Clu` +
+                                   b_mu0_B + b_mu0_C + b_mu0_BC +
                                    get(mub_name) + get(muc_name) + get(mubc_name))*
                          A1(softplus(Intercept_kappa +get(kappa_name)+
-                                   b_kappa_BRl + b_kappa_CLu + draws_all$`b_kappa_BRl:CLu` +
+                                   b_kappa_B + b_kappa_C + b_kappa_BC +
                                    get(kappab_name) + get(kappac_name) + get(kappabc_name) ))'
              )
   mu_id_ul[i] = with(draws_all,
                       {
                         MedCDraws(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_BRl + b_mu0_CLu + draws_all$`b_mu0_BRl:Clu` +
+                                   b_mu0_B + b_mu0_C + b_mu0_BC +
                                    get(mub_name) + get(muc_name) + get(mubc_name))
                       })
   kappa_id_ul[i] = with(draws_all,
                          {softplus(median(Intercept_kappa +get(kappa_name)+
-                                   b_kappa_BRl + b_kappa_CLu + draws_all$`b_kappa_BRl:CLu` +
+                                   b_kappa_B + b_kappa_C + b_kappa_BC_name +
                                    get(kappab_name) + get(kappac_name) + get(kappabc_name)))} )
   
   arrows.circular(x = circular(x = mu_id_ul[i],
@@ -922,15 +925,15 @@ for(i in which(u_id %in% uh_ids) )
                  col = adjustcolor('magenta3', alpha.f = 100/255))
 }
 Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept + b_mu0_CLu)*
+           x_string = 'sin(b_mu0_Intercept + b_mu0_C)*
              A1(kappa_muc)',
-           y_string = 'cos(b_mu0_Intercept + b_mu0_CLu)*
+           y_string = 'cos(b_mu0_Intercept + b_mu0_C)*
              A1(kappa_muc)'#,
            # palette = 'Mint'
            )
 
 with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_CLu),
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_C),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2),
@@ -966,15 +969,15 @@ for(i in which(u_id %in% gl_ids) )
                  col = adjustcolor('darkgreen', alpha.f = 100/255))
 }
 Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept + b_mu0_BRl)*
+           x_string = 'sin(b_mu0_Intercept + b_mu0_B)*
              A1(kappa_mub)',
-           y_string = 'cos(b_mu0_Intercept + b_mu0_BRl)*
+           y_string = 'cos(b_mu0_Intercept + b_mu0_B)*
              A1(kappa_mub)'#,
            # palette = 'Mint'
            )
 
 with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_BRl),
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2),
@@ -1010,15 +1013,15 @@ for(i in which(u_id %in% uv_ids) )
 }
 
 Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_CLu)*
+           x_string = 'sin(b_mu0_C)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_CLu)*
+           y_string = 'cos(b_mu0_C)*
              A1(kappa_mu)'#,
            # palette = 'Purp'
            )
 
 with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_CLu),
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_C),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2),
@@ -1032,7 +1035,7 @@ with(draws_all,
 with(draws_all,
      {
        round(deg(
-     quantile(mod_circular(b_mu0_CLu), probs = c(0.5, 0.025, 0.975))
+     quantile(mod_circular(b_mu0_C), probs = c(0.5, 0.025, 0.975))
        ))
      }
 )
@@ -1057,9 +1060,9 @@ for(i in which(u_id %in% gr_ids))
 }
 
 Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_BRl)*
+           x_string = 'sin(b_mu0_B)*
              A1(kappa_mu)',
-           y_string = 'cos(b_mu0_BRl)*
+           y_string = 'cos(b_mu0_B)*
              A1(kappa_mu)'#,
            # palette = 'YlGn'
            )
@@ -1067,13 +1070,13 @@ Draws2Cont(draws = draws_all,
 with(draws_all,
      {
        round(deg(
-     quantile(mod_circular(b_mu0_BRl), probs = c(0.5, 0.025, 0.975))
+     quantile(mod_circular(b_mu0_B), probs = c(0.5, 0.025, 0.975))
        ))
      }
 )
 
 with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_BRl),
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_B),
                                                   units = 'radians',
                                                   rotation = 'clock',
                                                   zero = pi/2),
@@ -1100,7 +1103,7 @@ axis(1)
 axis(2, at = 0:5*5)
 
 with(draws_all,
-     VertHist(data = softplus(Intercept_kappa + b_kappa_CLu), 
+     VertHist(data = softplus(Intercept_kappa + b_kappa_C), 
               main = '\nUV bright',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -1113,7 +1116,7 @@ axis(2, at = 0:5*5)
 with(draws_all,
      {
        round(
-     quantile(softplus(Intercept_kappa + b_kappa_CLu) - 
+     quantile(softplus(Intercept_kappa + b_kappa_C) - 
                 softplus(Intercept_kappa),
               probs = c(0.5, 0.025, 0.975)),
      digits = 2
@@ -1122,7 +1125,7 @@ with(draws_all,
 )
 
 with(draws_all,
-     VertHist(data = softplus(Intercept_kappa + b_kappa_BRl), 
+     VertHist(data = softplus(Intercept_kappa + b_kappa_B), 
               main = '\ngreen dim',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -1136,7 +1139,7 @@ axis(2, at = 0:5*5)
 with(draws_all,
      {
        round(
-     quantile(softplus(Intercept_kappa + b_kappa_BRl) - 
+     quantile(softplus(Intercept_kappa + b_kappa_B) - 
                 softplus(Intercept_kappa),
               probs = c(0.5, 0.025, 0.975)),
      digits = 2
