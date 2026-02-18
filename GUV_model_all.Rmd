@@ -342,17 +342,18 @@ formula_all = bf(#modulus may not be necessary, included in lpd function
   muib ~ 0 + B:ID, # individual mu offset for brightness
   muic ~ 0 + C:ID, # individual mu offset for uv
   muibc ~ 0 + BC:ID, # individual mu offset for uv dim
-  kappa ~ 1 + B + C + B:C + (1 + B + C + B:C | ID), #concentration for primary mean
+  kappa ~ 1 + B + C + BC + (1 + B + C + BC | ID), #concentration for primary mean
   family = unwrap_von_mises,
   nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
 
 ```
 
-[kappa_sd T(3,0,2) -> T(3,0,1) ]
+kappa_sd T(3,0,2) -> T(3,0,1) 
+[mu0_Intercept N(0,pi) -> N(0,pi/2)] : there is a lot of data on this but seems low gradient
 ```{r Unimodal change priors}
 
 #priors for mu
-pr_mu_all = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+pr_mu_all = prior('normal(0, pi()/2)', coef = 'Intercept', nlpar = 'mu0') +
                   prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
@@ -506,6 +507,10 @@ kappa_id_uh = rep(NA, length(u_id))
 mu_id_gl = rep(NA, length(u_id))
 kappa_id_gl = rep(NA, length(u_id))
 
+#UV dim
+mu_id_ul = rep(NA, length(u_id))
+kappa_id_ul = rep(NA, length(u_id))
+
 draws_all = as_draws_df(model_all)
 
 par(pty = 's')
@@ -654,13 +659,15 @@ for(i in 1:20 )
                                    get(mub_name) + get(muc_name) + get(mubc_name))*
                          A1(softplus(Intercept_kappa +get(kappa_name)+
                                    b_kappa_B + b_kappa_C + b_kappa_BC +
-                                   get(kappab_name) + get(kappac_name) + get(kappabc_name) ))',
+                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)
+             ))',
              y_string = 'cos(b_mu0_Intercept + get(mu_name) + 
                                    b_mu0_B + b_mu0_C + b_mu0_BC +
                                    get(mub_name) + get(muc_name) + get(mubc_name))*
                          A1(softplus(Intercept_kappa +get(kappa_name)+
                                    b_kappa_B + b_kappa_C + b_kappa_BC +
-                                   get(kappab_name) + get(kappac_name) + get(kappabc_name) ))'
+                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)
+             ))'
              )
   mu_id_ul[i] = with(draws_all,
                       {
@@ -670,8 +677,9 @@ for(i in 1:20 )
                       })
   kappa_id_ul[i] = with(draws_all,
                          {softplus(median(Intercept_kappa +get(kappa_name)+
-                                   b_kappa_B + b_kappa_C + b_kappa_BC_name +
-                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)))} )
+                                   b_kappa_B + b_kappa_C + b_kappa_BC +
+                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)
+                                   ))} )
   
   arrows.circular(x = circular(x = mu_id_ul[i],
                                units = 'radians',
@@ -831,9 +839,10 @@ mu_diff_ul = sapply(X = uv_ids,
 mu_diff_ugl = sapply(X = di_ids,
                     FUN = MuDiff,
                     dt = mean_vectors,
-                    cl = 'u',
+                     cl = 'u',
                     br = 'l',
-                    ref_br = 'l')
+                    ref_cl = 'g',
+                    ref_br = 'h')
 
 ```
 
@@ -841,7 +850,7 @@ mu_diff_ugl = sapply(X = di_ids,
 
 par(pty = 's')
 #Population mean for green bright
-par(mfrow = c(1,3),
+par(mfrow = c(1,4),
     mar = c(0,0,0,0))
 with(subset(mean_vectors,
             colour %in% 'g' &
@@ -987,6 +996,49 @@ with(draws_all,
      col = adjustcolor('darkgreen', alpha.f = 200/255))
 )
 
+#pop mean for UV dim
+with(subset(mean_vectors,
+            colour %in% 'u' &
+              brightn %in% 'l'),
+     {
+PCfun(angles = mu,
+      col = 'purple',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% ul_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_ul[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('purple', alpha.f = 100/255))
+}
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('purple', alpha.f = 200/255))
+)
+
 
   
 
@@ -1014,9 +1066,9 @@ for(i in which(u_id %in% uv_ids) )
 
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_C)*
-             A1(kappa_mu)',
+             A1(kappa_muc)',
            y_string = 'cos(b_mu0_C)*
-             A1(kappa_mu)'#,
+             A1(kappa_muc)'#,
            # palette = 'Purp'
            )
 
@@ -1061,9 +1113,9 @@ for(i in which(u_id %in% gr_ids))
 
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_B)*
-             A1(kappa_mu)',
+             A1(kappa_mub)',
            y_string = 'cos(b_mu0_B)*
-             A1(kappa_mu)'#,
+             A1(kappa_mub)'#,
            # palette = 'YlGn'
            )
 
@@ -1084,6 +1136,98 @@ with(draws_all,
      lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
+#effect of dim UV
+PCfun(angles = unlist(mu_diff_ul),
+      col = 'purple',
+      shrink = 2,
+      plot_rho = FALSE)
+
+#UV low
+for(i in which(u_id %in% uv_ids))
+{
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('purple', alpha.f = 100/255))
+}
+#the difference between UV bright and UV dim is brightness and the interaction
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_B + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_B + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'YlGn'
+           )
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_B + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_B + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('purple', alpha.f = 200/255))
+)
+
+#effect of dim UV relative to dim green
+PCfun(angles = unlist(mu_diff_ugl),
+      col = 'gray25',
+      shrink = 2,
+      plot_rho = FALSE)
+
+#UV low
+for(i in which(u_id %in% di_ids))
+{
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('gray25', alpha.f = 100/255))
+}
+#the difference between green dim and UV dim is colour and the interaction
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'YlGn'
+           )
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_C + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_C + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray25', alpha.f = 200/255))
 )
 ```
 
