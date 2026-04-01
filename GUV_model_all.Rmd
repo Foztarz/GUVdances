@@ -75,6 +75,16 @@ Implicitly adaptive importance sampling.
 *Statistics and Computing* 31, 16.
 <doi:10.1007/s11222-020-09982-2>.
 
+# To Do
+- Achieve mu0 convergence with very informative prior
+- Extract individual differences in heading +
+  - Separate individual calculations from plotting +
+- Plot model predictions
+- Plot model contrasts
+- Fit bimodality to contrasts
+- Make plot
+- Make hmtl
+
 # Motivation
 
 
@@ -349,11 +359,13 @@ formula_all = bf(#modulus may not be necessary, included in lpd function
 ```
 
 kappa_sd T(3,0,2) -> T(3,0,1) 
-[mu0_Intercept N(0,pi) -> N(0,pi/2)] : there is a lot of data on this but seems low gradient
+mu0_Intercept N(0,pi) -> N(0,pi/2) : there is a lot of data on this but seems low gradient
+mu0_Intercept N(0,pi/2) -> N(0,pi/6) : most chains around 15° but drift, tighten
+b_kappa (flat) -> N(0,1) : avoid extremely low kappa for conditions!
 ```{r Unimodal change priors}
 
 #priors for mu
-pr_mu_all = prior('normal(0, pi()/2)', coef = 'Intercept', nlpar = 'mu0') +
+pr_mu_all = prior('normal(0, pi()/6)', coef = 'Intercept', nlpar = 'mu0') +
                   prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
@@ -375,6 +387,7 @@ pr_mu_all = prior('normal(0, pi()/2)', coef = 'Intercept', nlpar = 'mu0') +
 #priors for kappa
 pr_kappa_all = 
                   prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
+                  prior('normal(0,1)', class = 'b', dpar = 'kappa') +
                   prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'kappa')
 
   
@@ -392,8 +405,8 @@ system.time(
   {
     
     model_all = brm(formula = formula_all,
-                   # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = cd_all,
+                   data = subset(cd_all, ID %in% u_id[20+1:50]), #target some balanced cases
+                   # data = cd_all,
                    prior = pr_all,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -413,7 +426,7 @@ system.time(
     
   }
 )
-save(file = '2Results/all_model.RData',
+save(file = '2Results/all_model-test.RData',
      model_all)#save for future reference
 
 ```
@@ -425,11 +438,12 @@ This model identifies both a population level bias (near 0°) and individual bia
  with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
  
 ```{r Inspect unimodal change model}
-load(file = '2Results/all_model.RData')
+load(file = '2Results/all_model-test.RData')
 #population kappa and its standard deviation
 plot(model_all,
       ask = FALSE,
-      variable = c('kappa_Intercept', 'kappa_mu'),
+      variable = c('b_kappa_Intercept','b_kappa_B', 'b_kappa_C', 'kappa_mu'),
+      nvariables = 4,
       regex = TRUE) #plot raw estimates
 #population directional bias
 plot(model_all,
@@ -474,8 +488,8 @@ summary(UnwrapRhats(model_all,
 
 #A function to find the circular median in (-pi, pi)
 MedCDraws = function(x,
-                     templ = 'none',
-                     medn = 1)
+                     templ = 'none', #assumes radians
+                     medn = 1) #take the 1st median
 {
   median.circular( circular(x = mod_circular(x),
                             template = templ)
@@ -493,7 +507,9 @@ QCDraws = function(x,
 }
 ```
 
-```{r Plot the unimodal model}
+```{r Extract individual predictions}
+
+draws_all = as_draws_df(model_all)
 
 #green high
 mu_id_gh = rep(NA, length(u_id))
@@ -511,13 +527,70 @@ kappa_id_gl = rep(NA, length(u_id))
 mu_id_ul = rep(NA, length(u_id))
 kappa_id_ul = rep(NA, length(u_id))
 
-draws_all = as_draws_df(model_all)
+# for(i in 1:length(u_id) )
+for(i in 20+1:50 )
+{
+  mu_name = as.name(paste0('b_mui_ID',u_id[i]))
+  mub_name =  as.name(paste0('b_muib_B:ID',u_id[i]))
+  muc_name =  as.name(paste0('b_muic_C:ID',u_id[i]))
+  mubc_name =  as.name(paste0('b_muibc_BC:ID',u_id[i]))
+  kappa_name =  as.name(paste0('r_ID__kappa[',u_id[i],',Intercept]'))
+  kappab_name =  as.name(paste0('r_ID__kappa[',u_id[i],',B]'))
+  kappac_name =  as.name(paste0('r_ID__kappa[',u_id[i],',C]'))
+  kappabc_name =  as.name(paste0('r_ID__kappa[',u_id[i],',BC]'))
+  
+  #green high
+  mu_id_gh[i] = with(draws_all,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name))
+                      })
+  kappa_id_gh[i] = with(draws_all,
+                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
+  
+  #UV high
+  mu_id_uh[i] = with(draws_all,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name)  +
+                                      b_mu0_C + get(muc_name))
+                      })
+  kappa_id_uh[i] = with(draws_all,
+                         {softplus(median(Intercept_kappa+get(kappa_name)+
+                                           b_kappa_C +get(kappac_name)))} )
+  #green low
+  mu_id_gl[i] = with(draws_all,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name) +
+                                        b_mu0_B + get(mub_name))
+                      })
+  kappa_id_gl[i] = with(draws_all,
+                         {softplus(median(Intercept_kappa+get(kappa_name)+
+                                            b_kappa_B + get(kappab_name)))} )
+
+  #UV low
+  mu_id_ul[i] = with(draws_all,
+                      {
+                        MedCDraws(b_mu0_Intercept + get(mu_name) + 
+                                   b_mu0_B + b_mu0_C + b_mu0_BC +
+                                   get(mub_name) + get(muc_name) + get(mubc_name))
+                      })
+  kappa_id_ul[i] = with(draws_all,
+                         {softplus(median(Intercept_kappa +get(kappa_name)+
+                                   b_kappa_B + b_kappa_C + b_kappa_BC +
+                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)
+                                   ))} )
+}
+
+```
+
+```{r Plot the unimodal model}
+
+
 
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,4) )
 # for(i in 1:length(u_id) )
-for(i in 1:20 )
+for(i in 20+1:50 )
 {
   mu_name = as.name(paste0('b_mui_ID',u_id[i]))
   mub_name =  as.name(paste0('b_muib_B:ID',u_id[i]))
@@ -549,13 +622,6 @@ for(i in 1:20 )
              y_string = 'cos(b_mu0_Intercept + get(mu_name))*
                          A1(softplus(Intercept_kappa+get(kappa_name)))'
              )
-  mu_id_gh[i] = with(draws_all,
-                      {
-                        MedCDraws(b_mu0_Intercept + get(mu_name))
-                      })
-  kappa_id_gh[i] = with(draws_all,
-                         {softplus(median(Intercept_kappa+get(kappa_name)))} )
-  
   arrows.circular(x = circular(x = mu_id_gh[i],
                                units = 'radians',
                               rotation = 'clock',
@@ -585,20 +651,11 @@ for(i in 1:20 )
                          A1(softplus(Intercept_kappa+get(kappa_name) +
                                        b_kappa_C +get(kappac_name)))'
              )
-  mu_id_uh[i] = with(draws_all,
-                      {
-                        MedCDraws(b_mu0_Intercept + get(mu_name)  +
-                                      b_mu0_C + get(muc_name))
-                      })
-  kappa_id_uh[i] = with(draws_all,
-                         {softplus(median(Intercept_kappa+get(kappa_name)+
-                                           b_kappa_C +get(kappac_name)))} )
-  
   arrows.circular(x = circular(x = mu_id_uh[i],
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_gh[i]),
+                 y = A1(kappa_id_uh[i]),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('magenta3', alpha.f = 200/255))
@@ -624,20 +681,11 @@ for(i in 1:20 )
                          A1(softplus(Intercept_kappa+get(kappa_name)+
                                            b_kappa_B +get(kappab_name)))'
              )
-  mu_id_gl[i] = with(draws_all,
-                      {
-                        MedCDraws(b_mu0_Intercept + get(mu_name) +
-                                        b_mu0_B + get(mub_name))
-                      })
-  kappa_id_gl[i] = with(draws_all,
-                         {softplus(median(Intercept_kappa+get(kappa_name)+
-                                            b_kappa_B + get(kappab_name)))} )
-  
   arrows.circular(x = circular(x = mu_id_gl[i],
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_gh[i]),
+                 y = A1(kappa_id_gl[i]),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('green4', alpha.f = 200/255))
@@ -669,23 +717,11 @@ for(i in 1:20 )
                                    get(kappab_name) + get(kappac_name) + get(kappabc_name)
              ))'
              )
-  mu_id_ul[i] = with(draws_all,
-                      {
-                        MedCDraws(b_mu0_Intercept + get(mu_name) + 
-                                   b_mu0_B + b_mu0_C + b_mu0_BC +
-                                   get(mub_name) + get(muc_name) + get(mubc_name))
-                      })
-  kappa_id_ul[i] = with(draws_all,
-                         {softplus(median(Intercept_kappa +get(kappa_name)+
-                                   b_kappa_B + b_kappa_C + b_kappa_BC +
-                                   get(kappab_name) + get(kappac_name) + get(kappabc_name)
-                                   ))} )
-  
   arrows.circular(x = circular(x = mu_id_ul[i],
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_gh[i]),
+                 y = A1(kappa_id_ul[i]),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('purple', alpha.f = 200/255))
@@ -873,7 +909,7 @@ for(i in which(u_id %in% gh_ids) )
                  y = A1(kappa_id_gh[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('green3', alpha.f = 100/255))
+                 col = adjustcolor('green3', alpha.f = 200/255))
 }
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_Intercept)*
@@ -931,7 +967,7 @@ for(i in which(u_id %in% uh_ids) )
                  y = A1(kappa_id_uh[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('magenta3', alpha.f = 100/255))
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
 }
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_Intercept + b_mu0_C)*
@@ -975,7 +1011,7 @@ for(i in which(u_id %in% gl_ids) )
                  y = A1(kappa_id_gl[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('darkgreen', alpha.f = 100/255))
+                 col = adjustcolor('darkgreen', alpha.f = 200/255))
 }
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_Intercept + b_mu0_B)*
@@ -1018,7 +1054,7 @@ for(i in which(u_id %in% ul_ids) )
                  y = A1(kappa_id_ul[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('purple', alpha.f = 100/255))
+                 col = adjustcolor('purple', alpha.f = 200/255))
 }
 Draws2Cont(draws = draws_all,
            x_string = 'sin(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
@@ -1060,7 +1096,7 @@ for(i in which(u_id %in% uv_ids) )
                  y = A1(kappa_id_uh[i]),
                  lwd = 0.5,
                  length = 0,
-                 col = adjustcolor('magenta3', alpha.f = 100/255))
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
   
 }
 
@@ -1108,7 +1144,7 @@ for(i in which(u_id %in% gr_ids))
                  y = A1(kappa_id_gl[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('green4', alpha.f = 100/255))
+                 col = adjustcolor('green4', alpha.f = 200/255))
 }
 
 Draws2Cont(draws = draws_all,
@@ -1154,7 +1190,7 @@ for(i in which(u_id %in% uv_ids))
                  y = A1(kappa_id_ul[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('purple', alpha.f = 100/255))
+                 col = adjustcolor('purple', alpha.f = 200/255))
 }
 #the difference between UV bright and UV dim is brightness and the interaction
 Draws2Cont(draws = draws_all,
@@ -1200,7 +1236,7 @@ for(i in which(u_id %in% di_ids))
                  y = A1(kappa_id_ul[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('gray25', alpha.f = 100/255))
+                 col = adjustcolor('gray25', alpha.f = 200/255))
 }
 #the difference between green dim and UV dim is colour and the interaction
 Draws2Cont(draws = draws_all,
@@ -1233,7 +1269,7 @@ with(draws_all,
 
 ```{r Kappa effects}
 #plot kappa
-par(mfrow = c(1,3))
+par(mfrow = c(1,4))
 
 with(draws_all,
      VertHist(data = softplus(Intercept_kappa), 
@@ -1279,6 +1315,17 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
+with(draws_all,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_B  + b_kappa_C +  + b_kappa_BC), 
+              main = '\nUV dim',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
 
 with(draws_all,
      {
@@ -1295,7 +1342,7 @@ with(draws_all,
 
 ```{r Kappamu effects}
 #plot kappa
-par(mfrow = c(1,3))
+par(mfrow = c(1,4))
 
 with(draws_all,
      VertHist(data = kappa_mu, 
@@ -1330,6 +1377,55 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
+with(draws_all,
+     VertHist(data = kappa_mubc, 
+              main = '\ndim uv effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+#change in effect concentration
+par(mfrow = c(1,3))
+
+with(draws_all,
+     VertHist(data = softkappamuc, 
+              main = '\nUV effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('gray50', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
+
+with(draws_all,
+     VertHist(data = softkappamub, 
+              main = '\ndim effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('darkgreen', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
+
+with(draws_all,
+     VertHist(data = kappa_mubc, 
+              main = '\ndim uv effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
 
 ```
 
