@@ -79,8 +79,8 @@ Implicitly adaptive importance sampling.
 - Achieve mu0 convergence with very informative prior
 - Extract individual differences in heading +
   - Separate individual calculations from plotting +
-- Plot model predictions
-- Plot model contrasts
+- Plot model predictions +
+- Plot model contrasts +
 - Fit bimodality to contrasts
 - Make plot
 - Make hmtl
@@ -405,8 +405,8 @@ system.time(
   {
     
     model_all = brm(formula = formula_all,
-                   data = subset(cd_all, ID %in% u_id[20+1:50]), #target some balanced cases
-                   # data = cd_all,
+                   # data = subset(cd_all, ID %in% u_id[20+1:50]), #target some balanced cases
+                   data = cd_all,
                    prior = pr_all,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -426,7 +426,7 @@ system.time(
     
   }
 )
-save(file = '2Results/all_model-test.RData',
+save(file = '2Results/all_model.RData',
      model_all)#save for future reference
 
 ```
@@ -438,7 +438,7 @@ This model identifies both a population level bias (near 0°) and individual bia
  with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
  
 ```{r Inspect unimodal change model}
-load(file = '2Results/all_model-test.RData')
+load(file = '2Results/all_model.RData')
 #population kappa and its standard deviation
 plot(model_all,
       ask = FALSE,
@@ -527,8 +527,8 @@ kappa_id_gl = rep(NA, length(u_id))
 mu_id_ul = rep(NA, length(u_id))
 kappa_id_ul = rep(NA, length(u_id))
 
-# for(i in 1:length(u_id) )
-for(i in 20+1:50 )
+for(i in 1:length(u_id) )
+# for(i in 20+1:50 )
 {
   mu_name = as.name(paste0('b_mui_ID',u_id[i]))
   mub_name =  as.name(paste0('b_muib_B:ID',u_id[i]))
@@ -589,8 +589,8 @@ for(i in 20+1:50 )
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,4) )
-# for(i in 1:length(u_id) )
-for(i in 20+1:50 )
+for(i in 1:length(u_id) )
+# for(i in 20+1:50 )
 {
   mu_name = as.name(paste0('b_mui_ID',u_id[i]))
   mub_name =  as.name(paste0('b_muib_B:ID',u_id[i]))
@@ -1433,7 +1433,7 @@ abline(h = 0, lty = 3)
 ## Set up formula and priors
 
 
-```{r Unimodal change formula}
+```{r Formulas for model reduction}
 
 formula_noCL = bf(#modulus may not be necessary, included in lpd function
   formula = angle ~ mu,
