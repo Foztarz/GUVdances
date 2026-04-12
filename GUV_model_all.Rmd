@@ -362,14 +362,25 @@ kappa_sd T(3,0,2) -> T(3,0,1)
 mu0_Intercept N(0,pi) -> N(0,pi/2) : there is a lot of data on this but seems low gradient
 mu0_Intercept N(0,pi/2) -> N(0,pi/6) : most chains around 15° but drift, tighten
 b_kappa (flat) -> N(0,1) : avoid extremely low kappa for conditions!
+b=sd_kappa T(3,0,1.0) -> T(3,0,0.5) : avoid extremely low kappa for conditions!
+mu0_Intercept N(0,pi/6) -> N(0,pi/12) : worse mu0, weaken softkappamu prior
+mu0_Intercept N(0,pi/12) -> N(0,pi/2)
+softkappamu LN(log(30), 0.6) -> LN(log(10), 0.6)
+mu0_Intercept N(0,pi/2) -> N(0,pi/4)
+sd_kappa T(3,0,1.0) -> T(3,0,0.5) : avoid extremely low kappa for conditions
+sd_kappa T(3,0,1.0) -> T(3,0,1.0) : to allow some gradient
+b sd_kappa T(3,0,0.5) -> T(3,0,0.5)
+b sd_kappa T(3,0,0.5) -> T(3,0,0.7) : to allow some gradient
+b sd_kappa  T(3,0,0.7) -> T(3,0,0.3) 
+Intercept sd_kappa  T(3,0,1.0) -> T(3,0,0.5) 
 ```{r Unimodal change priors}
 
 #priors for mu
-pr_mu_all = prior('normal(0, pi()/6)', coef = 'Intercept', nlpar = 'mu0') +
+pr_mu_all = prior('normal(0, pi()/2)', coef = 'Intercept', nlpar = 'mu0') +
                   prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(10), 0.6)", #expect high concentration (low variation) 
                       check = FALSE)  +
   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamub))',
                         nlpar  = 'muib',  class = 'b') +
@@ -387,8 +398,11 @@ pr_mu_all = prior('normal(0, pi()/6)', coef = 'Intercept', nlpar = 'mu0') +
 #priors for kappa
 pr_kappa_all = 
                   prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
-                  prior('normal(0,1)', class = 'b', dpar = 'kappa') +
-                  prior('student_t(3, 0, 1.0)', class = 'sd', dpar = 'kappa')
+                  prior('normal(0,1)', class = 'b', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'kappa')
+                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'B', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'C', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'BC', dpar = 'kappa')
 
   
 #all bimodal priors
@@ -419,7 +433,7 @@ system.time(
                    warmup = 1000, #
                    iter = 3000, # longer sampling to efficiently sample mu0
                    refresh = 500,
-                   control = list(adapt_delta = 0.90),
+                   control = list(adapt_delta = 0.95),
                    silent = 1, # echo only high priority Stan messages
                    save_pars = save_pars(all = TRUE), # Crucial for moment matching
                    backend = 'cmdstanr')
@@ -442,7 +456,7 @@ load(file = '2Results/all_model.RData')
 #population kappa and its standard deviation
 plot(model_all,
       ask = FALSE,
-      variable = c('b_kappa_Intercept','b_kappa_B', 'b_kappa_C', 'kappa_mu'),
+      variable = c('b_kappa_Intercept','b_kappa_B', 'b_kappa_C', 'kappa_mu', 'sd_ID__kappa'),
       nvariables = 4,
       regex = TRUE) #plot raw estimates
 #population directional bias
