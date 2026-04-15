@@ -47,8 +47,17 @@ editor_options:
 
 > **TODO**
 >
-> -   move necessary functions to GUV_functions
-> -   neaten up priors for BRMS models
+> -   <div>
+>
+>     > move necessary functions to GUV_functions
+>
+>     </div>
+>
+> -   <div>
+>
+>     > neaten up priors for BRMS models
+>
+>     </div>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -134,59 +143,16 @@ summary(mruns$run)
 For example we can look at the dance recorded on 2016.06.20 at 13:17.
 
 ```{r, example from 2016.06.20.13.17}
-ii = '2016.06.20.13.17'
-#set up a sequence for the axes
-xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
 par(pty = 's')
 par(mfrow = c(1,1), mar = c(0,0,0,0))
-mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
-mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
-mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
-mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
-plot(x = NULL,
-     xlim = 100*c(-1,1),
-     ylim = 100*c(-1,1),
-     pch = 19,
-     axes = FALSE,
-     xlab = '',
-     ylab = '',
-     main = ''
-     )
-abline(a = 0, b = 1, col = 'gray90')
-abline(a = 0, b = -1, col = 'gray90')
-abline(h = 0, v = 0, col = 'gray75')
-lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
-lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
-lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
-text(x = 1:3*20,
-     y = c(0,0,0),
-     labels = paste(' run', 1:3*20), 
-     cex = 0.7,
-     adj = c(1,0))
-with(subset(cd, ID %in% ii),
-     {
-lines(x = c(0, 100*sin(sun_az_rad)),
-      y = c(0, 100*cos(sun_az_rad)),
-      col = adjustcolor('orange',alpha.f = 0.5),
-      lwd = 2)
-points(x = run*sin(as.numeric(angle)),
-       y = run*cos(as.numeric(angle)),
-       bg = gray(level = 1.0,
-                 alpha =  0.4),
-       col = c('green', 'darkgreen', 'magenta', 'purple')
-              [ifelse(colour %in% 'g',
-                      yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
-                      no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
-      pch = 21,
-      lwd = 2
-     )
-     }
-)
-with(subset(cd, ID %in% ii & run %in% c(10, 20, 40)),
+PltDance(ids = '2016.06.20.13.17',
+         dtf = cd,
+         cx = 0.7)
+with(subset(cd, ID %in% '2016.06.20.13.17' & run %in% c(10, 20, 40)),
      {
 text(x = run*sin(as.numeric(angle)),
      y = run*cos(as.numeric(angle)),
-     labels = paste(' run', run), 
+     labels = paste(' run', run),
      col = c('green', 'darkgreen', 'magenta', 'purple')
             [ifelse(colour %in% 'g',
                     yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
@@ -195,24 +161,22 @@ text(x = run*sin(as.numeric(angle)),
      adj = c(0,0))
      }
 )
-
-lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
-      y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
-      col = 'green', 
-      lwd = 1)
-lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
-      y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
-      col = 'darkgreen', 
-      lwd = 1)
-lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
-      y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
-      col = 'magenta', 
-      lwd = 1)
-lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
-      y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
-      col = 'purple', 
-      lwd = 1)
-mtext(ii,side = 3,line = -2)
+legend(x = 'bottomleft',
+       legend = c('Green Bright',
+                  'Green Dim',
+                  'UV Bright',
+                  'UV Dim',
+                  'Sun azimuth (North = Up)'),
+       col = c('green',
+               'darkgreen',
+               'magenta',
+               'purple',
+               'darkred'),
+       pch = c(21,21,21,21,NA),
+       lty = c(NA, NA, NA, NA, 1),
+       lwd = c(2,2,2,2,3),
+       cex = 0.5
+       )
 ```
 
 A plot including all 169 dances can be found at the end of this markdown.
@@ -222,7 +186,6 @@ A plot including all 169 dances can be found at the end of this markdown.
 Plot all 169 dances
 
 ```{r Raw dances, echo=FALSE, warning=FALSE}
-#TODO make function
 #set up a sequence for the axes
 xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
 par(mfrow = c(2, 2),
@@ -249,76 +212,15 @@ legend(x = 'center',
                'darkgreen',
                'magenta',
                'purple',
-               'orange'),
+               'darkred'),
        pch = c(21,21,21,21,NA),
        lty = c(NA, NA, NA, NA, 1),
        lwd = c(2,2,2,2,3)
        )
 #loop through individuals
-for(ii in u_id)
-{
-  mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
-  mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
-  mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
-  mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
-  plot(x = NULL,
-       xlim = 100*c(-1,1),
-       ylim = 100*c(-1,1),
-       pch = 19,
-       axes = FALSE,
-       xlab = '',
-       ylab = '',
-       main = ''
-       )
-  abline(a = 0, b = 1, col = 'gray90')
-  abline(a = 0, b = -1, col = 'gray90')
-  abline(h = 0, v = 0, col = 'gray75')
-  lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
-  lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
-  lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
-  lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3)
-  text(x = 1:4*20,
-       y = c(0,0,0,0),
-       labels = paste(' run', 1:4*20), 
-       cex = 0.3,
-       adj = c(0,1))
-  with(subset(cd, ID %in% ii),
-       {
-  lines(x = c(0, 100*sin(sun_az_rad)),
-        y = c(0, 100*cos(sun_az_rad)),
-        col = adjustcolor('orange',alpha.f = 0.5),
-        lwd = 2)
-  points(x = run*sin(as.numeric(angle)),
-         y = run*cos(as.numeric(angle)),
-         bg = gray(level = 1.0,
-                   alpha =  0.4),
-         col = c('green', 'darkgreen', 'magenta', 'purple')
-                [ifelse(colour %in% 'g',
-                        yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
-                        no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
-        pch = 21,
-        lwd = 2
-       )
-       }
-  )
-  lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
-        y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
-        col = 'green', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
-        y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
-        col = 'darkgreen', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
-        y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
-        col = 'magenta', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
-        y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
-        col = 'purple', 
-        lwd = 1)
-  mtext(ii,side = 3,line = -2)
-}
+PltDance(ids = u_id,
+         dtf = cd,
+         cx = 1.0)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
@@ -428,6 +330,8 @@ abline(h = c(0,1))
 ```
 
 Print summary statistics
+
+Use the quantile function to summarise the distribution of mean vectors within each combination of stimulus colour and brightness.
 
 ```{r Mean vector summary per condition}
 mv_agg =  aggregate(mean_vector~colour*brightn,
@@ -550,13 +454,15 @@ print(cn_mv_full_art)
 
 The post-hoc tests indicate a large difference between bright and dim conditions, as expected, but very little evidence for differences between colours.
 The interactions (for which there was low support in the overall model) reflect the pattern we expect, that all bright conditions have higher accuracy than all dim conditions, and that while the two dim conditions have similar accuracy, the bright UV bright condition may be slightly more accurate the bright green condition (p = 0.158).
-### Parametric beta-distributed model of accuracy To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
+
+\### Parametric beta-distributed model of accuracy
+
+To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
 One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
 
 ### Beta model for accuracy
 
 ```{r Set up priors for a Bayesian beta model}
-#TODO remove unnecessary priors
 ### Maximal formula with all random effects ---------------------
 #set up model formula with indiv effects on light type
 frm_bmod_maxRE = bf(mean_vector~brightn*colour + # light types affect accuracy
@@ -644,6 +550,8 @@ pr_expression = expression({
 priors_bmod_mxRE = within(get_prior(formula = frm_bmod_maxRE, 
                                     data = mean_vectors_full), 
                           expr = eval(pr_expression))
+#remove excess priors generated by get_prior but not used by brms
+priors_bmod_mxRE = subset(priors_bmod_mxRE, !(coef %in% ''))
 print(priors_bmod_mxRE)#all parameters are accounted for
 ```
 
@@ -655,9 +563,6 @@ md_beta = brm(formula = frm_bmod_maxRE,
                  prior = priors_bmod_mxRE,
                  data = within(mean_vectors_full,
                                {
-                               # mean_vector = ifelse(mean_vector == 1.0,
-                               #                      yes = 1.0 - 1e-3,
-                               #                      no = mean_vector)
                                mean_vector = (mean_vector * (length(mean_vector) - 1) + 0.5) / length(mean_vector)
                                }
                                ),
@@ -672,7 +577,7 @@ md_beta = brm(formula = frm_bmod_maxRE,
 )
   }
 )
-#too many divergent transitions, check chains
+#some divergent transitions, but rhat and ESS look good
 rh_beta = rhat(md_beta)
 sm_beta = summary(md_beta)
 print(summary(rh_beta), digits= 4)#all ≤1.01
@@ -804,7 +709,7 @@ for(ct in 1:length(contr_mu) )
        lty = 2)
 with(data.frame(t(quant_mu[,ct])),
      {
-      arrows(x0 = 0,#dim(quant_mu[,ct])[2],
+      arrows(x0 = 0,
              y0 = X2.5.,
              y1 = X97.5.,
              length = 0, 
@@ -821,22 +726,6 @@ with(data.frame(t(quant_mu[,ct])),
      }
 )
 }
-# stripchart(x = round(contr_mu,2),
-#            at = 1:dim(contr_mu)[2],
-#            group.names = gsub(pattern = '_',
-#                               replacement = ' → ',
-#                               x = names(contr_mu)),
-#            main = 'Beta GLMM - Effects on Mean Accuracy',
-#            ylab = 'logit mean change in accuracy',
-#            vertical  = TRUE,
-#            method = 'stack',
-#            offset =  0.05,
-#            ylim = c(-1, 1)*4,
-#            pch = 20,
-#            col = gray(0, alpha = 4/2e3),
-#            cex.axis = 1.0,
-#            las = 3
-#            )
 
 legend(x = 'topleft',
        legend = c('estimates',
@@ -848,23 +737,6 @@ legend(x = 'topleft',
        cex = 0.7
        )
 
-
-# stripchart(x = round(contr_phi,2),
-#            at = 1:dim(contr_phi)[2],
-#            group.names = sub(pattern = '_',
-#                               replacement = ' → ',
-#                               x = names(contr_phi)),
-#            main = 'Effects on Accuracy Precision',
-#            ylab = 'log change in accuracy precision',
-#            vertical  = TRUE,
-#            method = 'stack',
-#            offset =  0.05,
-#            ylim = c(-1, 1)*6,
-#            pch = 20,
-#            col = gray(0, alpha = 4/2e3),
-#            cex.axis = 1.0,
-#            las = 3
-#            )
 par(mfrow = c(1, length(contr_phi)))
 for(ct in 1:length(contr_phi) )
 {
@@ -883,7 +755,7 @@ for(ct in 1:length(contr_phi) )
        lty = 2)
 with(data.frame(t(quant_phi[,ct])),
      {
-      arrows(x0 = 0,#dim(quant_mu[,ct])[2],
+      arrows(x0 = 0,
              y0 = X2.5.,
              y1 = X97.5.,
              length = 0, 
@@ -900,24 +772,6 @@ with(data.frame(t(quant_phi[,ct])),
      }
 )
 }
-# abline(h = 0,
-#        lty = 2)
-# with(data.frame(t(quant_phi)),
-#      {
-#       arrows(x0 = 1:dim(quant_phi)[2],
-#              y0 = X2.5.,
-#              y1 = X97.5.,
-#              length = 0, 
-#              angle = 90,
-#              lwd = 5,
-#              col = adjustcolor(c('darkgreen',
-#                             'purple',
-#                             'gray40',
-#                             'gray25'
-#                             ), alpha = 0.7)
-#              )
-#      }
-# )
 #can also calculate these with emmeans
 em_beta = emmeans(object = md_beta,
                   specs = ~brightn*colour)
@@ -959,7 +813,6 @@ print(beta_all_res[,c(2,5,7,10)], digits = 3)
 
 ```{r Set up priors for a sun elevation model}
 
-### Maximal formula with all random effects ---------------------
 #set up model formula with indiv effects on light type
 frm_elemod_maxRE = bf(mean_vector~ cos(sun_el_rad) + # accuracy is affected by projection distortion at high elevations following a cosine law
                             (1 |ID), # each individual is more or less oriented
@@ -1046,20 +899,18 @@ pr_expression = expression({
 priors_elemod_mxRE = within(get_prior(formula = frm_elemod_maxRE, 
                                     data = mean_vectors_full), 
                           expr = eval(pr_expression))
+#remove additional priors added by get_prior but not used by brms
+priors_elemod_mxRE  = subset(priors_elemod_mxRE, !(coef %in% ''))
 print(priors_elemod_mxRE)#all parameters are accounted for
 ```
 
 ```{r Fit the sun elevation model, echo = FALSE}
-## Run the models --------------------------------------------------------
 system.time( #takes about 2 minutes
   {
 md_ele = brm(formula = frm_elemod_maxRE,
                  prior = priors_elemod_mxRE,
                  data = within(mean_vectors_full,
                                {
-                               # mean_vector = ifelse(mean_vector == 1.0,
-                               #                      yes = 1.0 - 1e-3,
-                               #                      no = mean_vector)
                                mean_vector = (mean_vector * (length(mean_vector) - 1) + 0.5) / length(mean_vector)
                                
                                }
@@ -1085,7 +936,6 @@ print(sm_ele$fixed[, c(1, 3:4)], digits = 3)
 Extract the model's predictions and compare with the original data.
 
 ```{r Plot sun elevation model predictions, echo = FALSE}
-# Extract model predictions -----------------------------------------------
 fx_ele = sm_ele$fixed[, c(1, 3:4)]
 with(mean_vectors_full,
      {
@@ -1229,7 +1079,7 @@ The baseline is expected to be around $r = 0.27$, while the maximum accuracy sho
 The inflection points are expected around $10^{11}$ photons cm$^{-2}$ s$^{-1}$, with a rise-region width of $10^{3}$ photons cm$^{-2}$ s$^{-1}$.
 All colour effects may vary by a few orders of magnitude.
 
-```{r}
+```{r, Set up priors for beta psychometric}
 
 #set up priors
 prior_beta = get_prior(formula = formula_beta,
@@ -1321,7 +1171,7 @@ prior_beta = within(prior_beta,
 Fit a psychometric model to the data using the nonlinear formula and specified prior distributions.
 `4000` iterations on `4` chains takes less than one minute.
 
-```{r Fit model}
+```{r Fit model for beta psychometric}
 #takes less than 1 minute
 #parameters for the brms runs
 wup = 2000
@@ -1347,7 +1197,7 @@ system.time(
 
 Summarise the data from full cases in the Kühn data using quantiles (minimum, 25%, median, 75% and maximum).
 
-```{r Collect relevant data from Kühn data}
+```{r Collect relevant data from dances}
 #Examine quantiles
 meanQ = aggregate(mean_vector ~ colour*brightn, 
                   data = mean_vectors_full,
@@ -1729,19 +1579,12 @@ The hive is at 50°48'22.7"N 8°48'40.8"E.
 That would give the following bearing:
 
 ```{r Calculate the bearing of the Botanic Gardens}
-require(geosphere)#TODO move to functions
 # Define the coordinates
 
 hive_coords  =  c(longitude  = 8.811333,
                  latitude = 50.806306)
-# garden_coords = c(longitude  = 8.806694,
-#                   latitude = 50.800917) # flower beds
-#centre according to google 50.802605, 8.809097
-# left according to openstreetmap 50.802721, 8.806807
 
-#the 150m circle intersecting with the nearest corner
-
-#nearest edge
+#the 150m circle intersecting with the nearest edge
 garden_coords = list(left = 
                        c(longitude  = 8.808956,
                          latitude = 50.805509),
@@ -1767,8 +1610,7 @@ garden_bearing_rad = rad(as.numeric(garden_bearing[2]))
 ```{r Compare Likelihood of Phototaxis and Sun-Spot}
 #save and load models instead of running them each time
 load_model = FALSE
-# Custom family --------------------------------------------------------
-#In the "unwrap" family, all variables 
+# Custom family for "unwrap" von Mises distribution
 unwrap_von_mises = custom_family(
   "unwrap_von_mises", dpars = c("mu", "kappa"),
   links = c('identity',#brms cannot accept custom link functions, do via nl instead
@@ -1992,8 +1834,6 @@ Sm_only = function(x,
 print(lapply(X = sm_modlist, Sm_only), digits = 3 )
 #across individuals kappa
 print(lapply(X = sm_modlist, Sm_only, type = 'spec_pars', var = 'kappa_mu'), digits = 3 )
-#TODO add to functions
-SumUwRhats = function(x, var = NULL){summary(UnwrapRhats(x, variable = var))}
 #check population means
 lapply(X = modlist[c(2,4)],
        FUN = UnwrapRhats,
@@ -2029,8 +1869,7 @@ print(sort(unlist(modLIC)), digits = 1)
 
 ```
 
-There is very little separation between our different hypotheses here, 
-suggesting each would do well to explain the data.
+There is very little separation between our different hypotheses here, suggesting each would do well to explain the data.
 We can also look at the specific predictions to see how well each hypothesis matches.
 
 ### Hypothesis test
@@ -2070,6 +1909,9 @@ photo_id = unique(dt_photo$ID)
 rope_width = abs(mod_circular(rad(diff(garden_bearing[-2])))) # 35°
 rope_photo = c(-1,1)*rope_width/2
 rope_sunspot = sort( mod_circular(rad(garden_bearing[-2] - garden_bearing[2])) )
+
+#extract draws
+dr_modlist = lapply(modlist, as_draws_df)
 
 postl_nophoto  = sapply(X = photo_id,
        FUN = PostROPE,
@@ -2143,40 +1985,19 @@ PCfun(angles = subset(mean_vectors,
 with(dr_modlist$phototaxis, 
      arrows(x0 = 0, x1 = 0,
             y0 = 0, 
-            y1 = #A1(softplus(median(b_kappa_Intercept)))
-              A1(softplus(median(kappamu))),
+            y1 = A1(softplus(median(kappamu))),
             col = 'orange',
             lwd = 5,
             length = 0.1
             )
 )
-# Draws2Cont(dr_modlist$no_phototaxis,
-#            x_string = paste0('sin(',
-#                              'b_mu0_Intercept',
-#                              ')*',
-#                              'A1(softplus(',
-#                              'b_kappa_Intercept',
-#                              '))'),
-#            y_string = paste0('cos(',
-#                              'b_mu0_Intercept',
-#                              ')*',
-#                              'A1(softplus(',
-#                              'b_kappa_Intercept',
-#                              '))'),
-#            palette = 'Grays'
-# )
-
-
-
 
 with(dr_modlist$no_phototaxis, 
      arrows(x0 = 0,
-            x1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            x1 = A1(softplus(median(kappamu)))*
               sin(median(mod_circular(b_mu0_Intercept))),
             y0 = 0, 
-            y1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            y1 = A1(softplus(median(kappamu)))*
               cos(median(mod_circular(b_mu0_Intercept))),
             col = 'green3',
             lwd = 5,
@@ -2252,12 +2073,10 @@ PCfun(angles = with(subset(mean_vectors,
       title = '\n\n\n\nRelative to North')
 with(as_draws_df(modlist$sunspot), 
      arrows(x0 = 0,
-            x1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            x1 = A1(softplus(median(kappamu)))*
               sin(garden_bearing_rad),
             y0 = 0, 
-            y1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            y1 = A1(softplus(median(kappamu)))*
               cos(garden_bearing_rad),
             col = 'orange',
             lwd = 5,
@@ -2266,12 +2085,10 @@ with(as_draws_df(modlist$sunspot),
 )
 with(as_draws_df(modlist$no_sunspot), 
      arrows(x0 = 0,
-            x1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            x1 = A1(softplus(median(kappamu)))*
               sin(median(mod_circular(b_mu0_Intercept+garden_bearing_rad                                         ))),
             y0 = 0, 
-            y1 = #A1(softplus(median(b_kappa_Intercept)))*
-              A1(softplus(median(kappamu)))*
+            y1 = A1(softplus(median(kappamu)))*
               cos(median(mod_circular(b_mu0_Intercept+garden_bearing_rad 
                                         ))),
             col = 'green3',
@@ -2313,22 +2130,6 @@ with(as_draws_df(modlist$no_sunspot),
             length = 0
             )
 )
-# Draws2Cont(dr_modlist$no_sunspot,
-#            alpha = 100/255,
-#            x_string = paste0('sin(',
-#                              'b_mu0_Intercept+garden_bearing_rad',
-#                              ')*',
-#                              'A1(softplus(',
-#                              'b_kappa_Intercept',
-#                              '))'),
-#            y_string = paste0('cos(',
-#                              'b_mu0_Intercept+garden_bearing_rad',
-#                              ')*',
-#                              'A1(softplus(',
-#                              'b_kappa_Intercept',
-#                              '))'),
-#            palette = 'Grays'
-# )
 
 par(mar = c(0,3,0,0))
 
@@ -2491,7 +2292,6 @@ It is also worth considering any differences in accuracy between dances to each 
 These can be visualised as arcs.
 
 ```{r Plot change arcs}
-#TODO make a function for this
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 OpenCplot(n_sample = with(full_cd, median(run)/4) )
 mtext(text = 'Green Bright to Green Dim',
@@ -2685,7 +2485,7 @@ If angles shift in two directions between pairs, then the "two means" distributi
 #TODO neaten up!
 #Distribution for same means
 ml_same_lst = lapply(X = pair_diffs_lst,
-                     mle.vonmises,
+                     FUN = mle.vonmises,
                      bias = TRUE,
                      mu = circular(x = 0,
                                    units = angle_unit,
@@ -2693,7 +2493,7 @@ ml_same_lst = lapply(X = pair_diffs_lst,
 )
 #Distribution for different means
 ml_diff_lst = lapply(X = pair_diffs_lst,
-                     mle.vonmises,
+                     FUN = mle.vonmises,
                      bias = TRUE)
 #Distribution for multiple different means
 mod_diff_lst = lapply(X = pair_diffs_lst,
@@ -2736,8 +2536,8 @@ rspar = mod_diff_results[,c('mu', 'kappa', 'se.mu', 'se.kappa')]
 rspar = cbind(rspar, loglikelihood = all_ll)
 rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
 #reorder for easy comparison
-rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the different directly after the same
-rspar[,3:4] = NA
+rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the 'diff' directly after 'same'
+rspar[,3:4] = NA #not available for unimodal
 rspar = cbind(rspar, weight1 = 1.0)
 colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
 all_res = rbind(data.frame(rspar),
@@ -2841,15 +2641,11 @@ For *one-sided* calculations, the CI do overlap with 0° for green conditions, b
 ### Plot difference CI
 
 ```{r Plot CI}
-#TODO make bimodal version of PCfun
 par(mfrow = c(2,2), mar = c(0,0,0,0))
 PCfun(angles = unlist(mu_diff_gl),
       col = 'darkgreen',
       shrink = 1.5,
       title = 'Green Dim - Green Bright')
-# PlotCI_vM(mod_CI_tb['green_hl',],
-#           col = 'darkgreen',
-#           radius = 1+0.3)
 PlotCI_vM(mle_CI['diff green_hl',],
           col = 'darkgreen',
           radius = 1+0.3)
@@ -3130,13 +2926,11 @@ print(
   digits = 1)
 ```
 
-
 # Plot all raw data
 
 Plot all 169 dances
 
 ```{r Raw dances, echo=FALSE, warning=FALSE}
-#TODO make function
 #set up a sequence for the axes
 xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
 par(mfrow = c(2, 2),

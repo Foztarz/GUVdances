@@ -1,8 +1,8 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2025 06 05
-#     MODIFIED:	James Foster              DATE: 2025 06 11
+#     MODIFIED:	James Foster              DATE: 2026 04 15
 #
-#  DESCRIPTION: Functions for Foster JJ, Kühn N. & Pfeiffer K (in prep).
+#  DESCRIPTION: Functions for Foster JJ, Graving J & Pfeiffer K (in prep).
 #               
 #       INPUTS: 
 #               
@@ -54,6 +54,7 @@ suppressMessages(#these are disturbing users unnecessarily
     require(brms)#package for preparing Stan models
     require(ARTool)#package for non-parametric linear models
     require(emmeans)#package for post-hoc comparisons
+    require(geosphere)#for bearing calculations
   }
 )
 
@@ -540,6 +541,75 @@ DiffArc = function(a1, a2, r1, r2,
   pch= c(21, 19),
   lwd = 2
   )
+}
+
+PltDance = function(ids,
+                    dtf,
+                    cx = 0.3,
+                    rlim= 80)
+{
+  #set up a sequence for the axes
+  xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
+  for(ii in ids)
+  {
+    mnv_gh = Mvec(subset(dtf, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
+    mnv_gl = Mvec(subset(dtf, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
+    mnv_uh = Mvec(subset(dtf, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
+    mnv_ul = Mvec(subset(dtf, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
+    plot(x = NULL,
+         xlim = rlim*c(-1,1),
+         ylim = rlim*c(-1,1),
+         pch = 19,
+         axes = FALSE,
+         xlab = '',
+         ylab = '',
+         main = '',
+         cex = cx
+    )
+    abline(a = 0, b = 1, col = gray(0.9, alpha = cx), lwd = cx)
+    abline(a = 0, b = -1, , col = gray(0.9, alpha = cx), lwd = cx)
+    abline(h = 0, v = 0, , col = gray(0.75, alpha = cx), lwd = cx)
+    lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
+    lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
+    lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3, lwd = cx, col = gray(0, alpha = cx))
+    with(subset(cd, ID %in% ii),
+         {
+           lines(x = c(0, rlim*sin(-sun_az_rad)),
+                 y = c(0, rlim*cos(-sun_az_rad)),
+                 col = adjustcolor('darkred',alpha.f = 0.5),
+                 lwd = 2*cx)
+           points(x = run*sin(as.numeric(angle)),
+                  y = run*cos(as.numeric(angle)),
+                  bg = gray(level = 1.0,
+                            alpha =  0.4),
+                  col = c('green', 'darkgreen', 'magenta', 'purple')
+                  [ifelse(colour %in% 'g',
+                          yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
+                          no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
+                  pch = 21,
+                  lwd = cx,
+                  cex = cx*0.5
+           )
+         }
+    )
+    lines(x = c(0,rlim*sin(mnv_gh['mu'])*mnv_gh['rho']), 
+          y = c(0,rlim*cos(mnv_gh['mu'])*mnv_gh['rho']), 
+          col = 'green', 
+          lwd = 1*cx)
+    lines(x = c(0,rlim*sin(mnv_gl['mu'])*mnv_gl['rho']), 
+          y = c(0,rlim*cos(mnv_gl['mu'])*mnv_gl['rho']), 
+          col = 'darkgreen', 
+          lwd = 1*cx)
+    lines(x = c(0,rlim*sin(mnv_uh['mu'])*mnv_uh['rho']), 
+          y = c(0,rlim*cos(mnv_uh['mu'])*mnv_uh['rho']), 
+          col = 'magenta', 
+          lwd = 1*cx)
+    lines(x = c(0,rlim*sin(mnv_ul['mu'])*mnv_ul['rho']), 
+          y = c(0,rlim*cos(mnv_ul['mu'])*mnv_ul['rho']), 
+          col = 'purple', 
+          lwd = 1*cx)
+    mtext(ii,side = 1,line = -1, cex = cx)
+  }
 }
 
 # Set up circular formats -----------------------------------------------
@@ -1358,6 +1428,10 @@ UnwrapRhats = function(uwmod,
   return( round(rh,digits = digits) )
 }
 
+#summarise all circular rhats
+SumUwRhats = function(x, var = NULL){summary(UnwrapRhats(x, variable = var))}
+
+#calculate log likelihood for a brms von Mises model 
 log_lik_unwrap_von_mises <- function(i, prep) {
   #remove circular formatting?
   prep$data$Y = as.numeric(prep$data$Y)
