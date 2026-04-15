@@ -183,46 +183,6 @@ A plot including all 169 dances can be found at the end of this markdown.
 
 ### Plot all
 
-Plot all 169 dances
-
-```{r Raw dances, echo=FALSE, warning=FALSE}
-#set up a sequence for the axes
-xc = seq(from = -pi, to = pi-1e-16, length.out = 1e3)
-par(mfrow = c(2, 2),
-    mar = c(0,0,0,0))
-par(pty = 's')
-
-#add legend to 1st page
-plot(x = NULL,
-     xlim = c(-1,1),
-     ylim = c(-1,1),
-     pch = 19,
-     axes = FALSE,
-     xlab = '',
-     ylab = '',
-     main = ''
-)
-legend(x = 'center',
-       legend = c('Green Bright',
-                  'Green Dim',
-                  'UV Bright',
-                  'UV Dim',
-                  'Sun azimuth (North = Up)'),
-       col = c('green',
-               'darkgreen',
-               'magenta',
-               'purple',
-               'darkred'),
-       pch = c(21,21,21,21,NA),
-       lty = c(NA, NA, NA, NA, 1),
-       lwd = c(2,2,2,2,3)
-       )
-#loop through individuals
-PltDance(ids = u_id,
-         dtf = cd,
-         cx = 1.0)
-```
-
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ## Accuracy effects
@@ -2537,16 +2497,16 @@ rspar = cbind(rspar, loglikelihood = all_ll)
 rspar = apply(X = rspar, MARGIN = 2, FUN = unlist)
 #reorder for easy comparison
 rspar = rspar[c(rbind(1:4, 1:4+4)),]#put the 'diff' directly after 'same'
-rspar[,3:4] = NA #not available for unimodal
+rspar[,3:4] = NA #overwrite columns for secondary parameters
 rspar = cbind(rspar, weight1 = 1.0)
 colnames(rspar) = colnames(bim_diff_par)[c(1:4, 6:5)]
 all_res = rbind(data.frame(rspar),
                 data.frame(bim_diff_par) )
 all_res = apply(all_res, MARGIN = 2, FUN = unlist)
 rn_res = rownames(all_res)#NB in R4.5 need to make a copy of rownames
-rn_res[9:12] = paste('multi', rownames(bim_diff_par))
+rn_res[9:12] = paste('multi', rownames(bim_diff_par)) #identify bimodal rows
 rownames(all_res) = rn_res #
-#rownames(all_res[9:12,]) = paste('multi', rownames(bim_diff_par))
+#reorder to place unimodal and bimodal distributions of the same type together
 all_res = all_res[c(1:2, 9, 3:4, 10, 5:6, 11, 7:8, 12),]
 
 all_res = within(data = data.frame(all_res),
@@ -2559,9 +2519,6 @@ all_res = within(data = data.frame(all_res),
                                     times = 3) )
                  }
                 )
-# print(rspar, digits = 3)
-# print(mod_diff_par, digits = 3)
-# print(bim_diff_par, digits = 3)
 print(all_res, digits = 3)
 #save results
 write.table(x = all_res, 
@@ -2608,7 +2565,6 @@ mod_CI = with(data.frame(mod_diff_par),
                      k2 = kappa2, 
                      w1 = weight1,
                      alternative = 'two.sided',#not a hypothesis test (symmetrical)
-                     # SIMPLIFY = FALSE,
                      n = 1e4)#takes ≈15 for 10 000 simulations
                 }
               )
@@ -2681,33 +2637,8 @@ PCfun(angles = unlist(mu_diff_uh),
 PlotCI_vM(mod_CI_tb['uvg_h',],
           col = 'gray40',
           radius = 1+0.3)
-#according to model comparison, this is slightly better
-#But this is not truly bimodal, kappa2 = 0
-  # plot.circular(x = circular(unlist(mu_diff_uh),
-  #                            units = angle_unit,
-  #                            rot = angle_rot
-  #                            ),
-  #               col = 'gray40',
-  #               stack = TRUE,
-  #               sep = 0.1,
-  #               bins = 355/5,
-  #               units = angle_unit,
-  #               rotation = angle_rot,
-  #               zero = pi/2,
-  #               shrink = 1.5)
-  # mtext(text = 'UV Bright - Green Bright',
-  #       side = 1,
-  #       line = -2)
-  # lines(x = c(0,0),
-  #       y = c(-1,1),
-  #       col = 'gray')
-  # PlotMV_circMLE(mod_par = bim_diff_par['uvg_h',],
-  #                col1 = 'gray40')
-  # PlotCI_vM(bim_CI_tb['uvg_h',],
-  #           col = 'gray40',
-  #           radius = 1+0.3)
-
-
+#according to model comparison, bim_diff_par['uvg_h',] is sometimes better
+#but is not truly bimodal, kappa2 = 0
 
 plot.circular(x = circular(unlist(mu_diff_gul),
                            units = angle_unit,
@@ -2778,11 +2709,6 @@ all_lr_results = within(data.frame(all_lr_results),
                             ) 
                         }
                       )
-# lapply(
-#        all_lr_results_lst,
-#        FUN = print,
-#        digits = 3
-#        )
 
 #add labels to interpret each test according to p value and sign of comparison
 all_lr_results = within(all_lr_results,
@@ -2814,7 +2740,6 @@ print_lr_results = within(print_lr_results,
                           )
 rownames(print_lr_results) = with(print_lr_results, paste(comparison, test))#better to keep them for the html
 #Round numeric columns
-# print_lr_results = apply(print_lr_results, MARGIN = 2, FUN = unlist)
 num_col = sapply(X = print_lr_results, 
                  FUN = is.numeric)
 print_lr_results[,num_col] = apply(X = print_lr_results[,num_col],
@@ -2957,76 +2882,13 @@ legend(x = 'center',
                'darkgreen',
                'magenta',
                'purple',
-               'orange'),
+               'darkred'),
        pch = c(21,21,21,21,NA),
        lty = c(NA, NA, NA, NA, 1),
        lwd = c(2,2,2,2,3)
        )
 #loop through individuals
-for(ii in u_id)
-{
-  mnv_gh = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'h')$angle)
-  mnv_gl = Mvec(subset(cd, ID %in% ii & colour %in% 'g' & brightn %in% 'l')$angle)
-  mnv_uh = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'h')$angle)
-  mnv_ul = Mvec(subset(cd, ID %in% ii & colour %in% 'u' & brightn %in% 'l')$angle)
-  plot(x = NULL,
-       xlim = 100*c(-1,1),
-       ylim = 100*c(-1,1),
-       pch = 19,
-       axes = FALSE,
-       xlab = '',
-       ylab = '',
-       main = ''
-       )
-  abline(a = 0, b = 1, col = 'gray90')
-  abline(a = 0, b = -1, col = 'gray90')
-  abline(h = 0, v = 0, col = 'gray75')
-  lines(x = 20*sin(xc), y = 20*cos(xc), lty = 3)
-  lines(x = 40*sin(xc), y = 40*cos(xc), lty = 3)
-  lines(x = 60*sin(xc), y = 60*cos(xc), lty = 3)
-  lines(x = 80*sin(xc), y = 80*cos(xc), lty = 3)
-  text(x = 1:4*20,
-       y = c(0,0,0,0),
-       labels = paste(' run', 1:4*20), 
-       cex = 0.3,
-       adj = c(0,1))
-  with(subset(cd, ID %in% ii),
-       {
-  lines(x = c(0, 100*sin(sun_az_rad)),
-        y = c(0, 100*cos(sun_az_rad)),
-        col = adjustcolor('orange',alpha.f = 0.5),
-        lwd = 2)
-  points(x = run*sin(as.numeric(angle)),
-         y = run*cos(as.numeric(angle)),
-         bg = gray(level = 1.0,
-                   alpha =  0.4),
-         col = c('green', 'darkgreen', 'magenta', 'purple')
-                [ifelse(colour %in% 'g',
-                        yes = ifelse(brightn %in% 'h', yes = 1, no = 2),
-                        no = ifelse(brightn %in% 'h', yes = 3, no = 4))],
-        pch = 21,
-        lwd = 2
-       )
-       }
-  )
-  lines(x = c(0,100*sin(mnv_gh['mu'])*mnv_gh['rho']), 
-        y = c(0,100*cos(mnv_gh['mu'])*mnv_gh['rho']), 
-        col = 'green', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_gl['mu'])*mnv_gl['rho']), 
-        y = c(0,100*cos(mnv_gl['mu'])*mnv_gl['rho']), 
-        col = 'darkgreen', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_uh['mu'])*mnv_uh['rho']), 
-        y = c(0,100*cos(mnv_uh['mu'])*mnv_uh['rho']), 
-        col = 'magenta', 
-        lwd = 1)
-  lines(x = c(0,100*sin(mnv_ul['mu'])*mnv_ul['rho']), 
-        y = c(0,100*cos(mnv_ul['mu'])*mnv_ul['rho']), 
-        col = 'purple', 
-        lwd = 1)
-  mtext(ii,side = 3,line = -2)
-}
+PltDance(ids = u_id,
+         dtf = cd,
+         cx = 1.0)
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
