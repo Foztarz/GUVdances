@@ -275,7 +275,7 @@ invisible(
 abline(h = c(0,1))
 ```
 
-Print summary statistics
+#### Print summary statistics
 
 Use the quantile function to summarise the distribution of mean vectors within each combination of stimulus colour and brightness.
 
@@ -401,7 +401,7 @@ print(cn_mv_full_art)
 The post-hoc tests indicate a large difference between bright and dim conditions, as expected, but very little evidence for differences between colours.
 The interactions (for which there was low support in the overall model) reflect the pattern we expect, that all bright conditions have higher accuracy than all dim conditions, and that while the two dim conditions have similar accuracy, the bright UV bright condition may be slightly more accurate the bright green condition (p = 0.158).
 
-\### Parametric beta-distributed model of accuracy
+### Parametric beta-distributed model of accuracy
 
 To investigate this with greater statistical power we would need an appropriate parametric model for bounded variables.
 One approach is to use the beta distribution, which is defined between (but not at) 0 and 1.
