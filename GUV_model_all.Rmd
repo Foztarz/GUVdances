@@ -374,36 +374,47 @@ b sd_kappa T(3,0,0.5) -> T(3,0,0.7) : to allow some gradient
 b sd_kappa  T(3,0,0.7) -> T(3,0,0.3) 
 Intercept sd_kappa  T(3,0,1.0) -> T(3,0,0.5) 
 Intercept_kappa N(3,3) -> N(3,1) 
+
+Very restrictive priors from GUV_unwrap.ipynb (but diff kappamu format)
+Very restrictive priors from GUV_unwrap.ipynb (updated to account for UV dim 
+Very restrictive priors from GUV_unwrap.ipynb with BC left turn
 ```{r Unimodal change priors}
 
 #priors for mu
-pr_mu_all = prior('normal(0, pi()/2)', coef = 'Intercept', nlpar = 'mu0') +
-                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
+pr_mu_all = prior('normal(0, pi()/6)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('normal(0, pi()/12)', class = 'b', nlpar = 'mu0') +
+                  prior('normal(-pi()/2, pi()/12)', class = 'b', coef = 'BC', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(10), 0.6)", #expect high concentration (low variation) 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                       check = FALSE)  +
+  # prior('unwrap_von_mises_vect(0, log1p_exp(16))',
+  #                       nlpar  = 'muib',  class = 'b')+
   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamub))',
                         nlpar  = 'muib',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamub | 0, 1.0)", #expect small differences 
+            set_prior("target += normal_lpdf(softkappamub | 0, 0.2)", #expect small differences 
                       check = FALSE)  +
+  # prior('unwrap_von_mises_vect(0, log1p_exp(30))',
+  #                       nlpar  = 'muic',  class = 'b')+
   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamuc))',
                         nlpar  = 'muic',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamuc | 0, 1.0)", #expect small differences 
+            set_prior("target += normal_lpdf(softkappamuc | 0, 0.2)", #expect small differences 
                       check = FALSE) +
+  # prior('unwrap_von_mises_vect(0, log1p_exp(20))',
+  #                       nlpar  = 'muibc',  class = 'b') +
   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamubc))',
                         nlpar  = 'muibc',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamubc | 0, 1.0)", #expect small differences 
+            set_prior("target += normal_lpdf(softkappamubc | 0, 0.5)", #expect small differences 
                       check = FALSE)  
 
 #priors for kappa
 pr_kappa_all = 
-                  prior('normal(3,1)', class = 'Intercept', dpar = 'kappa') +
-                  prior('normal(0,1)', class = 'b', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'kappa')
-                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'B', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'C', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.3)', class = 'sd', coef = 'BC', dpar = 'kappa')
+                  prior('normal(3,0.5)', class = 'Intercept', dpar = 'kappa') +
+                  prior('normal(0,0.3)', class = 'b', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.3)', class = 'sd', dpar = 'kappa')
+                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'B', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'C', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'BC', dpar = 'kappa')
 
   
 #all bimodal priors
