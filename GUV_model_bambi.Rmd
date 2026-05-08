@@ -1251,6 +1251,44 @@ VertHist(data = post_kappamu_ul,
          axes = FALSE, cex.axis = 0.7)
 axis(1); axis(2, at = 0:3*5)
 ```
+```{r kappamu condition differences}
+# 1. Calculate Differences
+diff_uv_bright <- post_kappamu_uh - post_kappamu_gh
+diff_green_dim <- post_kappamu_gl - post_kappamu_gh
+diff_uv_dim    <- post_kappamu_ul - post_kappamu_uh
+diff_interaction <- diff_uv_dim - diff_green_dim
+
+# 2. Plotting
+par(mfrow = c(1,4))
+
+# Plot 1: Effect of UV Brightness
+VertHist(data = diff_uv_bright, 
+         main = '\nDiff: UV bright', ylab = 'diff kappamu',
+         ylim = c(-2, 2), col = adjustcolor('magenta3', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
+
+# Plot 2: Effect of Dimming Green
+VertHist(data = diff_green_dim, 
+         main = '\nDiff: green dim', ylab = 'diff kappamu',
+         ylim = c(-2, 2), col = adjustcolor('green4', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
+
+# Plot 3: Effect of Dimming UV
+VertHist(data = diff_uv_dim, 
+         main = '\nDiff: dim UV', ylab = 'diff kappamu',
+         ylim = c(-2, 2), col = adjustcolor('purple', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
+
+# Plot 4: Interaction Effect
+VertHist(data = diff_interaction, 
+         main = '\nDim UV vs dim green', ylab = 'diff kappamu',
+         ylim = c(-2, 2), col = adjustcolor('gray40', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
+```
 # Model comparison for unimodal
 ## Set up formula and priors
 
