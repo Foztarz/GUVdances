@@ -1,0 +1,1646 @@
+---
+title: "GUV_model_figure"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    fig_caption: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Details
+
+**DESCRIPTION**
+
+Load and plot circular GLMs to describe all four stimulus conditions.
+
+**INPUTS**
+
+`GUV_functions.R`
+
+**OUTPUTS**
+
+Plotted estimates.
+
+**REFERENCES**
+
+**Experimental approach**
+
+Edrich W, Neumeyer C & von Helversen, O.
+(1979) “Anti-sun orientation” of bees with regard to a field of ultraviolet light.
+*J. Comp. Physiol.* 134, 151–157.
+
+Rossel, S.
+& Wehner, R.
+(1984).
+Celestial orientation in bees: the use of spectral cues.
+*J. Comp. Physiol. A* 155, 605–613.
+
+**modelling methods**
+
+Sayin S, Couzin-Fuchs E, Petelski I, Günzel Y, Salahshour M, Lee CY, Graving JM, Li L, Deussen O, Sword GA, et al. (2025) The behavioral mechanisms governing collective motion in swarming locusts.
+*Science* 387(6737):995–791
+
+Capretto, T., Piho, C., Kumar, R., Westfall, J., Yarkoni, T., & Martin, O. (2022)
+`Bambi`: A simple interface for fitting Bayesian linear models in Python.
+*Journal of Statistical Software* 103(15), 1-29. doi:10.18637/jss.v103.i15
+
+# To Do
+- Load Bambi model
+- Plot predictions
+- Plot contrasts
+
+# Motivation
+
+
+# Set up workspace
+
+To extract these models, we need to load the appropriate functions.
+Make sure that the `circular`, `reticulate`, `posterior` and `bayesplot`,  are installed, and 
+(on Windows) that you have installed the latest version of [Rtools](https://cran.r-project.org/bin/windows/Rtools/).
+Here we first set up a `reticulate` Python environment with the appropriate versions of each package, then reload reticulate to ensure that those packages are available.
+
+```{r Load functions and packages}
+source('GUV_functions.R')
+require(reticulate)
+reticulate::py_install(c(
+  "numpy==1.26.4",
+  "pandas==2.1.4",
+  "scipy==1.11.4",
+  "arviz==0.17.1",
+  "packaging"
+), method = "pip")
+require(reticulate)
+require(posterior)
+require(bayesplot)
+options(posterior.num_args = list(sigfig = 3))#for ease of reading
+```
+
+Set up some colours for plotting.
+
+```{r Set up plot colours}
+col_kappa = '#1E78B5'#colour for kappa parameter
+col_rho = '#F08024' #colour for mean vector length
+col_sd = '#E74A29' #colour for SD and mean angle
+col_sd2 = '#E57461' #colour for other SD heuristics
+col_pdf = adjustcolor(col = '#21A885', # colour for probability density
+                      alpha.f = 0.7)
+col_obs = '#3E1F51' #colour for control observations
+col_treat = '#006400' # colour for treatment observations
+```
+
+# Prepare data
+
+Then load the data that will be used.
+This is our dance data, reorganised by `GUV_organisedata.R` as `colour_dance_reorg.csv`.
+
+```{r Load data}
+#Dance angle data
+cd = read.table(file = '1Data/colour_dance_reorg.csv', 
+                header = T, 
+                sep  = ',')
+head(cd)
+```
+
+## Format data
+
+Ensure that each variable has the correct data format for subsequent analysis.
+
+```{r Data formatting}
+cd = within(cd,
+            {
+              ID = as.factor(ID) # beedance identifier as a factor
+              date = as.factor(date) # date as a factor
+              signed_angle = Mod360.180(bearing)  # bearing between -180 and 180
+              angle = circular(rad(signed_angle),# bearing between -pi and pi
+                               rotation = 'clock') # circular format suppresses later warnings
+            }
+)
+u_id = with(cd, unique(ID)) # unique beedances
+length(u_id)#169 beedances
+```
+```{r Shorten variable names}
+cd = within(cd,
+            {
+              BR = brightn
+              CL = colour
+              DT = date
+              RN = run
+            }
+)
+```
+
+## Identify dances for both conditions
+Identify dances in which all four stimulus conditions were used.
+
+```{r both conditions}
+uvc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'u'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
+
+#There should be two brightness levels for UV
+uv_ids = u_id[uvc == 2]
+length(uv_ids)#most individuals
+#extract just those individuals
+
+#find data for full condition individuals
+cd_uv = subset(cd, ID %in% uv_ids)
+```
+
+# Load Bambi model and extract draws for each parameter
+
+```{r Load the model}
+#Import arviz for model handling
+az = reticulate::import("arviz")
+# Load the NetCDF file
+idata = az$from_netcdf("2Results/GUV_unwrap_model.nc")
+# Convert to data frame
+posterior_df = reticulate::py_to_r(x =                                         idata$posterior$to_dataframe()
+                                   )
+```
+
+Set up metadata about draws for sorting.
+
+```{r Identify individuals and chains}
+# Initial Metadata -----------------------------------------------------
+
+n_ind = 169
+n_chains = 4
+obs_per_chain = nrow(posterior_df) /
+                    (n_ind * n_chains) # Calculated automatically
+
+# Individual changes every row (1,2...169, 1,2...169)
+posterior_df = within(posterior_df,
+                      {
+                Individual_ID = rep(x = 1:n_ind, 
+                         times = n_chains * obs_per_chain)
+    
+    # Iteration changes every 169 rows (1,1... (169 times), 2,2... (169 times))
+                .iteration    = rep(x = rep(x = 1:obs_per_chain, 
+                                 each = n_ind), 
+                         times = n_chains)
+
+# Chain changes every (169 * obs_per_chain) rows
+                .chain        = rep(x = 1:n_chains, 
+                                    each = obs_per_chain * n_ind)
+                      }
+)
+# Define Parameter Groupings
+global_params = c(
+  "Intercept", "B", "C", "B:C", 
+  "kappa_Intercept", "kappa_B", "kappa_C", "kappa_B:C",
+  "1|Individual_kappa", "B|Individual_kappa", "C|Individual_kappa", "B:C|Individual_kappa",
+  "kappa_1|Individual_sigma", "kappa_B|Individual_sigma", 
+  "kappa_C|Individual_sigma", "kappa_B:C|Individual_sigma",
+  "kappa_1|Individual_offset", "kappa_B|Individual_offset", 
+  "kappa_C|Individual_offset", "kappa_B:C|Individual_offset"
+)
+
+ind_params = c(
+  "1|Individual", "B|Individual", "C|Individual", "B:C|Individual",
+  "kappa_1|Individual", "kappa_B|Individual", "kappa_C|Individual", "kappa_B:C|Individual"
+)
+
+```
+
+```{r Reorganise draws by individual}
+
+# Reshape posterior draws -------------------------------------------------
+
+# Reshape to Wide Format
+list_of_inds = split(x = posterior_df, 
+                     f = posterior_df$Individual_ID)
+
+# Start wide df with metadata and population-level parameters
+existing_globals = intersect(x = global_params,
+                             y = colnames(posterior_df))
+# take the first individual's data as a template for the wide data frame
+draws_wide  =  list_of_inds[[1]][, c(".chain", ".iteration", existing_globals)]
+
+# Pivot individual-level parameters into columns
+for(param in ind_params)
+  {
+  if(param %in% colnames(posterior_df))
+    {
+    clean_base = gsub("\\|", "_", param)
+    for(i in 1:n_ind) {
+      draws_wide[[paste0(clean_base, "_Ind_", i)]] = list_of_inds[[i]][[param]]
+    }
+  }
+}
+
+# Export to draws dataframe
+draws_final = posterior::as_draws_df(draws_wide)
+```
+
+
+# Inspect model estimates
+
+This model identifies both a population level bias (near 0°) and individual biases
+ with stable parameter estimates on the 'unwrapped' (circular modulo) scale.
+ 
+```{r Inspect unimodal change model}
+
+mcmc_trace(draws_final,
+           pars = c('Intercept', 'B', 'C', 'B:C'),
+           transformations = unwrap_circular_deg)
+mcmc_trace(draws_final,
+           pars = paste0("kappa_",
+                         c('Intercept', 'B', 'C', 'B:C')) )
+mcmc_trace(draws_final,
+           pars = paste0( c('1', 'B', 'C', 'B:C'),
+                          '|Individual_kappa') )
+mcmc_trace(draws_final,
+           pars = paste0('kappa_',
+                         c('1', 'B', 'C', 'B:C'),
+                         '|Individual_sigma') )
+```
+
+
+
+```{r Inspect individual means unimodal change model}
+plt_panels = 9
+#individual but they overlap when unwrapped
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+plt = mcmc_trace(draws_final,
+           pars = paste0("1_Individual_Ind_",
+                         start_idx:end_idx),
+           facet_args = list(ncol = 3,
+                             nrow = 3),
+           transformations = unwrap_circular_deg
+           )
+print(plt)
+}
+```
+
+Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
+all estimates converged well ( $\hat{R}<1.01$).
+
+```{r Convergence heuristics for the change model}
+sm_fixed = summarise_draws(draws_final[,c(1:16)],
+                           .num_args = list(digits = 3))
+# print(sm_all$fixed[c(1,5:6+20),], digits = 3)
+sm_fixed[, c('variable', 'median', 'q5', 'q95', 'rhat')]
+# print(sm_all$random, digits = 3)
+# print(sm_all$spec_pars, digits = 3)
+# 
+# #mu0 and mui look bad, but good after unwrapping
+# UnwrapRhats(draws_final,
+#             variable = '^b_mu0')
+# summary(UnwrapRhats(draws_final,
+#             variable = '^b_mui') )
+```
+
+```{r summarise fixef with arviz}
+azsum_fixed = az$summary(idata,
+           var_names=c("Intercept", #slightly right shifted, should converge to around 0.26
+               "B", 
+                "C",
+                "B:C",
+                "kappa_Intercept",
+               "kappa_B",
+                "kappa_C",
+                "kappa_B:C"
+                ),
+    circ_var_names=c("Intercept",
+                    "B",
+                    "C",
+                    "B:C"
+                    )
+)
+print(azsum_fixed[, c(1, 3, 4, 7, 9)], digits = 3)
+```
+
+```{r summarise ranef with arviz}
+azsum_ranef = az$summary(idata,
+           var_names=c( "1|Individual_kappa",
+        "B|Individual_kappa",
+        "C|Individual_kappa",
+        "B:C|Individual_kappa",
+        "kappa_1|Individual_sigma",
+        "kappa_B|Individual_sigma",
+        "kappa_C|Individual_sigma",
+        "kappa_B:C|Individual_sigma"
+                )
+)
+print(azsum_ranef[, c(1, 3, 4, 7, 9)], digits = 3)
+```
+
+## Extract predictions
+
+```{r set up functions to summarise draws}
+
+#A function to find the circular median in (-pi, pi)
+MedCDraws = function(x,
+                     templ = 'none', #assumes radians
+                     medn = 1) #take the 1st median
+{
+  median.circular( circular(x = mod_circular(x),
+                            template = templ)
+                                           )[medn]
+}
+QCDraws = function(x,
+                   probs = c(0.025, 0.5, 0.975),
+                     templ = 'none',
+                     medn = 1)
+{
+  quantile.circular( circular(x = mod_circular(x),
+                            template = templ),
+                     probs = probs
+                                           )
+}
+```
+
+```{r Extract individual predictions}
+# Setup containers for summary statistics
+u_id_num <- 1:n_ind
+mu_id_gh <- kappa_id_gh <- numeric(length(u_id_num))
+mu_id_uh <- kappa_id_uh <- numeric(length(u_id_num))
+mu_id_gl <- kappa_id_gl <- numeric(length(u_id_num))
+mu_id_ul <- kappa_id_ul <- numeric(length(u_id_num))
+
+# Create one Master List for all raw draws
+# Structure: individual_draws[[i]]$mu$gh
+individual_draws <- vector("list", length(u_id_num))
+
+for(i in seq_along(u_id_num)) {
+  
+  calc <- within(draws_final, {
+    # Dynamic fetch
+    m_i   <- get(paste0("1_Individual_Ind_", i))
+    m_bi  <- get(paste0("B_Individual_Ind_", i))
+    m_ci  <- get(paste0("C_Individual_Ind_", i))
+    m_bci <- get(paste0("B:C_Individual_Ind_", i))
+    
+    k_i   <- get(paste0("kappa_1_Individual_Ind_", i))
+    k_bi  <- get(paste0("kappa_B_Individual_Ind_", i))
+    k_ci  <- get(paste0("kappa_C_Individual_Ind_", i))
+    k_bci <- get(paste0("kappa_B:C_Individual_Ind_", i))
+    
+    # Calculate Raw Vectors
+    gh_mu_vec <- Intercept + m_i
+    gh_ka_vec <- kappa_Intercept + k_i
+    
+    uh_mu_vec <- Intercept + m_i + C + m_ci
+    uh_ka_vec <- kappa_Intercept + k_i + kappa_C + k_ci
+    
+    gl_mu_vec <- Intercept + m_i + B + m_bi
+    gl_ka_vec <- kappa_Intercept + k_i + kappa_B + k_bi
+    
+    ul_mu_vec <- Intercept + m_i + B + C + `B:C` + m_bi + m_ci + m_bci
+    ul_ka_vec <- kappa_Intercept + k_i + kappa_B + kappa_C + `kappa_B:C` + k_bi + k_ci + k_bci
+  })
+  
+  # Save to the Nested List
+  individual_draws[[i]] <- list(
+    mu    = list(gh = calc$gh_mu_vec, uh = calc$uh_mu_vec, gl = calc$gl_mu_vec, ul = calc$ul_mu_vec),
+    kappa = list(gh = calc$gh_ka_vec, uh = calc$uh_ka_vec, gl = calc$gl_ka_vec, ul = calc$ul_ka_vec)
+  )
+  
+  # Store summary stats for quick table access
+  mu_id_gh[i] <- MedCDraws(calc$gh_mu_vec)
+  kappa_id_gh[i] <- median(calc$gh_ka_vec)
+  
+  mu_id_uh[i] <- MedCDraws(calc$uh_mu_vec)
+  kappa_id_uh[i] <- median(calc$uh_ka_vec)
+  
+  mu_id_gl[i] <- MedCDraws(calc$gl_mu_vec)
+  kappa_id_gl[i] <- median(calc$gl_ka_vec)
+  
+  mu_id_ul[i] <- MedCDraws(calc$ul_mu_vec)
+  kappa_id_ul[i] <- median(calc$ul_ka_vec)
+}
+```
+
+```{r Plot the unimodal model}
+
+
+
+par(pty = 's')
+par(mar = c(0,0,0,0),
+    mfrow = c(4,4) )
+for(i in 1:length(u_id) )
+# for(i in 20+1:50 )
+{
+  
+  # Construct the exact column names
+  mu_i   = paste0("1_Individual_Ind_", i)
+  mu_bi  = paste0("B_Individual_Ind_", i)
+  mu_ci  = paste0("C_Individual_Ind_", i)
+  mu_bci = paste0("B:C_Individual_Ind_", i)
+  
+  ka_i   = paste0("kappa_1_Individual_Ind_", i)
+  ka_bi  = paste0("kappa_B_Individual_Ind_", i)
+  ka_ci  = paste0("kappa_C_Individual_Ind_", i)
+  ka_bci = paste0("kappa_B:C_Individual_Ind_", i)
+  
+  #green high
+  with(subset(cd, 
+              ID %in% u_id[i] &
+                CL %in% 'g' & BR %in% 'h'),
+  {
+    PCfun(angles = bearing,
+         col = 'green3',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+  Draws2Cont(individual_draws[[i]],
+           x_string = paste0('sin(mu$gh) * A1(softplus(kappa$gh))'),
+           y_string = paste0('cos(mu$gh) * A1(softplus(kappa$gh))')
+  )
+  
+  arrows.circular(
+    x = circular(mu_id_gh[i],
+                 units = 'radians',
+                 rotation = 'clock',
+                 zero = pi/2),
+    y = A1(softplus(kappa_id_gh[i])), # Ensure softplus is applied here
+    lwd = 5,
+    length = 0.1/1.25,
+    col = adjustcolor('green3', alpha.f = 0.8)
+  )
+
+  #UV high
+  with(subset(cd,
+              ID %in% u_id[i] &
+                CL %in% 'u' & BR %in% 'h'),
+  {
+    PCfun(angles = bearing,
+         col = 'magenta3',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+   Draws2Cont(individual_draws[[i]],
+           x_string = paste0('sin(mu$uh) * A1(softplus(kappa$uh))'),
+           y_string = paste0('cos(mu$uh) * A1(softplus(kappa$uh))')
+  )
+  arrows.circular(x = circular(x = mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uh[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
+
+  #green low
+  with(subset(cd,
+              ID %in% u_id[i] &
+                CL %in% 'g' & BR %in% 'l'),
+  {
+    PCfun(angles = bearing,
+         col = 'green4',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+   Draws2Cont(individual_draws[[i]],
+           x_string = paste0('sin(mu$gl) * A1(softplus(kappa$gl))'),
+           y_string = paste0('cos(mu$gl) * A1(softplus(kappa$gl))')
+  )
+  arrows.circular(x = circular(x = mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gl[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('green4', alpha.f = 200/255))
+  # 
+  #UV low
+  with(subset(cd,
+              ID %in% u_id[i] &
+                CL %in% 'u' & BR %in% 'l'),
+  {
+    PCfun(angles = bearing,
+         col = 'purple',
+         plot_rho = FALSE,
+         title = u_id[i])
+    }
+  )
+  Draws2Cont(individual_draws[[i]],
+           x_string = paste0('sin(mu$ul) * A1(softplus(kappa$ul))'),
+           y_string = paste0('cos(mu$ul) * A1(softplus(kappa$ul))')
+  )
+  arrows.circular(x = circular(x = mu_id_ul[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 5,
+                 length = 0.1/1.25,
+                 col = adjustcolor('purple', alpha.f = 200/255))
+}
+
+```
+
+
+## Plot population level predictions
+
+
+```{r Calculate estimates of means and changes}
+
+#calculate mean vectors
+mean_vectors = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el_rad, # N.B. Including sun azimuth drops some cases without a time stamp
+                         data = cd,
+                         FUN = rho.circular
+)
+#correct names
+mean_vectors = within(mean_vectors,
+                      {mean_vector = angle; rm(angle)} # angle now indicates a mean vector, not an angle
+)
+#add kappa
+mle_estimates = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el,
+                          data = cd,
+                          FUN = MLE_est
+)
+#Rayleigh tests
+rayleigh_tests = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el,
+                          data = cd,
+                          FUN = Rayleigh_p
+                          )
+#add to the summary table and 
+#calculate inverse softplus kappa
+mean_vectors = within(mean_vectors,
+                      {
+                        mu = deg(mle_estimates$angle[,'mu'])
+                        kappa = mle_estimates$angle[,'kappa']
+                        iskappa  = inv_softplus(kappa)
+                      }
+)
+
+luc = sapply(u_id,
+              FUN = IndCond,
+              dt = cd)
+
+#Most individuals that made it to bright green 
+full_ids = u_id[luc == 4]
+
+#find pair conditions
+#green
+grc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'g'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
+#bright
+brc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              brightn %in% 'h'),
+                     {
+                       length(unique(colour))
+                       }
+                     )
+              },
+              dt = cd)
+#UV
+uvc = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              colour %in% 'u'),
+                     {
+                       length(unique(brightn))
+                       }
+                     )
+              },
+              dt = cd)
+#dim
+dic = sapply(u_id,
+              FUN = function(id, dt)
+                {
+                with(subset(dt,
+                            ID %in% id & 
+                              brightn %in% 'l'),
+                     {
+                       length(unique(colour))
+                       }
+                     )
+              },
+              dt = cd)
+
+#There should be two brightness levels for green
+gr_ids = u_id[grc == 2]
+#There should be two colour levels for bright
+br_ids = u_id[brc == 2]
+#There should be two brightness levels for UV
+uv_ids = u_id[uvc == 2]
+#There should be two colour levels for dim
+di_ids = u_id[dic == 2]
+
+#condition specific
+gh_ids = with(subset(cd_all,
+                     subset = CL %in% 'g' & 
+                       BR %in% 'h'),
+              unique(ID)
+              )
+uh_ids = with(subset(cd_all,
+                     subset = CL %in% 'u' & 
+                       BR %in% 'h'),
+              unique(ID)
+              )
+gl_ids = with(subset(cd_all,
+                     subset = CL %in% 'g' & 
+                       BR %in% 'l'),
+              unique(ID)
+              )
+ul_ids = with(subset(cd_all,
+                     subset = CL %in% 'u' & 
+                       BR %in% 'l'),
+              unique(ID)
+              )
+
+
+mu_diff_gl = sapply(X = gr_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'g',
+                    br = 'l')
+mu_diff_uh = sapply(X = br_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'h')
+mu_diff_ul = sapply(X = uv_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                    cl = 'u',
+                    br = 'l')
+mu_diff_ugl = sapply(X = di_ids,
+                    FUN = MuDiff,
+                    dt = mean_vectors,
+                     cl = 'u',
+                    br = 'l',
+                    ref_cl = 'g',
+                    ref_br = 'h')
+
+```
+
+```{r Extract population level predictions}
+
+par(pty = 's')
+#Population mean for green bright
+par(mfrow = c(1,4),
+    mar = c(0,0,0,0))
+with(subset(mean_vectors,
+            colour %in% 'g' &
+              brightn %in% 'h'),
+     {
+PCfun(angles = mu,
+      col = 'green3',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% gh_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gh[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('green3', alpha.f = 200/255))
+}
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_Intercept)*
+             A1(kappa_mu)',
+           y_string = 'cos(b_mu0_Intercept)*
+             A1(kappa_mu)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('green3', alpha.f = 200/255))
+)
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+#pop mean for UV bright
+with(subset(mean_vectors,
+            colour %in% 'u' &
+              brightn %in% 'h'),
+     {
+PCfun(angles = mu,
+      col = 'magenta3',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% uh_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uh[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
+}
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_C)*
+             A1(kappa_muc)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_C)*
+             A1(kappa_muc)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_C),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_muc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('magenta3', alpha.f = 200/255))
+)
+
+
+#pop mean for green dim
+with(subset(mean_vectors,
+            colour %in% 'g' &
+              brightn %in% 'l'),
+     {
+PCfun(angles = mu,
+      col = 'darkgreen',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% gl_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gl[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('darkgreen', alpha.f = 200/255))
+}
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_B)*
+             A1(kappa_mub)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_B)*
+             A1(kappa_mub)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mub)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
+#pop mean for UV dim
+with(subset(mean_vectors,
+            colour %in% 'u' &
+              brightn %in% 'l'),
+     {
+PCfun(angles = mu,
+      col = 'purple',
+      shrink = 2,
+      plot_rho = FALSE)
+     }
+)
+
+for(i in which(u_id %in% ul_ids) )
+{
+
+  arrows.circular(x = circular(x = mu_id_ul[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('purple', alpha.f = 200/255))
+}
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'Mint'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('purple', alpha.f = 200/255))
+)
+
+
+  
+
+
+#effect of UV
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 2,
+      plot_rho = FALSE)
+
+for(i in which(u_id %in% uv_ids) )
+{
+   #UV high
+  
+  arrows.circular(x = circular(x = mu_id_uh[i] - mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_uh[i]),
+                 lwd = 0.5,
+                 length = 0,
+                 col = adjustcolor('magenta3', alpha.f = 200/255))
+  
+}
+
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_C)*
+             A1(kappa_muc)',
+           y_string = 'cos(b_mu0_C)*
+             A1(kappa_muc)'#,
+           # palette = 'Purp'
+           )
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_C),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray40', alpha.f = 200/255))
+)
+
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_C), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+#effect of dim green
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 2,
+      plot_rho = FALSE)
+
+#green low
+for(i in which(u_id %in% gr_ids))
+{
+  arrows.circular(x = circular(x = mu_id_gl[i] - mu_id_gh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_gl[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('green4', alpha.f = 200/255))
+}
+
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_B)*
+             A1(kappa_mub)',
+           y_string = 'cos(b_mu0_B)*
+             A1(kappa_mub)'#,
+           # palette = 'YlGn'
+           )
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_B), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_B),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mu)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
+#effect of dim UV
+PCfun(angles = unlist(mu_diff_ul),
+      col = 'purple',
+      shrink = 2,
+      plot_rho = FALSE)
+
+#UV low
+for(i in which(u_id %in% uv_ids))
+{
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_uh[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('purple', alpha.f = 200/255))
+}
+#the difference between UV bright and UV dim is brightness and the interaction
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_B + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_B + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'YlGn'
+           )
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_B + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_B + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('purple', alpha.f = 200/255))
+)
+
+#effect of dim UV relative to dim green
+PCfun(angles = unlist(mu_diff_ugl),
+      col = 'gray25',
+      shrink = 2,
+      plot_rho = FALSE)
+
+#UV low
+for(i in which(u_id %in% di_ids))
+{
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_gl[i],
+                               units = 'radians',
+                              rotation = 'clock',
+                              zero = pi/2),
+                 y = A1(kappa_id_ul[i]),
+                 lwd = 0.25,
+                 length = 0,
+                 col = adjustcolor('gray25', alpha.f = 200/255))
+}
+#the difference between green dim and UV dim is colour and the interaction
+Draws2Cont(draws = draws_all,
+           x_string = 'sin(b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)',
+           y_string = 'cos(b_mu0_C + b_mu0_BC)*
+             A1(kappa_mubc)'#,
+           # palette = 'YlGn'
+           )
+
+with(draws_all,
+     {
+       round(deg(
+     quantile(mod_circular(b_mu0_C + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_all,
+     arrows.circular(x = circular(x = MedCDraws(b_mu0_C + b_mu0_BC),
+                                                  units = 'radians',
+                                                  rotation = 'clock',
+                                                  zero = pi/2),
+     y = A1(median(kappa_mubc)),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray25', alpha.f = 200/255))
+)
+```
+
+```{r Kappa effects}
+#plot kappa
+par(mfrow = c(1,4))
+
+with(draws_all,
+     VertHist(data = softplus(Intercept_kappa), 
+              main = '\ngreen bright',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('green3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_C), 
+              main = '\nUV bright',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('magenta3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     {
+       round(
+     quantile(softplus(Intercept_kappa + b_kappa_C) - 
+                softplus(Intercept_kappa),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+
+with(draws_all,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_B), 
+              main = '\ngreen dim',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('green4', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     VertHist(data = softplus(Intercept_kappa + b_kappa_B  + b_kappa_C +  + b_kappa_BC), 
+              main = '\nUV dim',
+              ylab = 'kappa',
+              ylim = c(0, 15),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+
+with(draws_all,
+     {
+       round(
+     quantile(softplus(Intercept_kappa + b_kappa_B) - 
+                softplus(Intercept_kappa),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+
+```
+
+```{r Kappamu effects}
+#plot kappa
+par(mfrow = c(1,4))
+
+with(draws_all,
+     VertHist(data = kappa_mu, 
+              main = '\ngreen bright',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('green3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     VertHist(data = kappa_muc, 
+              main = '\nUV effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('gray50', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     VertHist(data = kappa_mub, 
+              main = '\ndim effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('darkgreen', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+with(draws_all,
+     VertHist(data = kappa_mubc, 
+              main = '\ndim uv effect',
+              ylab = 'kappamu',
+              ylim = c(0, 15),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = 0:5*5)
+
+#change in effect concentration
+par(mfrow = c(1,3))
+
+with(draws_all,
+     VertHist(data = softkappamuc, 
+              main = '\nUV effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('gray50', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
+
+with(draws_all,
+     VertHist(data = softkappamub, 
+              main = '\ndim effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('darkgreen', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
+
+with(draws_all,
+     VertHist(data = softkappa_mubc, 
+              main = '\ndim uv effect',
+              ylab = 'inv_softplus(kappamu)',
+              ylim = c(-7, 7),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -5:5)
+abline(h = 0, lty = 3)
+
+```
+
+# Model comparison for unimodal
+## Set up formula and priors
+
+
+```{r Formulas for model reduction}
+
+formula_noCL = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui + muib), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + BR , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  muib ~ 0 + B:ID, # individual mu offset for brightness
+  kappa ~ 1 + BR + (1 + BR | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_noBR = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui +muic), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + CL , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  muic ~ 0 + C:ID, # individual mu offset for uv
+  kappa ~ 1 + CL + (1 + CL | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_KnoCL = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui + muib), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + BR , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  muib ~ 0 + B:ID, # individual mu offset for brightness
+  kappa ~ 1 + BR + CL + (1 + BR | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_KnoBR = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui + muic), #primary mean, population mean plus individual mean
+  mu0 ~ 1 + CL , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  muic ~ 0 + C:ID, # individual mu offset for uv
+  kappa ~ 1 + BR + CL + (1 + CL | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+formula_null = bf(#modulus may not be necessary, included in lpd function
+  formula = angle ~ mu,
+  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
+  mu0 ~ 1 , #population level effects
+  mui ~ 0 + ID, # individual mu offset 
+  kappa ~ 1 + (1 | ID), #concentration for primary mean
+  family = unwrap_von_mises,
+  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
+
+```
+
+N.B. Since the priors specify changes, but not what kind, each change model can use the same priors.
+ 
+```{r Null change priors}
+
+#priors for mu
+pr_mu_null = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)  #
+
+#priors for kappa
+pr_kappa_null = 
+                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
+                  prior('student_t(3, 0, 2.0)', class = 'sd', dpar = 'kappa')
+
+
+
+#priors for mu
+pr_mu_nobr = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)  +
+  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamuc))',
+                        nlpar  = 'muic',  class = 'b') +
+            set_prior("target += normal_lpdf(softkappamuc | 0, 1.0)", #expect small differences 
+                      check = FALSE)  
+
+
+#priors for mu
+pr_mu_nocl = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
+                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
+                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
+                        nlpar  = 'mui',  class = 'b') +
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
+                      check = FALSE)  +
+  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamub))',
+                        nlpar  = 'muib',  class = 'b') +
+            set_prior("target += normal_lpdf(softkappamub | 0, 1.0)", #expect small differences 
+                      check = FALSE)  
+
+
+  
+#no mu colour priors
+pr_nobr = pr_mu_nobr + pr_kappa_all
+
+#no mu brightness priors
+pr_nocl = pr_mu_nocl + pr_kappa_all
+
+  
+#all bimodal priors
+pr_null = pr_mu_null + pr_kappa_null
+```
+
+## Run the alternative models
+
+```{r run alternative models}
+
+#very long compile time
+system.time(
+  {
+    
+    model_noCL = brm(formula = formula_noCL,
+                     # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = cd_all,
+                   prior = pr_nocl,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu +
+                     stan_softkappamub,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/noCL_model.RData',
+     model_noCL)#save for future reference
+
+system.time(
+  {
+    
+    model_noBR = brm(formula = formula_noBR,
+                     # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = subset(cd_all),
+                   prior = pr_nobr,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu+
+                     stan_softkappamuc,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/noBR_model.RData',
+     model_noBR)#save for future reference
+
+system.time(
+  {
+    
+    model_null = brm(formula = formula_null,
+                     # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = subset(cd_all),
+                   prior = pr_null,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/uninull_model.RData',
+     model_null)#save for future reference
+
+```
+
+```{r Kappa only models}
+
+#very long compile time
+system.time(
+  {
+    
+    model_KnoCL = brm(formula = formula_KnoCL,
+                     # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = subset(cd_all),
+                   prior = pr_nocl,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu+
+                     stan_softkappamub,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/KnoCL_model.RData',
+     model_KnoCL)#save for future reference
+
+system.time(
+  {
+    
+    model_KnoBR = brm(formula = formula_KnoBR,
+                     # data = subset(cd_all, ID %in% u_id[1:20]),
+                   data = subset(cd_all),
+                   prior = pr_nobr,
+                   stanvars = stan_unwrap_fun + 
+                      modulo_circular_fun + 
+                      stan_softkappamu+
+                     stan_softkappamuc,
+                   chains = 4, # 4 chains in parallel
+                   cores = 4, # on 4 CPUs
+                   warmup = 1000, #
+                   iter = 3000, # longer sampling to efficiently sample mu0
+                   refresh = 500,
+                   control = list(adapt_delta = 0.90),
+                   silent = 1, # echo only high priority Stan messages
+                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
+                   backend = 'cmdstanr')
+    
+  }
+)
+save(file = '2Results/KnoBR_model.RData',
+     model_KnoBR)#save for future reference
+
+```
+
+## Unimodal LOO comparison
+```{r Loo comparison for unimodal models}
+#collect models
+load(file = '2Results/uni_model.RData')#model_all
+load(file = '2Results/noCL_model.RData')#model_noCL
+load(file = '2Results/noBR_model.RData')#model_noBR
+load(file = '2Results/KnoCL_model.RData')#model_KnoCL
+load(file = '2Results/KnoBR_model.RData')#model_KnoBR
+load(file = '2Results/uninull_model.RData')#model_null
+
+modlist = list(maximal = model_all,
+               KnoCL = model_noCL,
+               KnoBR = model_noBR,
+               noCL = model_noCL,
+               noBR = model_noBR,
+               null = model_null
+                )
+
+#calculate loo
+modlist = lapply(modlist,
+       FUN = add_criterion,
+       'loo',
+       moment_match = TRUE)
+
+save(modlist,
+     file = '2Results/uni_modlist.RData')
+
+#compare all models
+lc_all = with(modlist, loo_compare(maximal, KnoCL, KnoBR, noCL, noBR, null))
+print(lc_all)
+#effect of UV bright
+with(modlist, loo_compare(maximal, KnoCL))
+#effect of green dim
+with(modlist, loo_compare(maximal, KnoBR))
+#compare LOO IC
+LooIC = function(lmod)
+{
+  loo(lmod)$estimates['looic', 'Estimate']
+}
+
+modLIC = lapply(X = modlist,
+       FUN = LooIC)
+print(sort(unlist(modLIC)), digits = 1)
+
+```
+
+```{r Plot the model comparison}
+
+lc_plot = with(modlist,
+  data.frame(elpd = c(null$criteria$loo$estimates['elpd_loo','Estimate'],
+                      noBR$criteria$loo$estimates['elpd_loo','Estimate'],
+                      KnoBR$criteria$loo$estimates['elpd_loo','Estimate'],
+                      noCL$criteria$loo$estimates['elpd_loo','Estimate'],
+                      KnoCL$criteria$loo$estimates['elpd_loo','Estimate'],
+                      maximal$criteria$loo$estimates['elpd_loo','Estimate'],
+                      maximal$criteria$loo$estimates['elpd_loo','Estimate'] -
+                                  lc_all['KnoCL','elpd_diff']),
+                     se = c(null$criteria$loo$estimates['elpd_loo','SE'],
+                            noBR$criteria$loo$estimates['elpd_loo','SE'],
+                            KnoBR$criteria$loo$estimates['elpd_loo','SE'],
+                            noCL$criteria$loo$estimates['elpd_loo','SE'],
+                            KnoCL$criteria$loo$estimates['elpd_loo','SE'],
+                            maximal$criteria$loo$estimates['elpd_loo','SE'],
+                            lc_all['noCL','se_diff'])
+                     )
+)
+
+par(mar = c(0,4,0,4),
+    mfrow = c(1,1))
+plot(x = 1:dim(lc_plot)[1],
+     y = lc_plot$elpd,
+     xlab = '',
+     ylab = 'expected log predictive density',
+     xlim = c(1,dim(lc_plot)[1]) + c(-1,1)*0.5,
+     ylim = with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}), #within 2sigma of all estimates
+     pch = 19,
+     col = c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho),
+     cex = 2,
+     axes = FALSE)
+with(lc_plot,
+     {
+arrows(x0 = 1:dim(lc_plot)[1],
+       x1 = 1:dim(lc_plot)[1],
+       y0 = elpd - se,
+       y1 = elpd + se,
+       code = 3,
+       angle = 90,
+       length = 0.1,
+       lwd = 3,
+       col =  c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho)
+       )
+     }
+)
+axis(2,
+     at = pretty(
+                   with(lc_plot, {range(elpd+se%*% t(c(-2,2)))})
+                 )
+     )
+axis(4,
+     at = with(lc_plot,
+               {
+               seq(from = elpd[5], to = elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4, by = 20)
+               }
+               ),
+     labels = with(lc_plot,
+                          {
+                            seq(from = 0, to =  elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4 - elpd[5],  by = 20)
+                          }
+     ),
+     col = col_rho
+)
+abline(h = lc_plot$elpd[5],
+       col = 'gray')
+mtext(text = 'ELPD difference',
+      side = 4,
+      line = 3
+      )
+mtext(side = 1,
+      line = -1,
+      at = 1:dim(lc_plot)[1],
+     text = c('null\nmodel',
+              'no\nbrightness',
+              'kappa\nbrightness',
+              'no\ncolour',
+              'kappa\ncolour',
+              'colour &\nbrightness',
+              'difference'),
+     col = c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho)
+     )
+
+
+```
