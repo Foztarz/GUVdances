@@ -172,25 +172,25 @@ for(i in 1:length(u_id)) {
   # Using draws_final[[name]] extracts the column as a numeric vector
   
   # Green High (Reference)
-  mu_id_gh[i] <- -1*MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]])
+  mu_id_gh[i] <- MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]])
   kappa_id_gh[i] <- median(draws_final[["kappa_Intercept"]] + draws_final[[ka_i]])
   
   # UV High (C effect)
-  mu_id_uh[i] <- -1*MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
+  mu_id_uh[i] <- MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
                              draws_final[["C"]] + draws_final[[mu_ci]])
   
   kappa_id_uh[i] <- median(draws_final[["kappa_Intercept"]] + draws_final[[ka_i]] + 
                              draws_final[["kappa_C"]] + draws_final[[ka_ci]])
   
   # Green Low (B effect)
-  mu_id_gl[i] <- -1*MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
+  mu_id_gl[i] <- MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
                              draws_final[["B"]] + draws_final[[mu_bi]])
   
   kappa_id_gl[i] <- median(draws_final[["kappa_Intercept"]] + draws_final[[ka_i]] + 
                              draws_final[["kappa_B"]] + draws_final[[ka_bi]])
   
   # UV Low (All effects + Interactions)
-  mu_id_ul[i] <- -1*MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
+  mu_id_ul[i] <- -MedCDraws(draws_final[["Intercept"]] + draws_final[[mu_i]] + 
                              draws_final[["B"]] + draws_final[["C"]] + draws_final[["B:C"]] + 
                              draws_final[[mu_bi]] + draws_final[[mu_ci]] + draws_final[[mu_bci]])
   
@@ -283,6 +283,36 @@ Draws2Cont = function(draws,
        }
   )
 }
+
+
+# Population example ------------------------------------------------------
+
+
+OpenCplot()
+
+# Inside your plotting loop:
+Draws2Cont(draws_final,
+           x_string = paste0('sin( (Intercept)) * A1(softplus(kappa_Intercept))'),
+           y_string = paste0('cos( (Intercept)) * A1(softplus(kappa_Intercept))')
+             )
+
+with(draws_final,
+     {
+  arrows.circular(
+    x = circular(MedCDraws(Intercept),
+                 units = 'radians',
+                 rotation = 'clock',
+                 zero = pi/2),
+    y = A1(softplus(median(kappa_Intercept))), # Ensure softplus is applied here
+    lwd = 5,
+    length = 0.1/1.25,
+    col = adjustcolor('green3', alpha.f = 0.8)
+  )
+}
+)
+
+# Individual example ------------------------------------------------------
+
 
 OpenCplot()
 
