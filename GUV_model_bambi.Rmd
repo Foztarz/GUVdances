@@ -1184,15 +1184,15 @@ with(draws_final,
      VertHist(data = softplus(`B:C|Individual_kappa`), 
               main = '\ndim uv effect',
               ylab = 'kappamu',
-              ylim = c(0, 15),
+              ylim = c(0, 50),
               col = adjustcolor('purple', alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
 axis(1)
-axis(2, at = 0:5*5)
+axis(2, at = 0:5*10)
 ```
 
-```{r Kappamu effects}
+```{r Kappamu conditions}
 
 # 1. Reconstruct matrices: Rows = Draws, Cols = Individuals
 n_draws <- length(individual_draws[[1]]$mu$gh)
@@ -1226,30 +1226,30 @@ par(mfrow = c(1,4))
 # Green Bright
 VertHist(data = post_kappamu_gh, 
          main = '\ngreen bright', ylab = 'kappamu (MLE)',
-         ylim = c(0, 15), col = adjustcolor('green3', alpha.f = 100/255),
+         ylim = c(0, 5), col = adjustcolor('green3', alpha.f = 100/255),
          axes = FALSE, cex.axis = 0.7)
-axis(1); axis(2, at = 0:3*5)
+axis(1); axis(2, at = 0:5)
 
 # UV Bright
 VertHist(data = post_kappamu_uh, 
          main = '\nUV bright', ylab = 'kappamu (MLE)',
-         ylim = c(0, 15), col = adjustcolor('magenta3', alpha.f = 100/255),
+         ylim = c(0, 5), col = adjustcolor('magenta3', alpha.f = 100/255),
          axes = FALSE, cex.axis = 0.7)
-axis(1); axis(2, at = 0:3*5)
+axis(1); axis(2, at = 0:5)
 
 # Green Dim
 VertHist(data = post_kappamu_gl, 
          main = '\ngreen dim', ylab = 'kappamu (MLE)',
-         ylim = c(0, 15), col = adjustcolor('green4', alpha.f = 100/255),
+         ylim = c(0, 5), col = adjustcolor('green4', alpha.f = 100/255),
          axes = FALSE, cex.axis = 0.7)
-axis(1); axis(2, at = 0:3*5)
+axis(1); axis(2, at = 0:5)
 
 # UV Dim
 VertHist(data = post_kappamu_ul, 
          main = '\nUV dim', ylab = 'kappamu (MLE)',
-         ylim = c(0, 15), col = adjustcolor('purple', alpha.f = 100/255),
+         ylim = c(0, 5), col = adjustcolor('purple', alpha.f = 100/255),
          axes = FALSE, cex.axis = 0.7)
-axis(1); axis(2, at = 0:3*5)
+axis(1); axis(2, at = 0:5)
 ```
 ```{r kappamu condition differences}
 # 1. Calculate Differences
@@ -1288,390 +1288,4 @@ VertHist(data = diff_interaction,
          ylim = c(-2, 2), col = adjustcolor('gray40', alpha.f = 100/255),
          axes = FALSE, cex.axis = 0.7)
 axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
-```
-# Model comparison for unimodal
-## Set up formula and priors
-
-
-```{r Formulas for model reduction}
-
-formula_noCL = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mu,
-  nlf(mu ~ mu0 + mui + muib), #primary mean, population mean plus individual mean
-  mu0 ~ 1 + BR , #population level effects
-  mui ~ 0 + ID, # individual mu offset 
-  muib ~ 0 + B:ID, # individual mu offset for brightness
-  kappa ~ 1 + BR + (1 + BR | ID), #concentration for primary mean
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
-
-formula_noBR = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mu,
-  nlf(mu ~ mu0 + mui +muic), #primary mean, population mean plus individual mean
-  mu0 ~ 1 + CL , #population level effects
-  mui ~ 0 + ID, # individual mu offset 
-  muic ~ 0 + C:ID, # individual mu offset for uv
-  kappa ~ 1 + CL + (1 + CL | ID), #concentration for primary mean
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
-
-formula_KnoCL = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mu,
-  nlf(mu ~ mu0 + mui + muib), #primary mean, population mean plus individual mean
-  mu0 ~ 1 + BR , #population level effects
-  mui ~ 0 + ID, # individual mu offset 
-  muib ~ 0 + B:ID, # individual mu offset for brightness
-  kappa ~ 1 + BR + CL + (1 + BR | ID), #concentration for primary mean
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
-
-formula_KnoBR = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mu,
-  nlf(mu ~ mu0 + mui + muic), #primary mean, population mean plus individual mean
-  mu0 ~ 1 + CL , #population level effects
-  mui ~ 0 + ID, # individual mu offset 
-  muic ~ 0 + C:ID, # individual mu offset for uv
-  kappa ~ 1 + BR + CL + (1 + CL | ID), #concentration for primary mean
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
-
-formula_null = bf(#modulus may not be necessary, included in lpd function
-  formula = angle ~ mu,
-  nlf(mu ~ mu0 + mui), #primary mean, population mean plus individual mean
-  mu0 ~ 1 , #population level effects
-  mui ~ 0 + ID, # individual mu offset 
-  kappa ~ 1 + (1 | ID), #concentration for primary mean
-  family = unwrap_von_mises,
-  nl = TRUE)#to accept user-defined extra parameters (mui) we need to treat the formula as nonlinear
-
-```
-
-N.B. Since the priors specify changes, but not what kind, each change model can use the same priors.
- 
-```{r Null change priors}
-
-#priors for mu
-pr_mu_null = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
-                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
-                        nlpar  = 'mui',  class = 'b') +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
-                      check = FALSE)  #
-
-#priors for kappa
-pr_kappa_null = 
-                  prior('normal(3,3)', class = 'Intercept', dpar = 'kappa') +
-                  prior('student_t(3, 0, 2.0)', class = 'sd', dpar = 'kappa')
-
-
-
-#priors for mu
-pr_mu_nobr = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
-                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
-                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
-                        nlpar  = 'mui',  class = 'b') +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
-                      check = FALSE)  +
-  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamuc))',
-                        nlpar  = 'muic',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamuc | 0, 1.0)", #expect small differences 
-                      check = FALSE)  
-
-
-#priors for mu
-pr_mu_nocl = prior('normal(0, pi()/1)', coef = 'Intercept', nlpar = 'mu0') +
-                  prior('normal(0, pi()/2)', class = 'b', nlpar = 'mu0') +
-                  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
-                        nlpar  = 'mui',  class = 'b') +
-            set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
-                      check = FALSE)  +
-  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamub))',
-                        nlpar  = 'muib',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamub | 0, 1.0)", #expect small differences 
-                      check = FALSE)  
-
-
-  
-#no mu colour priors
-pr_nobr = pr_mu_nobr + pr_kappa_all
-
-#no mu brightness priors
-pr_nocl = pr_mu_nocl + pr_kappa_all
-
-  
-#all bimodal priors
-pr_null = pr_mu_null + pr_kappa_null
-```
-
-## Run the alternative models
-
-```{r run alternative models}
-
-#very long compile time
-system.time(
-  {
-    
-    model_noCL = brm(formula = formula_noCL,
-                     # data = subset(cd, ID %in% u_id[1:20]),
-                   data = cd,
-                   prior = pr_nocl,
-                   stanvars = stan_unwrap_fun + 
-                      modulo_circular_fun + 
-                      stan_softkappamu +
-                     stan_softkappamub,
-                   chains = 4, # 4 chains in parallel
-                   cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 500,
-                   control = list(adapt_delta = 0.90),
-                   silent = 1, # echo only high priority Stan messages
-                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
-                   backend = 'cmdstanr')
-    
-  }
-)
-save(file = '2Results/noCL_model.RData',
-     model_noCL)#save for future reference
-
-system.time(
-  {
-    
-    model_noBR = brm(formula = formula_noBR,
-                     # data = subset(cd, ID %in% u_id[1:20]),
-                   data = subset(cd),
-                   prior = pr_nobr,
-                   stanvars = stan_unwrap_fun + 
-                      modulo_circular_fun + 
-                      stan_softkappamu+
-                     stan_softkappamuc,
-                   chains = 4, # 4 chains in parallel
-                   cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 500,
-                   control = list(adapt_delta = 0.90),
-                   silent = 1, # echo only high priority Stan messages
-                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
-                   backend = 'cmdstanr')
-    
-  }
-)
-save(file = '2Results/noBR_model.RData',
-     model_noBR)#save for future reference
-
-system.time(
-  {
-    
-    model_null = brm(formula = formula_null,
-                     # data = subset(cd, ID %in% u_id[1:20]),
-                   data = subset(cd),
-                   prior = pr_null,
-                   stanvars = stan_unwrap_fun + 
-                      modulo_circular_fun + 
-                      stan_softkappamu,
-                   chains = 4, # 4 chains in parallel
-                   cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 500,
-                   control = list(adapt_delta = 0.90),
-                   silent = 1, # echo only high priority Stan messages
-                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
-                   backend = 'cmdstanr')
-    
-  }
-)
-save(file = '2Results/uninull_model.RData',
-     model_null)#save for future reference
-
-```
-
-```{r Kappa only models}
-
-#very long compile time
-system.time(
-  {
-    
-    model_KnoCL = brm(formula = formula_KnoCL,
-                     # data = subset(cd, ID %in% u_id[1:20]),
-                   data = subset(cd),
-                   prior = pr_nocl,
-                   stanvars = stan_unwrap_fun + 
-                      modulo_circular_fun + 
-                      stan_softkappamu+
-                     stan_softkappamub,
-                   chains = 4, # 4 chains in parallel
-                   cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 500,
-                   control = list(adapt_delta = 0.90),
-                   silent = 1, # echo only high priority Stan messages
-                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
-                   backend = 'cmdstanr')
-    
-  }
-)
-save(file = '2Results/KnoCL_model.RData',
-     model_KnoCL)#save for future reference
-
-system.time(
-  {
-    
-    model_KnoBR = brm(formula = formula_KnoBR,
-                     # data = subset(cd, ID %in% u_id[1:20]),
-                   data = subset(cd),
-                   prior = pr_nobr,
-                   stanvars = stan_unwrap_fun + 
-                      modulo_circular_fun + 
-                      stan_softkappamu+
-                     stan_softkappamuc,
-                   chains = 4, # 4 chains in parallel
-                   cores = 4, # on 4 CPUs
-                   warmup = 1000, #
-                   iter = 3000, # longer sampling to efficiently sample mu0
-                   refresh = 500,
-                   control = list(adapt_delta = 0.90),
-                   silent = 1, # echo only high priority Stan messages
-                   save_pars = save_pars(all = TRUE), #Crucial for moment matching
-                   backend = 'cmdstanr')
-    
-  }
-)
-save(file = '2Results/KnoBR_model.RData',
-     model_KnoBR)#save for future reference
-
-```
-
-## Unimodal LOO comparison
-```{r Loo comparison for unimodal models}
-#collect models
-load(file = '2Results/uni_model.RData')#model_all
-load(file = '2Results/noCL_model.RData')#model_noCL
-load(file = '2Results/noBR_model.RData')#model_noBR
-load(file = '2Results/KnoCL_model.RData')#model_KnoCL
-load(file = '2Results/KnoBR_model.RData')#model_KnoBR
-load(file = '2Results/uninull_model.RData')#model_null
-
-modlist = list(maximal = model_all,
-               KnoCL = model_noCL,
-               KnoBR = model_noBR,
-               noCL = model_noCL,
-               noBR = model_noBR,
-               null = model_null
-                )
-
-#calculate loo
-modlist = lapply(modlist,
-       FUN = add_criterion,
-       'loo',
-       moment_match = TRUE)
-
-save(modlist,
-     file = '2Results/uni_modlist.RData')
-
-#compare all models
-lc_all = with(modlist, loo_compare(maximal, KnoCL, KnoBR, noCL, noBR, null))
-print(lc_all)
-#effect of UV bright
-with(modlist, loo_compare(maximal, KnoCL))
-#effect of green dim
-with(modlist, loo_compare(maximal, KnoBR))
-#compare LOO IC
-LooIC = function(lmod)
-{
-  loo(lmod)$estimates['looic', 'Estimate']
-}
-
-modLIC = lapply(X = modlist,
-       FUN = LooIC)
-print(sort(unlist(modLIC)), digits = 1)
-
-```
-
-```{r Plot the model comparison}
-
-lc_plot = with(modlist,
-  data.frame(elpd = c(null$criteria$loo$estimates['elpd_loo','Estimate'],
-                      noBR$criteria$loo$estimates['elpd_loo','Estimate'],
-                      KnoBR$criteria$loo$estimates['elpd_loo','Estimate'],
-                      noCL$criteria$loo$estimates['elpd_loo','Estimate'],
-                      KnoCL$criteria$loo$estimates['elpd_loo','Estimate'],
-                      maximal$criteria$loo$estimates['elpd_loo','Estimate'],
-                      maximal$criteria$loo$estimates['elpd_loo','Estimate'] -
-                                  lc_all['KnoCL','elpd_diff']),
-                     se = c(null$criteria$loo$estimates['elpd_loo','SE'],
-                            noBR$criteria$loo$estimates['elpd_loo','SE'],
-                            KnoBR$criteria$loo$estimates['elpd_loo','SE'],
-                            noCL$criteria$loo$estimates['elpd_loo','SE'],
-                            KnoCL$criteria$loo$estimates['elpd_loo','SE'],
-                            maximal$criteria$loo$estimates['elpd_loo','SE'],
-                            lc_all['noCL','se_diff'])
-                     )
-)
-
-par(mar = c(0,4,0,4),
-    mfrow = c(1,1))
-plot(x = 1:dim(lc_plot)[1],
-     y = lc_plot$elpd,
-     xlab = '',
-     ylab = 'expected log predictive density',
-     xlim = c(1,dim(lc_plot)[1]) + c(-1,1)*0.5,
-     ylim = with(lc_plot, {range(elpd+se%*% t(c(-2,2)))}), #within 2sigma of all estimates
-     pch = 19,
-     col = c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho),
-     cex = 2,
-     axes = FALSE)
-with(lc_plot,
-     {
-arrows(x0 = 1:dim(lc_plot)[1],
-       x1 = 1:dim(lc_plot)[1],
-       y0 = elpd - se,
-       y1 = elpd + se,
-       code = 3,
-       angle = 90,
-       length = 0.1,
-       lwd = 3,
-       col =  c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho)
-       )
-     }
-)
-axis(2,
-     at = pretty(
-                   with(lc_plot, {range(elpd+se%*% t(c(-2,2)))})
-                 )
-     )
-axis(4,
-     at = with(lc_plot,
-               {
-               seq(from = elpd[5], to = elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4, by = 20)
-               }
-               ),
-     labels = with(lc_plot,
-                          {
-                            seq(from = 0, to =  elpd[dim(lc_plot)[1]] + se[dim(lc_plot)[1]]*4 - elpd[5],  by = 20)
-                          }
-     ),
-     col = col_rho
-)
-abline(h = lc_plot$elpd[5],
-       col = 'gray')
-mtext(text = 'ELPD difference',
-      side = 4,
-      line = 3
-      )
-mtext(side = 1,
-      line = -1,
-      at = 1:dim(lc_plot)[1],
-     text = c('null\nmodel',
-              'no\nbrightness',
-              'kappa\nbrightness',
-              'no\ncolour',
-              'kappa\ncolour',
-              'colour &\nbrightness',
-              'difference'),
-     col = c(col_obs, col_kappa, col_kappa, col_treat, col_treat, col_sd2, col_rho)
-     )
-
-
 ```
