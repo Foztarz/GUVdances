@@ -664,22 +664,22 @@ uv_ids = u_id[uvc == 2]
 di_ids = u_id[dic == 2]
 
 #condition specific
-gh_ids = with(subset(cd_all,
+gh_ids = with(subset(cd,
                      subset = CL %in% 'g' & 
                        BR %in% 'h'),
               unique(ID)
               )
-uh_ids = with(subset(cd_all,
+uh_ids = with(subset(cd,
                      subset = CL %in% 'u' & 
                        BR %in% 'h'),
               unique(ID)
               )
-gl_ids = with(subset(cd_all,
+gl_ids = with(subset(cd,
                      subset = CL %in% 'g' & 
                        BR %in% 'l'),
               unique(ID)
               )
-ul_ids = with(subset(cd_all,
+ul_ids = with(subset(cd,
                      subset = CL %in% 'u' & 
                        BR %in% 'l'),
               unique(ID)
@@ -712,79 +712,39 @@ mu_diff_ugl = sapply(X = di_ids,
 ```
 
 ```{r Extract population level predictions}
-
 par(pty = 's')
-#Population mean for green bright
-par(mfrow = c(1,4),
-    mar = c(0,0,0,0))
-with(subset(mean_vectors,
-            colour %in% 'g' &
-              brightn %in% 'h'),
-     {
-PCfun(angles = mu,
-      col = 'green3',
-      shrink = 2,
-      plot_rho = FALSE)
-     }
-)
+# Population mean for green bright (Baseline: Intercept)
+par(mfrow = c(1,4), mar = c(0,0,0,0))
 
-for(i in which(u_id %in% gh_ids) )
-{
+with(subset(mean_vectors, colour %in% 'g' & brightn %in% 'h'), {
+  PCfun(angles = mu, col = 'green3', shrink = 2, plot_rho = FALSE)
+})
 
-  arrows.circular(x = circular(x = mu_id_gh[i],
-                               units = 'radians',
-                              rotation = 'clock',
-                              zero = pi/2),
-                 y = A1(kappa_id_gh[i]),
-                 lwd = 0.25,
-                 length = 0,
-                 col = adjustcolor('green3', alpha.f = 200/255))
+for(i in which(u_id %in% gh_ids)) {
+  arrows.circular(x = circular(x = mu_id_gh[i], units = 'radians', rotation = 'clock', zero = pi/2),
+                  y = A1(kappa_id_gh[i]), lwd = 0.25, length = 0,
+                  col = adjustcolor('green3', alpha.f = 200/255))
 }
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept)*
-             A1(kappa_mu)',
-           y_string = 'cos(b_mu0_Intercept)*
-             A1(kappa_mu)'#,
-           # palette = 'Mint'
-           )
 
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mu)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('green3', alpha.f = 200/255))
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(Intercept) * A1(softplus(kappa_Intercept))',
+           y_string = 'cos(Intercept) * A1(softplus(kappa_Intercept))')
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(Intercept), 
+                                  units = 'radians', 
+                                  rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_Intercept))),
+                     lwd = 5, length = 0.1/1.25,
+                     col = adjustcolor('green3', alpha.f = 200/255, offset = c(rep(-0.2,3),0) )
+     )
 )
 
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
 
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_Intercept), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
-#pop mean for UV bright
-with(subset(mean_vectors,
-            colour %in% 'u' &
-              brightn %in% 'h'),
-     {
-PCfun(angles = mu,
-      col = 'magenta3',
-      shrink = 2,
-      plot_rho = FALSE)
-     }
-)
+# pop mean for UV bright (Intercept + C)
+with(subset(mean_vectors, colour %in% 'u' & brightn %in% 'h'), {
+  PCfun(angles = mu, col = 'magenta3', shrink = 2, plot_rho = FALSE)
+})
 
 for(i in which(u_id %in% uh_ids) )
 {
@@ -798,37 +758,22 @@ for(i in which(u_id %in% uh_ids) )
                  length = 0,
                  col = adjustcolor('magenta3', alpha.f = 200/255))
 }
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept + b_mu0_C)*
-             A1(kappa_muc)',
-           y_string = 'cos(b_mu0_Intercept + b_mu0_C)*
-             A1(kappa_muc)'#,
-           # palette = 'Mint'
-           )
 
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_C),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_muc)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('magenta3', alpha.f = 200/255))
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(Intercept + C) * A1(softplus(kappa_Intercept + kappa_C))',
+           y_string = 'cos(Intercept + C) * A1(softplus(kappa_Intercept + kappa_C))')
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(Intercept + C), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_Intercept + kappa_C))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('magenta3', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 
+# pop mean for green dim (Intercept + B)
+with(subset(mean_vectors, colour %in% 'g' & brightn %in% 'l'), {
+  PCfun(angles = mu, col = 'darkgreen', shrink = 2, plot_rho = FALSE)
+})
 
-#pop mean for green dim
-with(subset(mean_vectors,
-            colour %in% 'g' &
-              brightn %in% 'l'),
-     {
-PCfun(angles = mu,
-      col = 'darkgreen',
-      shrink = 2,
-      plot_rho = FALSE)
-     }
-)
 
 for(i in which(u_id %in% gl_ids) )
 {
@@ -840,38 +785,24 @@ for(i in which(u_id %in% gl_ids) )
                  y = A1(kappa_id_gl[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('darkgreen', alpha.f = 200/255))
+                 col = adjustcolor('darkgreen', alpha.f = 200/255 ))
 }
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept + b_mu0_B)*
-             A1(kappa_mub)',
-           y_string = 'cos(b_mu0_Intercept + b_mu0_B)*
-             A1(kappa_mub)'#,
-           # palette = 'Mint'
-           )
 
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mub)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('darkgreen', alpha.f = 200/255))
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(Intercept + B) * A1(softplus(kappa_Intercept + kappa_B))',
+           y_string = 'cos(Intercept + B) * A1(softplus(kappa_Intercept + kappa_B))')
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(Intercept + B), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_Intercept + kappa_B))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('darkgreen', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 
-#pop mean for UV dim
-with(subset(mean_vectors,
-            colour %in% 'u' &
-              brightn %in% 'l'),
-     {
-PCfun(angles = mu,
-      col = 'purple',
-      shrink = 2,
-      plot_rho = FALSE)
-     }
-)
+# pop mean for UV dim (Intercept + B + C + BC)
+with(subset(mean_vectors, colour %in% 'u' & brightn %in% 'l'), {
+  PCfun(angles = mu, col = 'purple', shrink = 2, plot_rho = FALSE)
+})
+
 
 for(i in which(u_id %in% ul_ids) )
 {
@@ -883,216 +814,53 @@ for(i in which(u_id %in% ul_ids) )
                  y = A1(kappa_id_ul[i]),
                  lwd = 0.25,
                  length = 0,
-                 col = adjustcolor('purple', alpha.f = 200/255))
-}
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
-             A1(kappa_mubc)',
-           y_string = 'cos(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC)*
-             A1(kappa_mubc)'#,
-           # palette = 'Mint'
-           )
-
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_Intercept + b_mu0_B + b_mu0_C + b_mu0_BC),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mubc)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('purple', alpha.f = 200/255))
-)
-
-
-  
-
-
-#effect of UV
-PCfun(angles = unlist(mu_diff_uh),
-      col = 'gray40',
-      shrink = 2,
-      plot_rho = FALSE)
-
-for(i in which(u_id %in% uv_ids) )
-{
-   #UV high
-  
-  arrows.circular(x = circular(x = mu_id_uh[i] - mu_id_gh[i],
-                               units = 'radians',
-                              rotation = 'clock',
-                              zero = pi/2),
-                 y = A1(kappa_id_uh[i]),
-                 lwd = 0.5,
-                 length = 0,
-                 col = adjustcolor('magenta3', alpha.f = 200/255))
-  
+                 col = adjustcolor('purple', alpha.f = 200/255)
+  )
 }
 
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_C)*
-             A1(kappa_muc)',
-           y_string = 'cos(b_mu0_C)*
-             A1(kappa_muc)'#,
-           # palette = 'Purp'
-           )
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(Intercept + B + C + `B:C`) * A1(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`))',
+           y_string = 'cos(Intercept + B + C + `B:C`) * A1(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`))')
 
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_C),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mu)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('gray40', alpha.f = 200/255))
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(Intercept + B + C + `B:C`), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('purple', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
+)
+```
+
+```{r relative pop level effects}
+# Effect of UV (Contrast C)
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(C) * A1(softplus(kappa_C))',
+           y_string = 'cos(C) * A1(softplus(kappa_C))')
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(C), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_C))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('gray40', alpha.f = 200/255))
 )
 
+# Effect of dim green (Contrast B)
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(B) * A1(softplus(kappa_B))',
+           y_string = 'cos(B) * A1(softplus(kappa_B))')
 
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_C), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(B), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_B))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('darkgreen', alpha.f = 200/255))
 )
 
-#effect of dim green
-PCfun(angles = unlist(mu_diff_gl),
-      col = 'darkgreen',
-      shrink = 2,
-      plot_rho = FALSE)
+# Effect of dim UV relative to dim green (Contrast C + BC)
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(C + BC) * A1(softplus(kappa_C + kappa_BC))',
+           y_string = 'cos(C + BC) * A1(softplus(kappa_C + kappa_BC))')
 
-#green low
-for(i in which(u_id %in% gr_ids))
-{
-  arrows.circular(x = circular(x = mu_id_gl[i] - mu_id_gh[i],
-                               units = 'radians',
-                              rotation = 'clock',
-                              zero = pi/2),
-                 y = A1(kappa_id_gl[i]),
-                 lwd = 0.25,
-                 length = 0,
-                 col = adjustcolor('green4', alpha.f = 200/255))
-}
-
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_B)*
-             A1(kappa_mub)',
-           y_string = 'cos(b_mu0_B)*
-             A1(kappa_mub)'#,
-           # palette = 'YlGn'
-           )
-
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_B), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
-
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_B),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mu)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('darkgreen', alpha.f = 200/255))
-)
-
-#effect of dim UV
-PCfun(angles = unlist(mu_diff_ul),
-      col = 'purple',
-      shrink = 2,
-      plot_rho = FALSE)
-
-#UV low
-for(i in which(u_id %in% uv_ids))
-{
-  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_uh[i],
-                               units = 'radians',
-                              rotation = 'clock',
-                              zero = pi/2),
-                 y = A1(kappa_id_ul[i]),
-                 lwd = 0.25,
-                 length = 0,
-                 col = adjustcolor('purple', alpha.f = 200/255))
-}
-#the difference between UV bright and UV dim is brightness and the interaction
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_B + b_mu0_BC)*
-             A1(kappa_mubc)',
-           y_string = 'cos(b_mu0_B + b_mu0_BC)*
-             A1(kappa_mubc)'#,
-           # palette = 'YlGn'
-           )
-
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_B + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
-
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_B + b_mu0_BC),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mubc)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('purple', alpha.f = 200/255))
-)
-
-#effect of dim UV relative to dim green
-PCfun(angles = unlist(mu_diff_ugl),
-      col = 'gray25',
-      shrink = 2,
-      plot_rho = FALSE)
-
-#UV low
-for(i in which(u_id %in% di_ids))
-{
-  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_gl[i],
-                               units = 'radians',
-                              rotation = 'clock',
-                              zero = pi/2),
-                 y = A1(kappa_id_ul[i]),
-                 lwd = 0.25,
-                 length = 0,
-                 col = adjustcolor('gray25', alpha.f = 200/255))
-}
-#the difference between green dim and UV dim is colour and the interaction
-Draws2Cont(draws = draws_all,
-           x_string = 'sin(b_mu0_C + b_mu0_BC)*
-             A1(kappa_mubc)',
-           y_string = 'cos(b_mu0_C + b_mu0_BC)*
-             A1(kappa_mubc)'#,
-           # palette = 'YlGn'
-           )
-
-with(draws_all,
-     {
-       round(deg(
-     quantile(mod_circular(b_mu0_C + b_mu0_BC), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
-
-with(draws_all,
-     arrows.circular(x = circular(x = MedCDraws(b_mu0_C + b_mu0_BC),
-                                                  units = 'radians',
-                                                  rotation = 'clock',
-                                                  zero = pi/2),
-     y = A1(median(kappa_mubc)),
-     lwd = 5,
-     length = 0.1/1.25,
-     col = adjustcolor('gray25', alpha.f = 200/255))
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(C + BC), units = 'radians', rotation = 'clock', zero = pi/2),
+                     y = A1(median(softplus(kappa_C + kappa_BC))),
+                     lwd = 5, length = 0.1/1.25, col = adjustcolor('gray25', alpha.f = 200/255))
 )
 ```
 
@@ -1380,8 +1148,8 @@ system.time(
   {
     
     model_noCL = brm(formula = formula_noCL,
-                     # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = cd_all,
+                     # data = subset(cd, ID %in% u_id[1:20]),
+                   data = cd,
                    prior = pr_nocl,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1406,8 +1174,8 @@ system.time(
   {
     
     model_noBR = brm(formula = formula_noBR,
-                     # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = subset(cd_all),
+                     # data = subset(cd, ID %in% u_id[1:20]),
+                   data = subset(cd),
                    prior = pr_nobr,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1432,8 +1200,8 @@ system.time(
   {
     
     model_null = brm(formula = formula_null,
-                     # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = subset(cd_all),
+                     # data = subset(cd, ID %in% u_id[1:20]),
+                   data = subset(cd),
                    prior = pr_null,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1462,8 +1230,8 @@ system.time(
   {
     
     model_KnoCL = brm(formula = formula_KnoCL,
-                     # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = subset(cd_all),
+                     # data = subset(cd, ID %in% u_id[1:20]),
+                   data = subset(cd),
                    prior = pr_nocl,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
@@ -1488,8 +1256,8 @@ system.time(
   {
     
     model_KnoBR = brm(formula = formula_KnoBR,
-                     # data = subset(cd_all, ID %in% u_id[1:20]),
-                   data = subset(cd_all),
+                     # data = subset(cd, ID %in% u_id[1:20]),
+                   data = subset(cd),
                    prior = pr_nobr,
                    stanvars = stan_unwrap_fun + 
                       modulo_circular_fun + 
