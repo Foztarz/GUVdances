@@ -830,46 +830,183 @@ with(draws_final,
 ```
 
 ```{r relative pop level effects}
-# Effect of UV (Contrast C)
+par(pty = 's')
+# Population mean for green bright (Baseline: Intercept)
+par(mfrow = c(1,4), mar = c(0,0,0,0))
+
+# --- Effect of UV ---
+PCfun(angles = unlist(mu_diff_uh),
+      col = 'gray40',
+      shrink = 2,
+      plot_rho = FALSE)
+
+for(i in which(u_id %in% uv_ids)) {
+  # UV high
+  arrows.circular(x = circular(x = mu_id_uh[i] - mu_id_gh[i],
+                               units = 'radians',
+                               rotation = 'clock',
+                               zero = pi/2),
+                  y = A1(kappa_id_uh[i]),
+                  lwd = 0.5,
+                  length = 0,
+                  col = adjustcolor('magenta3', alpha.f = 200/255))
+}
+
 Draws2Cont(draws = draws_final,
            x_string = 'sin(C) * A1(softplus(kappa_C))',
            y_string = 'cos(C) * A1(softplus(kappa_C))')
 
 with(draws_final,
-     arrows.circular(x = circular(x = MedCDraws(C), units = 'radians', rotation = 'clock', zero = pi/2),
-                     y = A1(median(softplus(kappa_C))),
-                     lwd = 5, length = 0.1/1.25, col = adjustcolor('gray40', alpha.f = 200/255))
+     arrows.circular(x = circular(x = MedCDraws(C),
+                                  units = 'radians',
+                                  rotation = 'clock',
+                                  zero = pi/2),
+     y = A1(median(softplus(kappa_C))),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray40', alpha.f = 200/255))
 )
 
-# Effect of dim green (Contrast B)
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(C), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+# --- Effect of dim green ---
+PCfun(angles = unlist(mu_diff_gl),
+      col = 'darkgreen',
+      shrink = 2,
+      plot_rho = FALSE)
+
+# green low
+for(i in which(u_id %in% gr_ids)) {
+  arrows.circular(x = circular(x = mu_id_gl[i] - mu_id_gh[i],
+                               units = 'radians',
+                               rotation = 'clock',
+                               zero = pi/2),
+                  y = A1(kappa_id_gl[i]),
+                  lwd = 0.25,
+                  length = 0,
+                  col = adjustcolor('green4', alpha.f = 200/255))
+}
+
 Draws2Cont(draws = draws_final,
            x_string = 'sin(B) * A1(softplus(kappa_B))',
            y_string = 'cos(B) * A1(softplus(kappa_B))')
 
 with(draws_final,
-     arrows.circular(x = circular(x = MedCDraws(B), units = 'radians', rotation = 'clock', zero = pi/2),
-                     y = A1(median(softplus(kappa_B))),
-                     lwd = 5, length = 0.1/1.25, col = adjustcolor('darkgreen', alpha.f = 200/255))
+     {
+       round(deg(
+         quantile(mod_circular(B), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
 )
 
-# Effect of dim UV relative to dim green (Contrast C + BC)
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(B),
+                                  units = 'radians',
+                                  rotation = 'clock',
+                                  zero = pi/2),
+     y = A1(median(softplus(kappa_B))),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('darkgreen', alpha.f = 200/255))
+)
+
+# --- Effect of dim UV ---
+PCfun(angles = unlist(mu_diff_ul),
+      col = 'purple',
+      shrink = 2,
+      plot_rho = FALSE)
+
+# UV low
+for(i in which(u_id %in% uv_ids)) {
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_uh[i],
+                               units = 'radians',
+                               rotation = 'clock',
+                               zero = pi/2),
+                  y = A1(kappa_id_ul[i]),
+                  lwd = 0.25,
+                  length = 0,
+                  col = adjustcolor('purple', alpha.f = 200/255))
+}
+
+# The difference between UV bright and UV dim is brightness and the interaction
 Draws2Cont(draws = draws_final,
-           x_string = 'sin(C + BC) * A1(softplus(kappa_C + kappa_BC))',
-           y_string = 'cos(C + BC) * A1(softplus(kappa_C + kappa_BC))')
+           x_string = 'sin(B + `B:C`) * A1(softplus(kappa_B + `kappa_B:C`))',
+           y_string = 'cos(B + `B:C`) * A1(softplus(kappa_B + `kappa_B:C`))')
 
 with(draws_final,
-     arrows.circular(x = circular(x = MedCDraws(C + BC), units = 'radians', rotation = 'clock', zero = pi/2),
-                     y = A1(median(softplus(kappa_C + kappa_BC))),
-                     lwd = 5, length = 0.1/1.25, col = adjustcolor('gray25', alpha.f = 200/255))
+     {
+       round(deg(
+         quantile(mod_circular(B + `B:C`), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(B + `B:C`),
+                                  units = 'radians',
+                                  rotation = 'clock',
+                                  zero = pi/2),
+     y = A1(median(softplus(kappa_B + `kappa_B:C`))),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('purple', alpha.f = 200/255))
+)
+
+# --- Effect of dim UV relative to dim green ---
+PCfun(angles = unlist(mu_diff_ugl),
+      col = 'gray25',
+      shrink = 2,
+      plot_rho = FALSE)
+
+# UV low
+for(i in which(u_id %in% di_ids)) {
+  arrows.circular(x = circular(x = mu_id_ul[i] - mu_id_gl[i],
+                               units = 'radians',
+                               rotation = 'clock',
+                               zero = pi/2),
+                  y = A1(kappa_id_ul[i]),
+                  lwd = 0.25,
+                  length = 0,
+                  col = adjustcolor('gray25', alpha.f = 200/255))
+}
+
+# The difference between green dim and UV dim is colour and the interaction
+Draws2Cont(draws = draws_final,
+           x_string = 'sin(C + `B:C`) * A1(softplus(kappa_C + `kappa_B:C`))',
+           y_string = 'cos(C + `B:C`) * A1(softplus(kappa_C + `kappa_B:C`))')
+
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(C + `B:C`), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+with(draws_final,
+     arrows.circular(x = circular(x = MedCDraws(C + `B:C`),
+                                  units = 'radians',
+                                  rotation = 'clock',
+                                  zero = pi/2),
+     y = A1(median(softplus(kappa_C + `kappa_B:C`))),
+     lwd = 5,
+     length = 0.1/1.25,
+     col = adjustcolor('gray25', alpha.f = 200/255))
 )
 ```
 
-```{r Kappa effects}
+```{r Kappa predictions}
 #plot kappa
 par(mfrow = c(1,4))
 
-with(draws_all,
-     VertHist(data = softplus(Intercept_kappa), 
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept), 
               main = '\ngreen bright',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -879,8 +1016,8 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
-with(draws_all,
-     VertHist(data = softplus(Intercept_kappa + b_kappa_C), 
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_C), 
               main = '\nUV bright',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -890,19 +1027,19 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
-with(draws_all,
+with(draws_final,
      {
        round(
-     quantile(softplus(Intercept_kappa + b_kappa_C) - 
-                softplus(Intercept_kappa),
+     quantile(softplus(kappa_Intercept + kappa_C) - 
+                softplus(kappa_Intercept),
               probs = c(0.5, 0.025, 0.975)),
      digits = 2
        )
      }
 )
 
-with(draws_all,
-     VertHist(data = softplus(Intercept_kappa + b_kappa_B), 
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_B), 
               main = '\ngreen dim',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -912,8 +1049,8 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
-with(draws_all,
-     VertHist(data = softplus(Intercept_kappa + b_kappa_B  + b_kappa_C +  + b_kappa_BC), 
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_B  + kappa_C +  + `kappa_B:C`), 
               main = '\nUV dim',
               ylab = 'kappa',
               ylim = c(0, 15),
@@ -924,11 +1061,11 @@ axis(1)
 axis(2, at = 0:5*5)
 
 
-with(draws_all,
+with(draws_final,
      {
        round(
-     quantile(softplus(Intercept_kappa + b_kappa_B) - 
-                softplus(Intercept_kappa),
+     quantile(softplus(kappa_Intercept + kappa_B) - 
+                softplus(kappa_Intercept),
               probs = c(0.5, 0.025, 0.975)),
      digits = 2
        )
@@ -936,13 +1073,82 @@ with(draws_all,
 )
 
 ```
+``` {r Kappa effects}
+# Plot difference in kappa
+par(mfrow = c(1,4))
+
+# 1. Effect of UV Brightness (UV Bright - Green Bright)
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_C) - softplus(kappa_Intercept), 
+              main = '\nDiff: UV bright',
+              ylab = 'diff kappa',
+              ylim = c(-10, 10),
+              col = adjustcolor('magenta3', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -2:2*5)
+abline(h = 0, lty = 2)
+
+# 2. Effect of Dimming Green (Green Dim - Green Bright)
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_B) - softplus(kappa_Intercept), 
+              main = '\nDiff: green dim',
+              ylab = 'diff kappa',
+              ylim = c(-10, 10),
+              col = adjustcolor('green4', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -2:2*5)
+abline(h = 0, lty = 2)
+
+# 3. Effect of Dimming UV (UV Dim - UV Bright)
+with(draws_final,
+     VertHist(data = softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
+                     softplus(kappa_Intercept + kappa_C), 
+              main = '\nDiff: dim UV',
+              ylab = 'diff kappa',
+              ylim = c(-10, 10),
+              col = adjustcolor('purple', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -2:2*5)
+abline(h = 0, lty = 2)
+
+# 4. Interaction Effect (The "Difference in Differences")
+with(draws_final,
+     VertHist(data = softplus(kappa_B + `kappa_B:C`) - softplus(kappa_B), 
+              main = '\nDim UV vs dim green',
+              ylab = 'diff kappa',
+              ylim = c(-10, 10),
+              col = adjustcolor('gray40', alpha.f = 100/255),
+              axes = FALSE,
+              cex.axis = 0.7))
+axis(1)
+axis(2, at = -2:2*5)
+abline(h = 0, lty = 2)
+
+# Summary Stats for the UV Dimming Effect
+with(draws_final,
+     {
+       round(
+         quantile(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
+                  softplus(kappa_Intercept + kappa_C), 
+                  probs = c(0.5, 0.025, 0.975)),
+         digits = 2
+       )
+     }
+)
+```
 
 ```{r Kappamu effects}
 #plot kappa
 par(mfrow = c(1,4))
 
-with(draws_all,
-     VertHist(data = kappa_mu, 
+with(draws_final,
+     VertHist(data = softplus(`1|Individual_kappa`), 
               main = '\ngreen bright',
               ylab = 'kappamu',
               ylim = c(0, 15),
@@ -952,30 +1158,30 @@ with(draws_all,
 axis(1)
 axis(2, at = 0:5*5)
 
-with(draws_all,
-     VertHist(data = kappa_muc, 
+with(draws_final,
+     VertHist(data = softplus(`C|Individual_kappa`), 
               main = '\nUV effect',
               ylab = 'kappamu',
-              ylim = c(0, 15),
+              ylim = c(0, 50),
               col = adjustcolor('gray50', alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
 axis(1)
-axis(2, at = 0:5*5)
+axis(2, at = 0:5*10)
 
-with(draws_all,
-     VertHist(data = kappa_mub, 
+with(draws_final,
+     VertHist(data = softplus(`B|Individual_kappa`), 
               main = '\ndim effect',
               ylab = 'kappamu',
-              ylim = c(0, 15),
+              ylim = c(0, 50),
               col = adjustcolor('darkgreen', alpha.f = 100/255),
               axes = FALSE,
               cex.axis = 0.7))
 axis(1)
-axis(2, at = 0:5*5)
+axis(2, at = 0:5*10)
 
-with(draws_all,
-     VertHist(data = kappa_mubc, 
+with(draws_final,
+     VertHist(data = softplus(`B:C|Individual_kappa`), 
               main = '\ndim uv effect',
               ylab = 'kappamu',
               ylim = c(0, 15),
@@ -984,48 +1190,67 @@ with(draws_all,
               cex.axis = 0.7))
 axis(1)
 axis(2, at = 0:5*5)
-
-#change in effect concentration
-par(mfrow = c(1,3))
-
-with(draws_all,
-     VertHist(data = softkappamuc, 
-              main = '\nUV effect',
-              ylab = 'inv_softplus(kappamu)',
-              ylim = c(-7, 7),
-              col = adjustcolor('gray50', alpha.f = 100/255),
-              axes = FALSE,
-              cex.axis = 0.7))
-axis(1)
-axis(2, at = -5:5)
-abline(h = 0, lty = 3)
-
-with(draws_all,
-     VertHist(data = softkappamub, 
-              main = '\ndim effect',
-              ylab = 'inv_softplus(kappamu)',
-              ylim = c(-7, 7),
-              col = adjustcolor('darkgreen', alpha.f = 100/255),
-              axes = FALSE,
-              cex.axis = 0.7))
-axis(1)
-axis(2, at = -5:5)
-abline(h = 0, lty = 3)
-
-with(draws_all,
-     VertHist(data = softkappa_mubc, 
-              main = '\ndim uv effect',
-              ylab = 'inv_softplus(kappamu)',
-              ylim = c(-7, 7),
-              col = adjustcolor('purple', alpha.f = 100/255),
-              axes = FALSE,
-              cex.axis = 0.7))
-axis(1)
-axis(2, at = -5:5)
-abline(h = 0, lty = 3)
-
 ```
 
+```{r Kappamu effects}
+
+# 1. Reconstruct matrices: Rows = Draws, Cols = Individuals
+n_draws <- length(individual_draws[[1]]$mu$gh)
+n_ind   <- length(individual_draws)
+
+# Helper to extract a condition into a Draw-by-Individual matrix
+get_mu_matrix <- function(cond) {
+  sapply(1:n_ind, function(i) individual_draws[[i]]$mu[[cond]])
+}
+
+mu_mat_gh <- get_mu_matrix("gh")
+mu_mat_uh <- get_mu_matrix("uh")
+mu_mat_gl <- get_mu_matrix("gl")
+mu_mat_ul <- get_mu_matrix("ul")
+
+# 2. Function to calculate MLE kappa for a single row of mu draws
+calc_kappa_mle <- function(mu_row) {
+  # mle.vonmises returns an object; we just want the kappa estimate
+  as.numeric(mle.vonmises(circular(mu_row, units='radians'))$kappa)
+}
+
+# 3. Apply across all draws (rows) to get the posterior of kappamu
+post_kappamu_gh <- apply(mu_mat_gh, 1, calc_kappa_mle)
+post_kappamu_uh <- apply(mu_mat_uh, 1, calc_kappa_mle)
+post_kappamu_gl <- apply(mu_mat_gl, 1, calc_kappa_mle)
+post_kappamu_ul <- apply(mu_mat_ul, 1, calc_kappa_mle)
+
+# 4. Plotting
+par(mfrow = c(1,4))
+
+# Green Bright
+VertHist(data = post_kappamu_gh, 
+         main = '\ngreen bright', ylab = 'kappamu (MLE)',
+         ylim = c(0, 15), col = adjustcolor('green3', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = 0:3*5)
+
+# UV Bright
+VertHist(data = post_kappamu_uh, 
+         main = '\nUV bright', ylab = 'kappamu (MLE)',
+         ylim = c(0, 15), col = adjustcolor('magenta3', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = 0:3*5)
+
+# Green Dim
+VertHist(data = post_kappamu_gl, 
+         main = '\ngreen dim', ylab = 'kappamu (MLE)',
+         ylim = c(0, 15), col = adjustcolor('green4', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = 0:3*5)
+
+# UV Dim
+VertHist(data = post_kappamu_ul, 
+         main = '\nUV dim', ylab = 'kappamu (MLE)',
+         ylim = c(0, 15), col = adjustcolor('purple', alpha.f = 100/255),
+         axes = FALSE, cex.axis = 0.7)
+axis(1); axis(2, at = 0:3*5)
+```
 # Model comparison for unimodal
 ## Set up formula and priors
 
