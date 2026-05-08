@@ -76,6 +76,7 @@ Implicitly adaptive importance sampling.
 <doi:10.1007/s11222-020-09982-2>.
 
 # To Do
+- Reparametrise kappamu to Bambi style
 - Achieve mu0 convergence with very informative prior
 - Extract individual differences in heading +
   - Separate individual calculations from plotting +
@@ -227,7 +228,7 @@ real softkappamub;
                            ",
                            block = "parameters") + 
   stanvar(scode = "
-real kappa_mub = log1p_exp(softkappamu + softkappamub);
+real kappa_mub = log1p_exp(softkappamub);
           ", 
           block = 'genquant')
 
@@ -237,7 +238,7 @@ real softkappamuc;
                            ",
                            block = "parameters") + 
   stanvar(scode = "
-real kappa_muc = log1p_exp(softkappamu + softkappamuc);
+real kappa_muc = log1p_exp(softkappamuc);
           ", 
           block = 'genquant')
 #Introduce stan variable for kappamu - b:c
@@ -246,7 +247,7 @@ real softkappamubc;
                            ",
                            block = "parameters") + 
   stanvar(scode = "
-real kappa_mubc = log1p_exp(softkappamu + softkappamubc);
+real kappa_mubc = log1p_exp(softkappamubc);
           ", 
           block = 'genquant')
 
@@ -378,43 +379,39 @@ Intercept_kappa N(3,3) -> N(3,1)
 Very restrictive priors from GUV_unwrap.ipynb (but diff kappamu format)
 Very restrictive priors from GUV_unwrap.ipynb (updated to account for UV dim 
 Very restrictive priors from GUV_unwrap.ipynb with BC left turn
+Very restrictive priors from GUV_unwrap.ipynb (and _same_ kappamu format)
 ```{r Unimodal change priors}
 
 #priors for mu
 pr_mu_all = prior('normal(0, pi()/6)', coef = 'Intercept', nlpar = 'mu0') +
                   prior('normal(0, pi()/12)', class = 'b', nlpar = 'mu0') +
-                  prior('normal(-pi()/2, pi()/12)', class = 'b', coef = 'BC', nlpar = 'mu0') +
+                  prior('normal(0, pi()/12)', class = 'b', coef = 'BC', nlpar = 'mu0') +
                   prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'mui',  class = 'b') +
             set_prior("target += lognormal_lpdf(log1p_exp(softkappamu) | log(30), 0.6)", #expect high concentration (low variation) 
                       check = FALSE)  +
-  # prior('unwrap_von_mises_vect(0, log1p_exp(16))',
-  #                       nlpar  = 'muib',  class = 'b')+
-  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamub))',
+  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu))',
                         nlpar  = 'muib',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamub | 0, 0.2)", #expect small differences 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamub) | log(30), 0.1)", #expect small differences 
                       check = FALSE)  +
-  # prior('unwrap_von_mises_vect(0, log1p_exp(30))',
-  #                       nlpar  = 'muic',  class = 'b')+
-  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamuc))',
+  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamuc))',
                         nlpar  = 'muic',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamuc | 0, 0.2)", #expect small differences 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamuc) | log(30), 0.1)", #expect small differences 
                       check = FALSE) +
-  # prior('unwrap_von_mises_vect(0, log1p_exp(20))',
-  #                       nlpar  = 'muibc',  class = 'b') +
-  prior('unwrap_von_mises_vect(0, log1p_exp(softkappamu + softkappamubc))',
+  prior('unwrap_von_mises_vect(0, log1p_exp( softkappamubc))',
                         nlpar  = 'muibc',  class = 'b') +
-            set_prior("target += normal_lpdf(softkappamubc | 0, 0.5)", #expect small differences 
+            set_prior("target += lognormal_lpdf(log1p_exp(softkappamubc) | log(30), 0.1)", #expect small differences 
                       check = FALSE)  
 
 #priors for kappa
 pr_kappa_all = 
                   prior('normal(3,0.5)', class = 'Intercept', dpar = 'kappa') +
                   prior('normal(0,0.3)', class = 'b', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.3)', class = 'sd', dpar = 'kappa')
-                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'B', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'C', dpar = 'kappa')+
-                  prior('student_t(3, 0, 0.2)', class = 'sd', coef = 'BC', dpar = 'kappa')
+                  prior('normal(0,1.0)', class = 'b', coef = 'BC', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.5)', class = 'sd', dpar = 'kappa')
+                  prior('student_t(3, 0, 0.5)', class = 'sd', coef = 'B', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.5)', class = 'sd', coef = 'C', dpar = 'kappa')+
+                  prior('student_t(3, 0, 0.5)', class = 'sd', coef = 'BC', dpar = 'kappa')
 
   
 #all bimodal priors
@@ -423,7 +420,7 @@ pr_all = pr_mu_all + pr_kappa_all
 
 ## Run the model for individual deviations in bimodal change
 
-For all individuals, expect this to take around 6 hours!
+For all individuals, expect this to take around 12 hours!
 ```{r individual change model}
 
 #very long compile time
@@ -431,7 +428,7 @@ system.time(
   {
     
     model_all = brm(formula = formula_all,
-                   # data = subset(cd_all, ID %in% u_id[20+1:50]), #target some balanced cases
+                   # data = subset(cd_all, ID %in% u_id[20+1:20]), #target some balanced cases
                    data = cd_all,
                    prior = pr_all,
                    stanvars = stan_unwrap_fun + 
@@ -443,8 +440,8 @@ system.time(
                    chains = 4, # 4 chains in parallel
                    cores = 4, # on 4 CPUs
                    warmup = 1000, #
-                   iter = 1500, # longer sampling to efficiently sample mu0
-                   refresh = 500,
+                   iter = 2000, # longer sampling to efficiently sample mu0
+                   refresh = 250,
                    control = list(adapt_delta = 0.95),
                    silent = 1, # echo only high priority Stan messages
                    save_pars = save_pars(all = TRUE), # Crucial for moment matching
@@ -627,10 +624,6 @@ for(i in 1:length(u_id) )
   kappac_name =  as.name(paste0('r_ID__kappa[',u_id[i],',C]'))
   kappabc_name =  as.name(paste0('r_ID__kappa[',u_id[i],',BC]'))
   
-  #proxy for awkward names
-  # b_mu0_BRlClu_name = as.name("b_mu0_BRl:Clu")
-  # b_kappa_BRlCLu_name = as.name("b_kappa_BRl:CLu")
-  
   #green high
   with(subset(cd_all, 
               ID %in% u_id[i] &
@@ -762,21 +755,21 @@ for(i in 1:length(u_id) )
 ```{r Calculate estimates of means and changes}
 
 #calculate mean vectors
-mean_vectors = aggregate(angle~ID*brightn*colour+sun_az+sun_el_rad, # N.B. Including sun azimuth drops some cases without a time stamp
+mean_vectors = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el_rad, # N.B. Including sun azimuth drops some cases without a time stamp
                          data = cd,
                          FUN = rho.circular
 )
 #correct names
 mean_vectors = within(mean_vectors,
-                      {mean_vector = angle; rm(angle)} # anlge now indicates a mean vector, not an angle
+                      {mean_vector = angle; rm(angle)} # angle now indicates a mean vector, not an angle
 )
 #add kappa
-mle_estimates = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
+mle_estimates = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el,
                           data = cd,
                           FUN = MLE_est
 )
 #Rayleigh tests
-rayleigh_tests = aggregate(angle~ID*brightn*colour+sun_az+sun_el,
+rayleigh_tests = aggregate(angle~ID*brightn*colour,#+sun_az+sun_el,
                           data = cd,
                           FUN = Rayleigh_p
                           )
@@ -1442,7 +1435,7 @@ axis(2, at = -5:5)
 abline(h = 0, lty = 3)
 
 with(draws_all,
-     VertHist(data = kappa_mubc, 
+     VertHist(data = softkappa_mubc, 
               main = '\ndim uv effect',
               ylab = 'inv_softplus(kappamu)',
               ylim = c(-7, 7),
