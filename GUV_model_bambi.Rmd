@@ -71,15 +71,24 @@ Here we first set up a `reticulate` Python environment with the appropriate vers
 
 ```{r Load functions and packages}
 source('GUV_functions.R')
+# require(reticulate)
+p311=reticulate::install_python(version = '3.11')
+reticulate::virtualenv_create(
+  envname = "GUV-env",
+  python = p311)
+reticulate::py_install(
+  envname = "GUV-env",
+  packages = 
+            c("numpy==1.26.4",
+               "pandas==2.1.4",
+               "scipy==1.11.4",
+               "arviz==0.17.1",
+              "h5py==3.11.0")
+            )
 require(reticulate)
-reticulate::py_install(c(
-  "numpy==1.26.4",
-  "pandas==2.1.4",
-  "scipy==1.11.4",
-  "arviz==0.17.1",
-  "packaging"
-), method = "pip")
-require(reticulate)
+use_virtualenv("GUV-env",
+               required = TRUE)
+reticulate::py_config()
 require(posterior)
 require(bayesplot)
 options(posterior.num_args = list(sigfig = 3))#for ease of reading
@@ -173,7 +182,8 @@ az = reticulate::import("arviz")
 # Load the NetCDF file
 idata = az$from_netcdf("2Results/GUV_unwrap_model.nc")
 # Convert to data frame
-posterior_df = reticulate::py_to_r(x =                                         idata$posterior$to_dataframe()
+posterior_df = reticulate::py_to_r(x =                                         
+                                     idata$posterior$to_dataframe()
                                    )
 ```
 
@@ -296,22 +306,7 @@ print(plt)
 ```
 
 Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
-all estimates converged well ( $\hat{R}<1.01$).
-
-```{r Convergence heuristics for the change model}
-sm_fixed = summarise_draws(draws_final[,c(1:16)],
-                           .num_args = list(digits = 3))
-# print(sm_all$fixed[c(1,5:6+20),], digits = 3)
-sm_fixed[, c('variable', 'median', 'q5', 'q95', 'rhat')]
-# print(sm_all$random, digits = 3)
-# print(sm_all$spec_pars, digits = 3)
-# 
-# #mu0 and mui look bad, but good after unwrapping
-# UnwrapRhats(draws_final,
-#             variable = '^b_mu0')
-# summary(UnwrapRhats(draws_final,
-#             variable = '^b_mui') )
-```
+all estimates converged well ($\hat{R}<1.01$).
 
 ```{r summarise fixef with arviz}
 azsum_fixed = az$summary(idata,
