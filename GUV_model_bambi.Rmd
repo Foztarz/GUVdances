@@ -497,7 +497,7 @@ for(i in 1:length(u_id) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_uh[i]),
+                 y = A1(softplus(kappa_id_uh[i])),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('magenta3', alpha.f = 200/255))
@@ -521,7 +521,7 @@ for(i in 1:length(u_id) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_gl[i]),
+                 y = A1(softplus(kappa_id_gl[i])),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('green4', alpha.f = 200/255))
@@ -545,7 +545,7 @@ for(i in 1:length(u_id) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_ul[i]),
+                 y = A1(softplus(kappa_id_ul[i])),
                  lwd = 5,
                  length = 0.1/1.25,
                  col = adjustcolor('purple', alpha.f = 200/255))
@@ -717,7 +717,7 @@ with(subset(mean_vectors, colour %in% 'g' & brightn %in% 'h'), {
 
 for(i in which(u_id %in% gh_ids)) {
   arrows.circular(x = circular(x = mu_id_gh[i], units = 'radians', rotation = 'clock', zero = pi/2),
-                  y = A1(kappa_id_gh[i]), lwd = 0.25, length = 0,
+                  y = A1(softplus(kappa_id_gh[i])), lwd = 0.25, length = 0,
                   col = adjustcolor('green3', alpha.f = 200/255))
 }
 
@@ -748,7 +748,7 @@ for(i in which(u_id %in% uh_ids) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_uh[i]),
+                 y = A1(softplus(kappa_id_uh[i])),
                  lwd = 0.25,
                  length = 0,
                  col = adjustcolor('magenta3', alpha.f = 200/255))
@@ -777,7 +777,7 @@ for(i in which(u_id %in% gl_ids) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_gl[i]),
+                 y = A1(softplus(kappa_id_gl[i])),
                  lwd = 0.25,
                  length = 0,
                  col = adjustcolor('darkgreen', alpha.f = 200/255 ))
@@ -806,7 +806,7 @@ for(i in which(u_id %in% ul_ids) )
                                units = 'radians',
                               rotation = 'clock',
                               zero = pi/2),
-                 y = A1(kappa_id_ul[i]),
+                 y = A1(softplus(kappa_id_ul[i])),
                  lwd = 0.25,
                  length = 0,
                  col = adjustcolor('purple', alpha.f = 200/255)
@@ -841,7 +841,7 @@ for(i in which(u_id %in% uv_ids)) {
                                units = 'radians',
                                rotation = 'clock',
                                zero = pi/2),
-                  y = A1(kappa_id_uh[i]),
+                  y = A1(softplus(kappa_id_uh[i])),
                   lwd = 0.5,
                   length = 0,
                   col = adjustcolor('magenta3', alpha.f = 200/255))
@@ -882,7 +882,7 @@ for(i in which(u_id %in% gr_ids)) {
                                units = 'radians',
                                rotation = 'clock',
                                zero = pi/2),
-                  y = A1(kappa_id_gl[i]),
+                  y = A1(softplus(kappa_id_gl[i])),
                   lwd = 0.25,
                   length = 0,
                   col = adjustcolor('green4', alpha.f = 200/255))
@@ -923,7 +923,7 @@ for(i in which(u_id %in% uv_ids)) {
                                units = 'radians',
                                rotation = 'clock',
                                zero = pi/2),
-                  y = A1(kappa_id_ul[i]),
+                  y = A1(softplus(kappa_id_ul[i])),
                   lwd = 0.25,
                   length = 0,
                   col = adjustcolor('purple', alpha.f = 200/255))
@@ -965,7 +965,7 @@ for(i in which(u_id %in% di_ids)) {
                                units = 'radians',
                                rotation = 'clock',
                                zero = pi/2),
-                  y = A1(kappa_id_ul[i]),
+                  y = A1(softplus(kappa_id_ul[i])),
                   lwd = 0.25,
                   length = 0,
                   col = adjustcolor('gray25', alpha.f = 200/255))
