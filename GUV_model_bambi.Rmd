@@ -89,6 +89,7 @@ require(reticulate)
 use_virtualenv("GUV-env",
                required = TRUE)
 reticulate::py_config()
+require(arrow)
 require(posterior)
 require(bayesplot)
 options(posterior.num_args = list(sigfig = 3))#for ease of reading
@@ -368,6 +369,16 @@ QCDraws = function(x,
 }
 ```
 
+```{r Load the data in pandas format}
+cd_pd = read_feather("1Data/colour_dance_reorg.feather")
+#find individuals
+cd = within(cd,
+            {Individual_nr = cd_pd$Individual}
+            )
+#This follows the same order as u_id
+u_id_nr = with(cd, unique(Individual_nr))
+```
+
 ```{r Extract individual predictions}
 # Setup containers for summary statistics
 u_id_num <- 1:n_ind
@@ -436,10 +447,10 @@ for(i in seq_along(u_id_num)) {
 par(pty = 's')
 par(mar = c(0,0,0,0),
     mfrow = c(4,4) )
-for(i in 1:length(u_id) )
+for(i in u_id_nr)
 # for(i in 20+1:50 )
 {
-  
+  indiv = u_id[u_id_nr %in% i]
   # Construct the exact column names
   mu_i   = paste0("1_Individual_Ind_", i)
   mu_bi  = paste0("B_Individual_Ind_", i)
@@ -453,13 +464,13 @@ for(i in 1:length(u_id) )
   
   #green high
   with(subset(cd, 
-              ID %in% u_id[i] &
+              ID %in% indiv &
                 CL %in% 'g' & BR %in% 'h'),
   {
     PCfun(angles = bearing,
          col = 'green3',
          plot_rho = FALSE,
-         title = u_id[i])
+         title = indiv)
     }
   )
   Draws2Cont(individual_draws[[i]],
@@ -480,13 +491,13 @@ for(i in 1:length(u_id) )
 
   #UV high
   with(subset(cd,
-              ID %in% u_id[i] &
+              ID %in% indiv &
                 CL %in% 'u' & BR %in% 'h'),
   {
     PCfun(angles = bearing,
          col = 'magenta3',
          plot_rho = FALSE,
-         title = u_id[i])
+         title = indiv)
     }
   )
    Draws2Cont(individual_draws[[i]],
@@ -504,13 +515,13 @@ for(i in 1:length(u_id) )
 
   #green low
   with(subset(cd,
-              ID %in% u_id[i] &
+              ID %in% indiv &
                 CL %in% 'g' & BR %in% 'l'),
   {
     PCfun(angles = bearing,
          col = 'green4',
          plot_rho = FALSE,
-         title = u_id[i])
+         title = indiv)
     }
   )
    Draws2Cont(individual_draws[[i]],
@@ -528,13 +539,13 @@ for(i in 1:length(u_id) )
   # 
   #UV low
   with(subset(cd,
-              ID %in% u_id[i] &
+              ID %in% indiv &
                 CL %in% 'u' & BR %in% 'l'),
   {
     PCfun(angles = bearing,
          col = 'purple',
          plot_rho = FALSE,
-         title = u_id[i])
+         title = indiv)
     }
   )
   Draws2Cont(individual_draws[[i]],
