@@ -85,11 +85,14 @@ reticulate::py_install(
                "arviz==0.17.1",
               "h5py==3.11.0")
             )
-require(reticulate)
+require(reticulate) #run python from R
 use_virtualenv("GUV-env",
                required = TRUE)
 reticulate::py_config()
+#load .feather files (readable in R and Python)
 require(arrow)
+require(feather)
+#process and plot MCMC data
 require(posterior)
 require(bayesplot)
 options(posterior.num_args = list(sigfig = 3))#for ease of reading
@@ -870,7 +873,8 @@ with(draws_final,
      y = A1(median(softplus(kappa_C))),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor('gray40', alpha.f = 200/255))
+     col = adjustcolor('gray40', alpha.f = 200/255, offset = c(rep(-0.2,3),0))
+     )
 )
 
 with(draws_final,
@@ -919,7 +923,7 @@ with(draws_final,
      y = A1(median(softplus(kappa_B))),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor('darkgreen', alpha.f = 200/255))
+     col = adjustcolor('darkgreen', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 
 # --- Effect of dim UV ---
@@ -961,7 +965,7 @@ with(draws_final,
      y = A1(median(softplus(kappa_B + `kappa_B:C`))),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor('purple', alpha.f = 200/255))
+     col = adjustcolor('purple', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 
 # --- Effect of dim UV relative to dim green ---
@@ -1003,7 +1007,7 @@ with(draws_final,
      y = A1(median(softplus(kappa_C + `kappa_B:C`))),
      lwd = 5,
      length = 0.1/1.25,
-     col = adjustcolor('gray25', alpha.f = 200/255))
+     col = adjustcolor('gray25', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 ```
 
