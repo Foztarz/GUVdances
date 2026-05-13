@@ -1,5 +1,5 @@
 ---
-title: "GUV_model_figure"
+title: "GUV_model_bambi"
 author: "James Foster"
 date: "`r Sys.Date()`"
 output:
