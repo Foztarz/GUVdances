@@ -1,13 +1,13 @@
-"df","delta_BIC","Bayes_factor_1.0","test","comparison","result"
-"green_hl diff zero",1,0.479,1.2705,"diff zero","green_hl","Anecdotal evidence for H1"
-"green_hl multi diff",3,-11.169,0.0038,"multi diff","green_hl","Decisive evidence for H0"
-"green_hl multi zero",4,-10.69,0.0048,"multi zero","green_hl","Decisive evidence for H0"
-"uv_hl diff zero",1,2.982,4.4421,"diff zero","uv_hl","*Moderate evidence for H1"
-"uv_hl multi diff",3,11.711,349.0977,"multi diff","uv_hl","Decisive evidence for H1"
-"uv_hl multi zero",4,14.693,1550.7337,"multi zero","uv_hl","Decisive evidence for H1"
-"uvg_h diff zero",1,2.21,3.0197,"diff zero","uvg_h","*Moderate evidence for H1"
-"uvg_h multi diff",3,-18.499,1e-04,"multi diff","uvg_h","Decisive evidence for H0"
-"uvg_h multi zero",4,-16.289,3e-04,"multi zero","uvg_h","Decisive evidence for H0"
-"uvg_l diff zero",1,2.15,2.9303,"diff zero","uvg_l","Anecdotal evidence for H1"
-"uvg_l multi diff",3,3.774,6.6008,"multi diff","uvg_l","*Moderate evidence for H1"
-"uvg_l multi zero",4,5.925,19.3424,"multi zero","uvg_l","*Strong evidence for H1"
+,df,delta_BIC,Bayes_factor_1.0,test,comparison,result
+green_hl diff zero,1,0.479,1.2705,diff zero,green_hl,Anecdotal evidence for H1
+green_hl multi diff,3,-11.169,0.0038,multi diff,green_hl,Decisive evidence for H0
+green_hl multi zero,4,-10.69,0.0048,multi zero,green_hl,Decisive evidence for H0
+uv_hl diff zero,1,2.982,4.4421,diff zero,uv_hl,*Moderate evidence for H1
+uv_hl multi diff,3,11.711,349.0977,multi diff,uv_hl,Decisive evidence for H1
+uv_hl multi zero,4,14.693,1550.7337,multi zero,uv_hl,Decisive evidence for H1
+uvg_h diff zero,1,2.21,3.0197,diff zero,uvg_h,*Moderate evidence for H1
+uvg_h multi diff,3,-18.499,1.00E-04,multi diff,uvg_h,Decisive evidence for H0
+uvg_h multi zero,4,-16.289,3.00E-04,multi zero,uvg_h,Decisive evidence for H0
+uvg_l diff zero,1,2.15,2.9303,diff zero,uvg_l,Anecdotal evidence for H1
+uvg_l multi diff,3,3.774,6.6008,multi diff,uvg_l,*Moderate evidence for H1
+uvg_l multi zero,4,5.925,19.3424,multi zero,uvg_l,*Strong evidence for H1
