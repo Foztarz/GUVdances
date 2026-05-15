@@ -1005,6 +1005,24 @@ with(draws_final,
        ))
      }
 )
+
+print("Effect of dim UV on individual directions")
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(mu_id_ul - mu_id_gl), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
+print("Effect of UV on  on individual directions for dim stimuli")
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(mu_id_ul - mu_id_gl), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
 ```
 
 ```{r Kappa predictions}
