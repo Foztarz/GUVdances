@@ -1066,12 +1066,12 @@ CollectDetails = function(ll,
             deviance = c(
                          -2*loglikelihood[model %in% 'same'],
                          -2*loglikelihood[model %in% 'diff']
-                      ), 
+                      ),
             rnk = rank(
                         c(
                           -2*loglikelihood[model %in% 'same'],
-                          -2*loglikelihood[model %in% 'diff'] 
-                      ) ),#paired differences use fewer observations, don't include in ranking 
+                          -2*loglikelihood[model %in% 'diff']
+                      ) ),#paired differences use fewer observations, don't include in ranking
             df = c(1, 2)
           )
         }
@@ -1091,13 +1091,13 @@ CollectDetails = function(ll,
                 -2*loglikelihood[model %in% 'same'],
                 -2*loglikelihood[model %in% 'diff'],
                 -2*loglikelihood[model %in% 'multi']
-              ), 
+              ),
               rnk = rank(
                 c(
                   -2*loglikelihood[model %in% 'same'],
-                  -2*loglikelihood[model %in% 'diff'], 
+                  -2*loglikelihood[model %in% 'diff'],
                   -2*loglikelihood[model %in% 'multi']
-                ) ),#paired differences use fewer observations, don't include in ranking 
+                ) ),#paired differences use fewer observations, don't include in ranking
               df = c(1,
                      2,
                      5)
@@ -1259,6 +1259,44 @@ LR_calc_lst = function(tst, mdt, digits = 6)
   
 }
 
+#Bayes factor equivalent
+BFDetails = function(ll,
+                     dts = 'all',
+                     bimod = FALSE,
+                     n_obs = NULL, # Pass the sample size length(pair_diffs_lst[[dts]])
+                     ...)
+{
+  if(is.null(n_obs)) stop("You must provide the sample size 'n_obs' to calculate BIC/Bayes Factors.")
+  
+  # Base models
+  mod_names = c('pairs same', 'pairs diff')
+  models_filter = c('same', 'diff')
+  degrees_of_freedom = c(1, 2)
+  
+  if(bimod) {
+    mod_names = c(mod_names, 'pairs multi')
+    models_filter = c(models_filter, 'multi')
+    degrees_of_freedom = c(degrees_of_freedom, 5)
+  }
+  
+  with(subset(ll, dataset == dts),
+       {
+         sub_ll = sapply(models_filter, function(m) loglikelihood[model %in% m])
+         devs   = -2 * sub_ll
+         
+         data.frame(
+           modnm = mod_names,
+           ll = sub_ll,
+           deviance = devs,
+           rnk = rank(devs),
+           df = degrees_of_freedom,
+           n = rep(n_obs, length(mod_names)), # Store sample size
+           bic = devs + degrees_of_freedom * log(n_obs) # Calculate BIC
+         )
+       }
+  )
+}
+
 #Interpret the hypothesis tests depending on size and sign of difference in deviance
 H1label = function(tst, d0, d1, pa)
 {
@@ -1279,6 +1317,60 @@ H1label = function(tst, d0, d1, pa)
          {'*pairs differ significantly with no single mean'}else
          {'pairs _do not_ differ significantly with multiple means'}
   )
+}
+
+
+#Bayes factor equivalent
+BF_calc = function(tst, mdt)
+{
+  # 1. Isolate H0 and H1 based on the requested test
+  hypotheses = with(mdt, {
+    switch(EXPR = tst,
+           uniformity = data.frame(
+             bic0 = bic[modnm == 'uniform'], 
+             bic1 = bic[rnk == 1]
+           ),
+           trials_same_mean = data.frame(
+             bic0 = bic[rnk == 2], 
+             bic1 = bic[modnm == 'trial mean']
+           ),
+           pairs_diff_zero = data.frame(
+             bic0 = bic[modnm == 'pairs same'], 
+             bic1 = bic[modnm == 'pairs diff']
+           ),
+           pairs_multi_zero = data.frame(
+             bic0 = bic[modnm == 'pairs same'], 
+             bic1 = bic[modnm == 'pairs multi']
+           ),
+           pairs_multi_diff = data.frame(
+             bic0 = bic[modnm == 'pairs diff'], 
+             bic1 = bic[modnm == 'pairs multi']
+           )
+    )
+  })
+  
+  # 2. Calculate Bayes Factor using the BIC difference
+  hypotheses = within(hypotheses, {
+    delta_bic = bic0 - bic1  # Positive value means H1 fits better relative to its complexity
+    Bayes_factor_1.0 = exp(delta_bic / 2) # Evidence for H1 vs H0
+    BF01 = 1 / Bayes_factor_1.0          # Evidence for H0 vs H1
+  })
+  
+  return(hypotheses)
+}
+
+#labelling
+BFlabel = function(tst, Bayes_factor_1.0) {
+  evidence = if(Bayes_factor_1.0 >= 100) { "Decisive evidence for H1" }
+  else if(Bayes_factor_1.0 >= 10)  { "*Strong evidence for H1" }
+  else if(Bayes_factor_1.0 >= 3)   { "*Moderate evidence for H1" }
+  else if(Bayes_factor_1.0 > 1)    { "Anecdotal evidence for H1" }
+  else if(Bayes_factor_1.0 == 1)   { "No evidence preference" }
+  else if(Bayes_factor_1.0 > 1/3)  { "Anecdotal evidence for H0" }
+  else if(Bayes_factor_1.0 > 1/10) { "Moderate evidence for H0" }
+  else if(Bayes_factor_1.0 > 1/100){ "Strong evidence for H0" }
+  else { "Decisive evidence for H0" }
+  return(evidence)
 }
 
 #bootstrap weights in a bimodal model
