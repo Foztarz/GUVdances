@@ -54,11 +54,6 @@ Capretto, T., Piho, C., Kumar, R., Westfall, J., Yarkoni, T., & Martin, O. (2022
 `Bambi`: A simple interface for fitting Bayesian linear models in Python.
 *Journal of Statistical Software* 103(15), 1-29. doi:10.18637/jss.v103.i15
 
-# To Do
-- Load Bambi model
-- Plot predictions
-- Plot contrasts
-
 # Motivation
 
 
@@ -373,7 +368,8 @@ QCDraws = function(x,
 ```
 
 ```{r Load the data in pandas format}
-cd_pd = read_feather("1Data/colour_dance_reorg.feather")
+cd_pd = read_feather(path = "1Data/colour_dance_reorg.feather",
+                     columns = c('Individual'))
 #find individuals
 cd = within(cd,
             {Individual_nr = cd_pd$Individual}
@@ -443,9 +439,7 @@ for(i in seq_along(u_id_num)) {
 }
 ```
 
-```{r Plot the unimodal model}
-
-
+```{r Plot the individual predictions}
 
 par(pty = 's')
 par(mar = c(0,0,0,0),
@@ -720,7 +714,7 @@ mu_diff_ugl = sapply(X = di_ids,
 
 ```
 
-```{r Extract population level predictions}
+```{r Plot population level predictions}
 par(pty = 's')
 # Population mean for green bright (Baseline: Intercept)
 par(mfrow = c(1,4), mar = c(0,0,0,0))
@@ -838,7 +832,7 @@ with(draws_final,
 )
 ```
 
-```{r relative pop level effects}
+```{r Plot relative pop level effects}
 par(pty = 's')
 # Population mean for green bright (Baseline: Intercept)
 par(mfrow = c(1,4), mar = c(0,0,0,0))
