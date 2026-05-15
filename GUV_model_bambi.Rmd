@@ -1006,20 +1006,20 @@ with(draws_final,
      }
 )
 
-print("Effect of dim UV on individual directions")
+print("Effect of dim UV on individual turn size")
 with(draws_final,
      {
        round(deg(
-         quantile(mod_circular(mu_id_ul - mu_id_gl), probs = c(0.5, 0.025, 0.975))
+         quantile(abs(mod_circular(mu_id_ul - mu_id_uh)), probs = c(0.5, 0.025, 0.975))
        ))
      }
 )
 
-print("Effect of UV on  on individual directions for dim stimuli")
+print("Effect of UV on  on individual turn size for dim stimuli")
 with(draws_final,
      {
        round(deg(
-         quantile(mod_circular(mu_id_ul - mu_id_gl), probs = c(0.5, 0.025, 0.975))
+         quantile(abs(mod_circular(mu_id_ul - mu_id_gl)), probs = c(0.5, 0.025, 0.975))
        ))
      }
 )
@@ -1389,11 +1389,16 @@ VertHist(data = diff_interaction,
          axes = FALSE, cex.axis = 0.7)
 axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
 ```
+
+
 # Appendix
+
 
 ## Plot individual means
 
 Print all individual effects in this model
+
+### Mean angle
 
 ```{r Inspect individual means for green high}
 plt_panels = 9
@@ -1470,6 +1475,9 @@ plt = mcmc_trace(draws_final,
 print(plt)
 }
 ```
+
+### Concentration
+
 ```{r Inspect individual kappas for green high}
 plt_panels = 9
 for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
