@@ -285,24 +285,7 @@ mcmc_trace(draws_final,
 
 
 
-```{r Inspect individual means unimodal change model}
-plt_panels = 9
-#individual but they overlap when unwrapped
-for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
-{
-  # Calculate the specific range of indices for this page
-  start_idx = (id * plt_panels) + 1
-  end_idx   = min((id + 1) * plt_panels, length(u_id))
-plt = mcmc_trace(draws_final,
-           pars = paste0("1_Individual_Ind_",
-                         start_idx:end_idx),
-           facet_args = list(ncol = 3,
-                             nrow = 3),
-           transformations = unwrap_circular_deg
-           )
-print(plt)
-}
-```
+
 
 Calculating the $\hat{R}$ values for unwrapped estimates for $\mu_i$ reveals that 
 all estimates converged well ($\hat{R}<1.01$).
@@ -870,7 +853,7 @@ with(draws_final,
      col = adjustcolor('gray40', alpha.f = 200/255, offset = c(rep(-0.2,3),0))
      )
 )
-
+print("Effect of UV bright on direction")
 with(draws_final,
      {
        round(deg(
@@ -901,6 +884,7 @@ Draws2Cont(draws = draws_final,
            x_string = 'sin(B) * A1(softplus(kappa_B))',
            y_string = 'cos(B) * A1(softplus(kappa_B))')
 
+print("Effect of Green dim on direction")
 with(draws_final,
      {
        round(deg(
@@ -962,6 +946,15 @@ with(draws_final,
      col = adjustcolor('purple', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
 
+print("Effect of UV dim on direction")
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(B + `B:C`), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
+
 # --- Effect of dim UV relative to dim green ---
 PCfun(angles = unlist(mu_diff_ugl),
       col = 'gray25',
@@ -1003,6 +996,15 @@ with(draws_final,
      length = 0.1/1.25,
      col = adjustcolor('gray25', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
 )
+
+print("Effect of UV on direction for dim stimuli")
+with(draws_final,
+     {
+       round(deg(
+         quantile(mod_circular(`B:C`), probs = c(0.5, 0.025, 0.975))
+       ))
+     }
+)
 ```
 
 ```{r Kappa predictions}
@@ -1031,16 +1033,6 @@ with(draws_final,
 axis(1)
 axis(2, at = 0:5*5)
 
-with(draws_final,
-     {
-       round(
-     quantile(softplus(kappa_Intercept + kappa_C) - 
-                softplus(kappa_Intercept),
-              probs = c(0.5, 0.025, 0.975)),
-     digits = 2
-       )
-     }
-)
 
 with(draws_final,
      VertHist(data = softplus(kappa_Intercept + kappa_B), 
@@ -1053,6 +1045,7 @@ with(draws_final,
 axis(1)
 axis(2, at = 0:5*5)
 
+
 with(draws_final,
      VertHist(data = softplus(kappa_Intercept + kappa_B  + kappa_C +  + `kappa_B:C`), 
               main = '\nUV dim',
@@ -1064,24 +1057,13 @@ with(draws_final,
 axis(1)
 axis(2, at = 0:5*5)
 
-
-with(draws_final,
-     {
-       round(
-     quantile(softplus(kappa_Intercept + kappa_B) - 
-                softplus(kappa_Intercept),
-              probs = c(0.5, 0.025, 0.975)),
-     digits = 2
-       )
-     }
-)
-
 ```
+
 ``` {r Kappa effects}
 # Plot difference in kappa
 par(mfrow = c(1,4))
 
-# 1. Effect of UV Brightness (UV Bright - Green Bright)
+# Effect of UV Brightness (UV Bright - Green Bright)
 with(draws_final,
      VertHist(data = softplus(kappa_Intercept + kappa_C) - softplus(kappa_Intercept), 
               main = '\nDiff: UV bright',
@@ -1094,7 +1076,7 @@ axis(1)
 axis(2, at = -2:2*5)
 abline(h = 0, lty = 2)
 
-# 2. Effect of Dimming Green (Green Dim - Green Bright)
+# Effect of Dimming Green (Green Dim - Green Bright)
 with(draws_final,
      VertHist(data = softplus(kappa_Intercept + kappa_B) - softplus(kappa_Intercept), 
               main = '\nDiff: green dim',
@@ -1107,7 +1089,7 @@ axis(1)
 axis(2, at = -2:2*5)
 abline(h = 0, lty = 2)
 
-# 3. Effect of Dimming UV (UV Dim - UV Bright)
+# Effect of Dimming UV (UV Dim - UV Bright)
 with(draws_final,
      VertHist(data = softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
                      softplus(kappa_Intercept + kappa_C), 
@@ -1121,7 +1103,7 @@ axis(1)
 axis(2, at = -2:2*5)
 abline(h = 0, lty = 2)
 
-# 4. Interaction Effect (The "Difference in Differences")
+# Interaction Effect (Green Dim - UV Dim)
 with(draws_final,
      VertHist(data = softplus(kappa_B + `kappa_B:C`) - softplus(kappa_B), 
               main = '\nDim UV vs dim green',
@@ -1134,17 +1116,113 @@ axis(1)
 axis(2, at = -2:2*5)
 abline(h = 0, lty = 2)
 
-# Summary Stats for the UV Dimming Effect
+#Report effects
+# Colour effect
+#effect on kappa
+print("effect of UV bright on kappa")
 with(draws_final,
      {
        round(
-         quantile(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
-                  softplus(kappa_Intercept + kappa_C), 
-                  probs = c(0.5, 0.025, 0.975)),
-         digits = 2
+     quantile(softplus(kappa_Intercept + kappa_C) - 
+                softplus(kappa_Intercept),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
        )
      }
 )
+#effect on mean vector
+print("effect of UV bright on mean vector length")
+with(draws_final,
+     {
+       round(
+     quantile(A1(softplus(kappa_Intercept + kappa_C)) - 
+                A1(softplus(kappa_Intercept)),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 3
+       )
+     }
+)
+
+# Brightness effect
+#effect on kappa
+print("effect of green dim on kappa")
+with(draws_final,
+     {
+       round(
+     quantile(softplus(kappa_Intercept + kappa_B) - 
+                softplus(kappa_Intercept),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+#effect on mean vector
+print("effect of green dim on mean vector length")
+with(draws_final,
+     {
+       round(
+     quantile(A1(softplus(kappa_Intercept + kappa_B)) - 
+                A1(softplus(kappa_Intercept)),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 3
+       )
+     }
+)
+
+# UV dim effect
+#effect on kappa
+print("effect of UV dim on kappa")
+with(draws_final,
+     {
+       round(
+     quantile(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
+                softplus(kappa_Intercept),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+
+#effect on mean vector
+print("effect of UV dim on mean vector length")
+with(draws_final,
+     {
+       round(
+     quantile(A1(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`)) - 
+                A1(softplus(kappa_Intercept)),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 3
+       )
+     }
+)
+
+# UV effect on dim stimuli
+#effect on kappa
+print("dim stimuli effect of UV on kappa")
+with(draws_final,
+     {
+       round(
+     quantile(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`) - 
+                softplus(kappa_Intercept + kappa_B),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 2
+       )
+     }
+)
+
+#effect on mean vector
+print("dim stimuli effect of UV on mean vector length")
+with(draws_final,
+     {
+       round(
+     quantile(A1(softplus(kappa_Intercept + kappa_B + kappa_C + `kappa_B:C`)) - 
+                A1(softplus(kappa_Intercept + kappa_B)),
+              probs = c(0.5, 0.025, 0.975)),
+     digits = 3
+       )
+     }
+)
+
 ```
 
 ```{r Kappamu effects}
@@ -1293,3 +1371,151 @@ VertHist(data = diff_interaction,
          axes = FALSE, cex.axis = 0.7)
 axis(1); axis(2, at = -2:2); abline(h = 0, lty = 2)
 ```
+# Appendix
+
+## Plot individual means
+
+Print all individual effects in this model
+
+```{r Inspect individual means for green high}
+plt_panels = 9
+#individual but they overlap when unwrapped
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+plt = mcmc_trace(draws_final,
+           pars = paste0("1_Individual_Ind_",
+                         start_idx:end_idx),
+           facet_args = list(ncol = 3,
+                             nrow = 3),
+           transformations = unwrap_circular_deg
+           )
+print(plt)
+}
+```
+
+```{r Inspect individual UV effects}
+plt_panels = 9
+#individual but they overlap when unwrapped
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+plt = mcmc_trace(draws_final,
+           pars = paste0("C_Individual_Ind_",
+                         start_idx:end_idx),
+           facet_args = list(ncol = 3,
+                             nrow = 3),
+           transformations = unwrap_circular_deg
+           )
+print(plt)
+}
+```
+
+```{r Inspect individual dim effects}
+plt_panels = 9
+#individual but they overlap when unwrapped
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+plt = mcmc_trace(draws_final,
+           pars = paste0("B_Individual_Ind_",
+                         start_idx:end_idx),
+           facet_args = list(ncol = 3,
+                             nrow = 3),
+           transformations = unwrap_circular_deg
+           )
+print(plt)
+}
+```
+
+```{r Inspect individual UV dim effects}
+plt_panels = 9
+#individual but they overlap when unwrapped
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+plt = mcmc_trace(draws_final,
+           pars = paste0("B:C_Individual_Ind_",
+                         start_idx:end_idx),
+           facet_args = list(ncol = 3,
+                             nrow = 3),
+           transformations = unwrap_circular_deg
+           )
+print(plt)
+}
+```
+```{r Inspect individual kappas for green high}
+plt_panels = 9
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+  
+  plt = mcmc_trace(draws_final,
+             pars = paste0("kappa_1_Individual_Ind_", start_idx:end_idx), # Check exact model prefix
+             facet_args = list(ncol = 3, nrow = 3)
+             )
+  print(plt)
+}
+```
+```{r Inspect individual kappas for UV effect}
+plt_panels = 9
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+  
+  plt = mcmc_trace(draws_final,
+             pars = paste0("kappa_C_Individual_Ind_", start_idx:end_idx), # Check exact model prefix
+             facet_args = list(ncol = 3, nrow = 3)
+             )
+  print(plt)
+}
+```
+```{r Inspect individual kappas for dim effect}
+plt_panels = 9
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+  
+  plt = mcmc_trace(draws_final,
+             pars = paste0("kappa_B_Individual_Ind_", start_idx:end_idx), # Check exact model prefix
+             facet_args = list(ncol = 3, nrow = 3)
+             )
+  print(plt)
+}
+```
+```{r Inspect individual kappas for UV dim effect}
+plt_panels = 9
+for(id in 0:(ceiling(length(u_id)/plt_panels)-1))
+{
+  # Calculate the specific range of indices for this page
+  start_idx = (id * plt_panels) + 1
+  end_idx   = min((id + 1) * plt_panels, length(u_id))
+  
+  plt = mcmc_trace(draws_final,
+             pars = paste0("kappa_B:C_Individual_Ind_", start_idx:end_idx), # Check exact model prefix
+             facet_args = list(ncol = 3, nrow = 3)
+             )
+  print(plt)
+}
+```
+
+## Session Information
+<details>
+<summary>Click to expand session metadata</summary>
+
+```{r session-info, echo=FALSE}
+sessionInfo()
