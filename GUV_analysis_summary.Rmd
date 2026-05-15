@@ -2745,6 +2745,71 @@ write.table(x = print_lr_results,
 
 These tests confirm, that there is no significant difference between the two green conditions, a marginally-significant 13° left turn between the bright conditions, and significant bimodal differences between the two UV conditions and the two dim conditions, driven by left and right turns for the dim UV condition.
 
+## Bayes-factor equivalent
+
+```{r Bayes factor}
+# Initialize an empty list to store row segments
+table_rows = list()
+
+# Loop through each dataset in your list
+for (dts in names(pair_diffs_lst)) {
+  
+  mdt_metrics = BFDetails(all_res, 
+                               dts = dts, 
+                               bimod = TRUE, 
+                               n_obs = length(pair_diffs_lst[[dts]]))
+  
+  # Define the 3 tests to run per dataset to match your layout
+  test_types = c("pairs_diff_zero", 
+                 "pairs_multi_diff", 
+                 "pairs_multi_zero")
+  display_names = c("diff zero", 
+                    "multi diff", 
+                    "multi zero")
+  dfs = c(1, 3, 4) # structural degrees of freedom for the tests
+  
+  for (i in 1:length(test_types)) {
+    
+    # Calculate Bayesian metrics for this specific test
+    bf_out = BF_calc(tst = test_types[i],
+                     mdt = mdt_metrics)
+    label_out = BFlabel(test_types[i], 
+                        bf_out$Bayes_factor_1.0 )
+    
+    # Construct unique row name (e.g., "green_hl diff zero")
+    row_id = paste(dts, display_names[i])
+    
+    # Assemble the individual row without mu1 and mu2 columns
+    table_rows[[row_id]] = with(bf_out,
+                                {
+          data.frame(
+            df          = dfs[i],
+            delta_BIC   = round(delta_bic, 3),
+            Bayes_factor_1.0         = round(Bayes_factor_1.0 , 4),
+            test        = display_names[i],
+            comparison  = dts,
+            result      = label_out,
+            stringsAsFactors = FALSE
+            )
+                                }
+    )
+  }
+}
+
+# Bind all collected rows into a unified final master table
+bf_summary_table = do.call(rbind, table_rows)
+#Print the results
+print(bf_summary_table,
+      digits = 3)
+
+#save results
+write.table(x = bf_summary_table, 
+          file = '2Results/BF_paired_diffs.csv',
+          sep = ',',
+          row.names = TRUE)
+
+```
+
 # Are the two means for UV dim equally likely
 
 ```{r Test relative weights for UV hl }
@@ -2879,7 +2944,9 @@ PltDance(ids = u_id,
          cx = 1.0)
 ```
 
-# Print raw data
+# Appendix
+
+## Print raw data
 
 Print all dance data loaded for this analysis.
 
@@ -2889,3 +2956,10 @@ print(cd)
 #Edrich et al. 1979
 print(ed)
 ```
+
+## Session Information
+<details>
+<summary>Click to expand session metadata</summary>
+
+```{r session-info, echo=FALSE}
+sessionInfo()
