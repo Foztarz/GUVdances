@@ -700,7 +700,7 @@ mu_diff_ugl = sapply(X = di_ids,
 ```{r Plot population level predictions}
 par(pty = 's')
 # Population mean for green bright (Baseline: Intercept)
-par(mfrow = c(1,4), mar = c(0,0,0,0))
+par(mfrow = c(2,2), mar = c(0,0,0,0))
 
 with(subset(mean_vectors, colour %in% 'g' & brightn %in% 'h'), {
   PCfun(angles = mu, col = 'green3', shrink = 2, plot_rho = FALSE)
@@ -818,7 +818,7 @@ with(draws_final,
 ```{r Plot relative pop level effects}
 par(pty = 's')
 # Population mean for green bright (Baseline: Intercept)
-par(mfrow = c(1,4), mar = c(0,0,0,0))
+par(mfrow = c(2,2), mar = c(0,0,0,0))
 
 # --- Effect of UV ---
 PCfun(angles = unlist(mu_diff_uh),
@@ -835,19 +835,19 @@ for(i in which(u_id %in% uv_ids)) {
                   y = A1(softplus(kappa_id_uh[i])),
                   lwd = 0.5,
                   length = 0,
-                  col = adjustcolor('magenta3', alpha.f = 200/255))
+                  col = adjustcolor('gray60', alpha.f = 200/255))
 }
-
+#scale by alignment _across_ individuals
 Draws2Cont(draws = draws_final,
-           x_string = 'sin(C) * A1(softplus(kappa_C))',
-           y_string = 'cos(C) * A1(softplus(kappa_C))')
+           x_string = 'sin(C) * A1(softplus(`C|Individual_kappa`))',
+           y_string = 'cos(C) * A1(softplus(`C|Individual_kappa`))')
 
 with(draws_final,
      arrows.circular(x = circular(x = MedCDraws(C),
                                   units = 'radians',
                                   rotation = 'clock',
                                   zero = pi/2),
-     y = A1(median(softplus(kappa_C))),
+     y = A1(median(softplus(`C|Individual_kappa`))),
      lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor('gray40', alpha.f = 200/255, offset = c(rep(-0.2,3),0))
@@ -881,8 +881,8 @@ for(i in which(u_id %in% gr_ids)) {
 }
 
 Draws2Cont(draws = draws_final,
-           x_string = 'sin(B) * A1(softplus(kappa_B))',
-           y_string = 'cos(B) * A1(softplus(kappa_B))')
+           x_string = 'sin(B) * A1(softplus(`B|Individual_kappa`))',
+           y_string = 'cos(B) * A1(softplus(`B|Individual_kappa`))')
 
 print("Effect of Green dim on direction")
 with(draws_final,
@@ -898,7 +898,7 @@ with(draws_final,
                                   units = 'radians',
                                   rotation = 'clock',
                                   zero = pi/2),
-     y = A1(median(softplus(kappa_B))),
+     y = A1(median(softplus(`B|Individual_kappa`))),
      lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor('darkgreen', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
@@ -924,23 +924,15 @@ for(i in which(u_id %in% uv_ids)) {
 
 # The difference between UV bright and UV dim is brightness and the interaction
 Draws2Cont(draws = draws_final,
-           x_string = 'sin(B + `B:C`) * A1(softplus(kappa_B + `kappa_B:C`))',
-           y_string = 'cos(B + `B:C`) * A1(softplus(kappa_B + `kappa_B:C`))')
-
-with(draws_final,
-     {
-       round(deg(
-         quantile(mod_circular(B + `B:C`), probs = c(0.5, 0.025, 0.975))
-       ))
-     }
-)
+           x_string = 'sin(B + `B:C`) * A1(softplus(`B:C|Individual_kappa`))',
+           y_string = 'cos(B + `B:C`) * A1(softplus(`B:C|Individual_kappa`))')
 
 with(draws_final,
      arrows.circular(x = circular(x = MedCDraws(B + `B:C`),
                                   units = 'radians',
                                   rotation = 'clock',
                                   zero = pi/2),
-     y = A1(median(softplus(kappa_B + `kappa_B:C`))),
+     y = A1(median(softplus(`B:C|Individual_kappa`))),
      lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor('purple', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
@@ -975,8 +967,8 @@ for(i in which(u_id %in% di_ids)) {
 
 # The difference between green dim and UV dim is colour and the interaction
 Draws2Cont(draws = draws_final,
-           x_string = 'sin(C + `B:C`) * A1(softplus(kappa_C + `kappa_B:C`))',
-           y_string = 'cos(C + `B:C`) * A1(softplus(kappa_C + `kappa_B:C`))')
+           x_string = 'sin(C + `B:C`) * A1(softplus(`B:C|Individual_kappa`))',
+           y_string = 'cos(C + `B:C`) * A1(softplus(`B:C|Individual_kappa`))')
 
 with(draws_final,
      {
@@ -991,7 +983,7 @@ with(draws_final,
                                   units = 'radians',
                                   rotation = 'clock',
                                   zero = pi/2),
-     y = A1(median(softplus(kappa_C + `kappa_B:C`))),
+     y = A1(median(softplus(`B:C|Individual_kappa`))),
      lwd = 5,
      length = 0.1/1.25,
      col = adjustcolor('gray25', alpha.f = 200/255, offset = c(rep(-0.2,3),0)))
